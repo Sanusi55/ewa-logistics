@@ -24,7 +24,7 @@ async function requireAdmin() {
   return { user, profile, isAdmin: true };
 }
 
-// ✅ Log admin action
+// ✅ Log admin action (Fixed: Removed invalid .catch())
 async function logAdminAction(
   adminId: string,
   action: string,
@@ -33,13 +33,17 @@ async function logAdminAction(
   details?: any
 ) {
   const supabase = await createClient();
-  await supabase.from("audit_logs").insert({
+  const { error } = await supabase.from("audit_logs").insert({
     admin_id: adminId,
     action,
     target_type: targetType || null,
     target_id: targetId || null,
     details: details || null,
-  }).catch(err => console.error("Failed to log admin action:", err));
+  });
+
+  if (error) {
+    console.error("Failed to log admin action:", error);
+  }
 }
 
 // ✅ Get admin dashboard stats
@@ -51,9 +55,10 @@ export async function getAdminStats() {
 
   const { data: users } = await supabase.from("profiles").select("id, role, created_at, is_suspended");
   const { data: orders } = await supabase.from("orders").select("id, status, total_amount, created_at, delivery_fee, driver_id");
-  const { data: deliveries } = await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount").maybeSingle() 
-    ? await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount") 
-    : { data: [] };
+  
+  // ✅ Fixed: Removed invalid ternary operator on Supabase query
+  const { data: deliveries } = await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount");
+  
   const { data: bids } = await supabase.from("driver_bids").select("id, status, bid_amount, created_at");
 
   const totalUsers = users?.length || 0;
@@ -217,7 +222,6 @@ export async function getAdminOrders(status: string = "all", search: string = ""
 
   const supabase = await createClient();
   
-  // ✅ Restored the join using the exact foreign key name we created in SQL!
   let query = supabase
     .from("orders")
     .select(`
@@ -302,13 +306,18 @@ export async function broadcastNotification(title: string, message: string, targ
 
   if (error) return { success: false, error: error.message };
 
-  await supabase.from("broadcast_notifications").insert({
+  // ✅ Fixed: Removed invalid .catch()
+  const { error: broadcastError } = await supabase.from("broadcast_notifications").insert({
     admin_id: admin.user!.id,
     title,
     message,
     target_roles: targetRoles,
     sent_count: users.length,
-  }).catch(() => {});
+  });
+
+  if (broadcastError) {
+    console.error("Failed to log broadcast notification:", broadcastError);
+  }
 
   await logAdminAction(admin.user!.id, "broadcast_notification", "users", null, { 
     title, 
