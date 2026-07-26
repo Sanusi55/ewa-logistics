@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Shield, BarChart3, Users, Package, Truck, 
-  Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft
+  Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,7 +20,21 @@ const navItems = [
   { name: "Settings", tab: "settings", icon: Settings },
 ];
 
+// ✅ 1. Main Layout wraps everything in a Suspense boundary
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+      </div>
+    }>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </Suspense>
+  );
+}
+
+// ✅ 2. Inner component safely uses useSearchParams()
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -40,7 +54,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    // ✅ Added overflow-x-hidden to prevent any horizontal scrolling issues
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex overflow-x-hidden">
       
       {/* Mobile Sidebar Overlay */}
@@ -103,13 +116,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen w-full overflow-x-hidden">
         
-        {/* Top Header (Provides mobile menu toggle and back button) */}
+        {/* Top Header */}
         <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between">
           <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-slate-400 hover:text-white mr-4">
             <Menu className="w-6 h-6" />
           </button>
           
-          <div className="flex-1" /> {/* Spacer to push button to the right */}
+          <div className="flex-1" /> 
           
           <Link href="/">
             <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm font-medium text-white transition-colors">

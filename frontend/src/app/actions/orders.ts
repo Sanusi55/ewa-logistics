@@ -628,8 +628,8 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
         order_id: orderId,
         driver_id: user.id,
         file_url: evidenceUrl,
-        file_type: evidenceFile.type,
-        file_name: evidenceFile.name,
+        file_type: evidenceFile?.type || "application/octet-stream", // ✅ FIXED: Optional chaining
+        file_name: evidenceFile?.name || "delivery_proof",           // ✅ FIXED: Optional chaining
         notes: "Delivery proof uploaded by driver",
       });
     }

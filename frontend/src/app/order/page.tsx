@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, ArrowRight, CheckCircle, AlertCircle, MapPin, 
@@ -24,7 +24,8 @@ const nigerianStates = [
   "Federal Capital Territory"
 ];
 
-export default function OrderPage() {
+// ✅ 1. Inner component that safely uses useSearchParams
+function OrderPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const materialId = searchParams.get("material");
@@ -498,5 +499,18 @@ export default function OrderPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ✅ 2. Main default export wraps the content in a Suspense boundary
+export default function OrderPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    }>
+      <OrderPageContent />
+    </Suspense>
   );
 }

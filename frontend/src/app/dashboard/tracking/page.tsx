@@ -180,20 +180,23 @@ export default function TrackingPage() {
     }
   };
 
+  // ✅ FIXED: Explicitly typed the updates array to allow both "success" and "info"
   const getUpdates = () => {
     if (!order) return [];
-    const updates = [
-      { time: formatDate(order.created_at), message: "Order confirmed and payment held in escrow.", type: "success" as const },
+    
+    type UpdateType = { time: string; message: string; type: "success" | "info" };
+    const updates: UpdateType[] = [
+      { time: formatDate(order.created_at), message: "Order confirmed and payment held in escrow.", type: "success" },
     ];
     
     if (["driver_assigned", "supplier_driver_assigned", "loading", "in_transit", "delivered"].includes(order.status)) {
-      updates.unshift({ time: "Recently", message: "Driver has been assigned to your delivery.", type: "info" as const });
+      updates.unshift({ time: "Recently", message: "Driver has been assigned to your delivery.", type: "info" });
     }
     if (["loading", "in_transit", "delivered"].includes(order.status)) {
-      updates.unshift({ time: "Recently", message: "Material loaded and secured. Departed pickup location.", type: "success" as const });
+      updates.unshift({ time: "Recently", message: "Material loaded and secured. Departed pickup location.", type: "success" });
     }
     if (order.status === "delivered") {
-      updates.unshift({ time: "Just now", message: "Delivery completed successfully!", type: "success" as const });
+      updates.unshift({ time: "Just now", message: "Delivery completed successfully!", type: "success" });
     }
     
     return updates;

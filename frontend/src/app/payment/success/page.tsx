@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle, Loader2, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-export default function PaymentSuccessPage() {
+// ✅ 1. Inner component that safely uses useSearchParams
+function PaymentSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isVerifying, setIsVerifying] = useState(true);
@@ -67,5 +68,18 @@ export default function PaymentSuccessPage() {
         )}
       </motion.div>
     </div>
+  );
+}
+
+// ✅ 2. Main default export wraps the content in a Suspense boundary
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+        <Loader2 className="w-16 h-16 text-orange-500 animate-spin mx-auto mb-6" />
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

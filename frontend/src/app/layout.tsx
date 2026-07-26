@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -10,15 +9,8 @@ import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// ✅ REMOVED next/font/google to prevent Turbopack build errors.
+// We will load fonts directly via <link> tag in <head> below.
 
 export const metadata: Metadata = {
   title: {
@@ -93,7 +85,6 @@ export const metadata: Metadata = {
       { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
     ],
   },
-  // ✅ Next.js automatically injects these into the <head> safely
   other: {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "default",
@@ -117,7 +108,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <head>
+        {/* ✅ Load Geist fonts directly from Google to bypass Turbopack font downloader bug */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet" />
+        
+        {/* ✅ Inject CSS variables so your globals.css still works perfectly */}
+        <style>{`
+          :root {
+            --font-geist-sans: 'Geist', sans-serif;
+            --font-geist-mono: 'Geist Mono', monospace;
+          }
+        `}</style>
+      </head>
+      <body className="antialiased">
         <CursorSpotlight />
         
         <ThemeProvider
@@ -135,7 +140,6 @@ export default function RootLayout({
           </ToastProvider>
         </ThemeProvider>
 
-        {/* ✅ CORRECT: Using Next.js Script component (Capital 'S') for Service Worker */}
         <Script id="register-sw" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {

@@ -32,14 +32,14 @@ export default function MagneticButton({
   type = "button",
   rippleColor = "rgba(255, 255, 255, 0.3)",
 }: MagneticButtonProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  // ✅ Use generic HTMLElement ref to satisfy both button and anchor
+  const ref = useRef<HTMLElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [ripples, setRipples] = useState<Ripple[]>([]);
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  // Enhanced spring physics for more natural movement
   const springConfig = { 
     damping: 20, 
     stiffness: 200,
@@ -49,18 +49,16 @@ export default function MagneticButton({
   const xSpring = useSpring(x, springConfig);
   const ySpring = useSpring(y, springConfig);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
     if (!ref.current || disabled) return;
 
     const rect = ref.current.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     
-    // Calculate distance from center with smooth falloff
     const distanceX = e.clientX - centerX;
     const distanceY = e.clientY - centerY;
     
-    // Reduce magnetic effect near edges for more natural feel
     const maxDistance = Math.max(rect.width, rect.height) * 0.6;
     const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
     const falloff = Math.max(0, 1 - distance / maxDistance);
@@ -78,7 +76,6 @@ export default function MagneticButton({
   const handleClick = (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
     if (disabled) return;
 
-    // Create ripple effect
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
       const rippleX = e.clientX - rect.left;
@@ -92,13 +89,11 @@ export default function MagneticButton({
 
       setRipples((prev) => [...prev, newRipple]);
 
-      // Remove ripple after animation completes
       setTimeout(() => {
         setRipples((prev) => prev.filter((r) => r.id !== newRipple.id));
       }, 600);
     }
 
-    // Call original onClick handler
     if (onClick) {
       onClick(e);
     }
@@ -107,7 +102,8 @@ export default function MagneticButton({
   const Component = as === "a" ? motion.a : motion.button;
 
   const baseProps = {
-    ref,
+    // ✅ FIXED: Cast to 'any' to bypass Framer Motion's strict polymorphic ref typing
+    ref: ref as any,
     onClick: handleClick,
     onMouseMove: handleMouseMove,
     onMouseEnter: () => !disabled && setIsHovered(true),
@@ -125,7 +121,6 @@ export default function MagneticButton({
     <>
       {as === "button" ? (
         <Component {...baseProps} type={type} disabled={disabled}>
-          {/* Ripple Effects */}
           <AnimatePresence>
             {ripples.map((ripple) => (
               <motion.span
@@ -149,14 +144,12 @@ export default function MagneticButton({
             ))}
           </AnimatePresence>
           
-          {/* Content */}
           <span className="relative z-10 flex items-center gap-2">
             {children}
           </span>
         </Component>
       ) : (
         <Component {...baseProps} href={disabled ? undefined : href}>
-          {/* Ripple Effects */}
           <AnimatePresence>
             {ripples.map((ripple) => (
               <motion.span
@@ -180,7 +173,6 @@ export default function MagneticButton({
             ))}
           </AnimatePresence>
           
-          {/* Content */}
           <span className="relative z-10 flex items-center gap-2">
             {children}
           </span>

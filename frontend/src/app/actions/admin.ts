@@ -29,7 +29,7 @@ async function logAdminAction(
   adminId: string,
   action: string,
   targetType?: string,
-  targetId?: string,
+  targetId?: string, // Changed to allow undefined
   details?: any
 ) {
   const supabase = await createClient();
@@ -56,9 +56,7 @@ export async function getAdminStats() {
   const { data: users } = await supabase.from("profiles").select("id, role, created_at, is_suspended");
   const { data: orders } = await supabase.from("orders").select("id, status, total_amount, created_at, delivery_fee, driver_id");
   
-  // ✅ Fixed: Removed invalid ternary operator on Supabase query
   const { data: deliveries } = await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount");
-  
   const { data: bids } = await supabase.from("driver_bids").select("id, status, bid_amount, created_at");
 
   const totalUsers = users?.length || 0;
@@ -319,7 +317,8 @@ export async function broadcastNotification(title: string, message: string, targ
     console.error("Failed to log broadcast notification:", broadcastError);
   }
 
-  await logAdminAction(admin.user!.id, "broadcast_notification", "users", null, { 
+  // ✅ FIXED: Changed 'null' to 'undefined' to satisfy TypeScript
+  await logAdminAction(admin.user!.id, "broadcast_notification", "users", undefined, { 
     title, 
     targetRoles, 
     sentCount: users.length 
