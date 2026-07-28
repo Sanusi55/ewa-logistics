@@ -44,16 +44,18 @@ export default function NotificationBell() {
 
   // ✅ Handle Realtime subscription
   useEffect(() => {
+    let isMounted = true;
+
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      if (user && isMounted) {
         setUserId(user.id);
         fetchNotifications();
 
-        // ✅ Create a unique channel name
-        const channelName = `notifications-${user.id}`;
+        // ✅ FIX: Create a truly unique channel name to prevent Supabase caching conflicts
+        // This guarantees we never try to add .on() to an already-subscribed channel
+        const channelName = `notifications-${user.id}-${Date.now()}`;
         
-        // ✅ Subscribe to INSERT events for THIS specific user only (Crucial for performance & privacy)
         const channel = supabase
           .channel(channelName)
           .on(
@@ -65,14 +67,16 @@ export default function NotificationBell() {
               filter: `user_id=eq.${user.id}`, 
             },
             () => {
-              fetchNotifications(); // Refresh list when new notification arrives
+              if (isMounted) {
+                fetchNotifications(); // Refresh list when new notification arrives
+              }
             }
           )
           .subscribe();
 
         channelRef.current = channel;
       } else {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     }
     
@@ -80,6 +84,7 @@ export default function NotificationBell() {
 
     // ✅ Proper cleanup function
     return () => {
+      isMounted = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
