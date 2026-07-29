@@ -55,6 +55,9 @@ export async function initializeSecurePayment(orderData: {
     return { error: "Failed to create order in database" };
   }
 
+  // ✅ FIX: Get the correct base URL (Live site in production, localhost in dev)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
   // 5. Initialize Transaction with Paystack (Server-to-Server)
   const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
@@ -66,7 +69,8 @@ export async function initializeSecurePayment(orderData: {
       email: profile.email,
       amount: orderData.total_amount * 100, // ⚠️ Paystack requires amount in KOBO (Naira * 100)
       reference: reference,
-      callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard/customer`,
+      // ✅ FIX: Redirect to the success page where the confetti lives!
+      callback_url: `${baseUrl}/payment/success`, 
       metadata: {
         order_id: order.id,
         customer_name: profile.full_name,

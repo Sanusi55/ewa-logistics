@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle, Loader2, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import confetti from "canvas-confetti"; // ✅ Import the confetti library
 
 // ✅ 1. Inner component that safely uses useSearchParams
 function PaymentSuccessContent() {
@@ -23,12 +24,43 @@ function PaymentSuccessContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ✅ 2. Trigger the colorful bubble celebration when verification is done
+  useEffect(() => {
+    if (!isVerifying) {
+      // Center burst
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#f97316', '#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7'], // Orange, Red, Green, Blue, Yellow, Purple
+      });
+
+      // Side bursts for extra celebration flair
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0 },
+          colors: ['#f97316', '#ef4444'],
+        });
+        confetti({
+          particleCount: 60,
+          angle: 120,
+          spread: 60,
+          origin: { x: 1 },
+          colors: ['#22c55e', '#3b82f6'],
+        });
+      }, 300);
+    }
+  }, [isVerifying]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl text-center"
+        className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl text-center relative z-10"
       >
         {isVerifying ? (
           <>
@@ -71,7 +103,7 @@ function PaymentSuccessContent() {
   );
 }
 
-// ✅ 2. Main default export wraps the content in a Suspense boundary
+// ✅ 3. Main default export wraps the content in a Suspense boundary
 export default function PaymentSuccessPage() {
   return (
     <Suspense fallback={
