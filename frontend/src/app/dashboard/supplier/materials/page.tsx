@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Plus, Edit2, Trash2, Search, Eye, EyeOff,
-  DollarSign, CheckCircle, Loader2, X, ArrowLeft
+  DollarSign, CheckCircle, Loader2, X, ArrowLeft, Upload, Image as ImageIcon
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
@@ -31,6 +31,8 @@ export default function SupplierMaterialsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   const [formData, setFormData] = useState({
@@ -40,6 +42,8 @@ export default function SupplierMaterialsPage() {
     unit: "tons",
     image_url: "",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
 
   useEffect(() => {
     fetchMaterials();
@@ -74,6 +78,8 @@ export default function SupplierMaterialsPage() {
       unit: "tons",
       image_url: "",
     });
+    setSelectedFile(null);
+    setImagePreview("");
     setShowAddModal(true);
   };
 
@@ -86,7 +92,74 @@ export default function SupplierMaterialsPage() {
       unit: material.unit,
       image_url: material.image_url || "",
     });
+    setSelectedFile(null);
+    setImagePreview(material.image_url || "");
     setShowEditModal(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        addToast({ type: "error", title: "Invalid File", message: "Please select an image file." });
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        addToast({ type: "error", title: "File Too Large", message: "Image must be less than 5MB." });
+        return;
+      }
+
+      setSelectedFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImageToSupabase = async (file: File, materialId?: string): Promise<string | null> => {
+    if (!file) return null;
+
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        addToast({ type: "error", title: "Error", message: "User not authenticated." });
+        return null;
+      }
+
+      // Create unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${materialId || Date.now()}.${fileExt}`;
+      const filePath = `materials/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('material-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('material-images')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error: any) {
+      addToast({ type: "error", title: "Upload Failed", message: error.message || "Failed to upload image." });
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleAddMaterial = async () => {
@@ -98,6 +171,16 @@ export default function SupplierMaterialsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    let imageUrl = formData.image_url;
+
+    // Upload image if file selected
+    if (selectedFile) {
+      const uploadedUrl = await uploadImageToSupabase(selectedFile);
+      if (uploadedUrl) {
+        imageUrl = uploadedUrl;
+      }
+    }
+
     const { error } = await supabase
       .from("materials")
       .insert({
@@ -106,13 +189,15 @@ export default function SupplierMaterialsPage() {
         description: formData.description,
         price_per_ton: parseFloat(formData.price_per_ton),
         unit: formData.unit,
-        image_url: formData.image_url,
+        image_url: imageUrl,
         is_active: true,
       });
 
     if (!error) {
       addToast({ type: "success", title: "Material Added! 🎉", message: "Your material has been added successfully." });
       setShowAddModal(false);
+      setSelectedFile(null);
+      setImagePreview("");
       fetchMaterials();
     } else {
       addToast({ type: "error", title: "Error", message: "Failed to add material." });
@@ -125,6 +210,16 @@ export default function SupplierMaterialsPage() {
       return;
     }
 
+    let imageUrl = formData.image_url;
+
+    // Upload new image if file selected
+    if (selectedFile) {
+      const uploadedUrl = await uploadImageToSupabase(selectedFile, selectedMaterial.id);
+      if (uploadedUrl) {
+        imageUrl = uploadedUrl;
+      }
+    }
+
     const { error } = await supabase
       .from("materials")
       .update({
@@ -132,13 +227,15 @@ export default function SupplierMaterialsPage() {
         description: formData.description,
         price_per_ton: parseFloat(formData.price_per_ton),
         unit: formData.unit,
-        image_url: formData.image_url,
+        image_url: imageUrl,
       })
       .eq("id", selectedMaterial.id);
 
     if (!error) {
       addToast({ type: "success", title: "Material Updated! ✅", message: "Your material has been updated successfully." });
       setShowEditModal(false);
+      setSelectedFile(null);
+      setImagePreview("");
       fetchMaterials();
     } else {
       addToast({ type: "error", title: "Error", message: "Failed to update material." });
@@ -447,15 +544,67 @@ export default function SupplierMaterialsPage() {
                     </div>
                   </div>
 
+                  {/* Image Upload Section */}
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Image URL</label>
-                    <input
-                      type="text"
-                      value={formData.image_url}
-                      onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <label className="block text-sm font-medium mb-1.5">Material Image</label>
+                    <div className="space-y-3">
+                      {/* Image Preview */}
+                      {imagePreview && (
+                        <div className="relative rounded-xl overflow-hidden border border-border bg-muted/30">
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="w-full h-48 object-cover"
+                          />
+                          <button
+                            onClick={() => {
+                              setImagePreview("");
+                              setSelectedFile(null);
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = "";
+                              }
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Upload Button */}
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer"
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground">Click to upload image</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+
+                      {/* Optional URL Input */}
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="text-xs text-muted-foreground">Or use image URL</span>
+                        </div>
+                        <div className="relative pt-4">
+                          <input
+                            type="text"
+                            value={formData.image_url}
+                            onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+                            className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                            placeholder="https://example.com/image.jpg"
+                            disabled={!!selectedFile}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -468,9 +617,16 @@ export default function SupplierMaterialsPage() {
                   </button>
                   <button
                     onClick={handleAddMaterial}
-                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20"
+                    disabled={isUploading}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Add Material
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
+                      </>
+                    ) : (
+                      "Add Material"
+                    )}
                   </button>
                 </div>
               </div>
@@ -551,14 +707,67 @@ export default function SupplierMaterialsPage() {
                     </div>
                   </div>
 
+                  {/* Image Upload Section */}
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Image URL</label>
-                    <input
-                      type="text"
-                      value={formData.image_url}
-                      onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                    />
+                    <label className="block text-sm font-medium mb-1.5">Material Image</label>
+                    <div className="space-y-3">
+                      {/* Image Preview */}
+                      {imagePreview && (
+                        <div className="relative rounded-xl overflow-hidden border border-border bg-muted/30">
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="w-full h-48 object-cover"
+                          />
+                          <button
+                            onClick={() => {
+                              setImagePreview("");
+                              setSelectedFile(null);
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = "";
+                              }
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Upload Button */}
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer"
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground">Click to upload new image</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+
+                      {/* Optional URL Input */}
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="text-xs text-muted-foreground">Or use image URL</span>
+                        </div>
+                        <div className="relative pt-4">
+                          <input
+                            type="text"
+                            value={formData.image_url}
+                            onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+                            className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                            placeholder="https://example.com/image.jpg"
+                            disabled={!!selectedFile}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -571,9 +780,16 @@ export default function SupplierMaterialsPage() {
                   </button>
                   <button
                     onClick={handleEditMaterial}
-                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20"
+                    disabled={isUploading}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Save Changes
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
                   </button>
                 </div>
               </div>

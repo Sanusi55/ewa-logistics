@@ -9,9 +9,6 @@ import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 
-// ✅ REMOVED next/font/google to prevent Turbopack build errors.
-// We will load fonts directly via <link> tag in <head> below.
-
 export const metadata: Metadata = {
   title: {
     default: "EWA Logistics | Premium Construction Materials & Delivery",
@@ -109,12 +106,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* ✅ Load Geist fonts directly from Google to bypass Turbopack font downloader bug */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet" />
         
-        {/* ✅ Inject CSS variables so your globals.css still works perfectly */}
         <style>{`
           :root {
             --font-geist-sans: 'Geist', sans-serif;
@@ -140,6 +135,8 @@ export default function RootLayout({
           </ToastProvider>
         </ThemeProvider>
 
+        {/* ⚠️ TEMPORARILY DISABLED TO TEST NAVIGATION ERR_FAILED ISSUE */}
+        {/* 
         <Script id="register-sw" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
@@ -156,6 +153,7 @@ export default function RootLayout({
             }
           `}
         </Script>
+        */}
       </body>
     </html>
   );

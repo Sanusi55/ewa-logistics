@@ -17,10 +17,10 @@ interface MaterialInfo {
 
 const materials: Record<string, MaterialInfo> = {
   "1-inch-granite": { name: "1-Inch Granite", density: 2.7, pricePerTon: 45000, icon: "🪨" },
-  "3-4-granite": { name: "3/4 Granite", density: 2.6, pricePerTon: 40000, icon: "🪨" },
+  "3-4-granite": { name: "3/4 Granite", density: 2.6, pricePerTon: 40000, icon: "" },
   "sharp-sand": { name: "Sharp Sand", density: 1.6, pricePerTon: 15000, icon: "⏳" },
   "stone-base": { name: "Stone Base", density: 2.4, pricePerTon: 30000, icon: "🏗️" },
-  "gravel": { name: "Gravel", density: 1.8, pricePerTon: 25000, icon: "🪨" },
+  "gravel": { name: "Gravel", density: 1.8, pricePerTon: 25000, icon: "" },
 };
 
 export default function MaterialCalculator() {
@@ -84,13 +84,13 @@ export default function MaterialCalculator() {
 
   return (
     <>
-      {/* 🎯 Floating Calculator Button */}
+      {/*  Floating Calculator Button (CENTERED AT BOTTOM) */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1.5 }}
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 transition-all cursor-pointer group"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 transition-all cursor-pointer group"
         title="Material Calculator"
       >
         <Calculator className="w-5 h-5 group-hover:rotate-12 transition-transform" />

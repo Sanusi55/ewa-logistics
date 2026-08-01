@@ -5,7 +5,8 @@ import {
   ArrowRight, ShieldCheck, TrendingUp, Truck, Package, MapPin, CreditCard, 
   CheckCircle, Star, Phone, Mail, ChevronDown, ChevronUp, Send, Globe, 
   Share2, Camera, Link as LinkIcon, Zap, Lock, Award, RefreshCw, 
-  MessageCircle, Shield, Clock, Building2, Users, Keyboard, FileText, Loader2
+  MessageCircle, Shield, Clock, Building2, Users, Keyboard, FileText, Loader2,
+  ShoppingCart
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -43,29 +44,6 @@ function FAQItem({ question, answer, isOpen, onClick }: { question: string; answ
       <motion.div initial={false} animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
         <p className="px-4 pb-4 text-muted-foreground">{answer}</p>
       </motion.div>
-    </div>
-  );
-}
-
-// --- Testimonial Component ---
-function TestimonialCard({ name, role, content, rating }: { name: string; role: string; content: string; rating: number }) {
-  return (
-    <div className="glass p-6 rounded-2xl min-w-[300px] md:min-w-[400px] snap-center border border-border/50">
-      <div className="flex items-center gap-1 mb-4">
-        {[...Array(5)].map((_, i) => (
-          <Star key={i} className={`w-4 h-4 ${i < rating ? "fill-orange-400 text-orange-400" : "text-muted"}`} />
-        ))}
-      </div>
-      <p className="text-muted-foreground mb-4 italic">"{content}"</p>
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white font-bold">
-          {name.charAt(0)}
-        </div>
-        <div>
-          <p className="font-semibold">{name}</p>
-          <p className="text-sm text-muted-foreground">{role}</p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -121,12 +99,6 @@ export default function Home() {
     { icon: MapPin, title: "Driver Assigned", desc: "Drivers bid for delivery; you choose." },
     { icon: CreditCard, title: "Secure Payment", desc: "Funds held in escrow until delivery." },
     { icon: CheckCircle, title: "Track & Receive", desc: "Live GPS tracking until safe arrival." }
-  ];
-
-  const testimonials = [
-    { name: "Chioma A.", role: "Project Manager, BuildRight Ltd", content: "EWA delivered 50 tons of granite to our Lekki site 2 days early. The escrow system gave us peace of mind!", rating: 5 },
-    { name: "Emmanuel O.", role: "Truck Driver", content: "I've earned 3x more since joining EWA. The bidding system is fair and payments are always on time.", rating: 5 },
-    { name: "Adebayo K.", role: "Supplier, Sagamu Quarry", content: "Managing inventory and orders on EWA is seamless. Our sales increased by 200% in 3 months!", rating: 5 }
   ];
 
   const faqs = [
@@ -214,8 +186,6 @@ export default function Home() {
 
       {/* 🎬 HERO SECTION WITH IMAGE BACKGROUND */}
       <main className="relative pt-20 md:pt-24 px-4 md:px-6 min-h-[80vh] md:min-h-[90vh] flex items-center">
-        
-        {/* ✅ Cinematic Image Background from Unsplash */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div 
             className="w-full h-full bg-cover bg-center bg-no-repeat"
@@ -223,16 +193,12 @@ export default function Home() {
               backgroundImage: 'url(https://images.unsplash.com/photo-1624084340915-8ef036692deb?q=80&w=1920&auto=format&fit=crop)' 
             }}
           />
-          
-          {/* Dark Gradient Overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-background" />
           <div className="absolute inset-0 bg-gradient-to-r from-orange-900/40 via-transparent to-transparent" />
         </div>
         
         <div className="relative z-10 max-w-5xl mx-auto text-center w-full px-2">
           <motion.div style={{ y }} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-            
-            {/* Live Activity Ticker */}
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -247,7 +213,6 @@ export default function Home() {
               </span>
             </motion.div>
 
-            {/* ✅ Responsive heading font sizes and line height */}
             <motion.h1 
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
@@ -269,7 +234,6 @@ export default function Home() {
               Order granite, sand, and construction materials with secure escrow payments, real-time GPS tracking, and verified supplier bidding.
             </motion.p>
             
-            {/* 🧲 MAGNETIC BUTTONS (Updated to use as="a" for valid HTML) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
@@ -285,19 +249,17 @@ export default function Home() {
                 Order Materials <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </MagneticButton>
               
-              <MagneticButton 
-                as="a"
+              {/* ✅ REPLACED MagneticButton with standard Next.js Link to fix ERR_FAILED */}
+              <Link 
                 href="/signup"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 border border-white/30 text-white font-semibold rounded-full hover:bg-white/10 backdrop-blur-sm transition-all"
-                magneticStrength={0.4}
               >
                 Become a Partner
-              </MagneticButton>
+              </Link>
             </motion.div>
 
-            {/* ⌨️ Keyboard Shortcut Hint */}
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 0}}
               animate={{ opacity: 1 }}
               transition={{ delay: 1.2 }}
               className="flex items-center justify-center gap-2 mb-8 md:mb-16"
@@ -311,7 +273,6 @@ export default function Home() {
               <span className="hidden md:inline text-xs text-gray-400">to search & navigate instantly</span>
             </motion.div>
 
-            {/* ✅ Responsive stats grid */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
@@ -333,15 +294,51 @@ export default function Home() {
       </main>
 
       {/* 🏢 TRUSTED BY SECTION */}
-      <section className="py-12 border-y border-border bg-muted/20">
+      <section className="py-16 border-y border-border bg-muted/20">
         <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
-          <p className="text-sm font-medium text-muted-foreground mb-6 uppercase tracking-wider">Trusted by Nigeria's Top Construction Firms</p>
-          <div className="flex flex-wrap justify-center items-center gap-6 md:gap-16 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-            {["Dangote Group", "Julius Berger", "Reynolds Construction", "CCECC", "Setraco"].map((company) => (
-              <div key={company} className="flex items-center gap-2 text-lg md:text-xl font-bold text-foreground/70 hover:text-orange-500 transition-colors cursor-default">
-                <Building2 className="w-5 h-5 md:w-6 md:h-6" /> {company}
+          <p className="text-sm font-medium text-muted-foreground mb-8 uppercase tracking-wider">Trusted by Customers, Suppliers, and Drivers</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
+            >
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
+                <ShoppingCart className="w-7 h-7" />
               </div>
-            ))}
+              <h3 className="font-bold text-lg mb-2">Customers</h3>
+              <p className="text-sm text-muted-foreground text-center">Get reliable delivery of construction materials with secure payment protection</p>
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
+            >
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
+                <Building2 className="w-7 h-7" />
+              </div>
+              <h3 className="font-bold text-lg mb-2">Suppliers</h3>
+              <p className="text-sm text-muted-foreground text-center">Grow your business with access to verified buyers and streamlined order management</p>
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
+            >
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
+                <Truck className="w-7 h-7" />
+              </div>
+              <h3 className="font-bold text-lg mb-2">Drivers</h3>
+              <p className="text-sm text-muted-foreground text-center">Earn competitive income with flexible scheduling and guaranteed payments</p>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -404,17 +401,43 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 💬 TESTIMONIALS */}
-      <section id="testimonials" className="py-16 md:py-20 px-4 md:px-6">
-        <div className="max-w-6xl mx-auto">
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">What Our Users Say</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Real stories from contractors, drivers, and suppliers who trust EWA.</p>
+      {/* 📈 IMPACT & STATISTICS SECTION */}
+      <section id="impact" className="py-16 md:py-24 px-4 md:px-6 bg-muted/10">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true }} 
+            className="text-center mb-12 md:mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Impact in Numbers</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
+              Driving efficiency, transparency, and growth across the construction supply chain.
+            </p>
           </motion.div>
-          <div className="flex overflow-x-auto gap-6 pb-4 snap-x snap-mandatory custom-scrollbar">
-            {testimonials.map((t, i) => (
-              <motion.div key={i} initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>
-                <TestimonialCard {...t} />
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+            {[
+              { icon: Truck, label: "Tons of Materials Delivered", value: 50000, suffix: "+", color: "text-orange-500" },
+              { icon: MapPin, label: "Cities & States Covered", value: 15, suffix: "+", color: "text-blue-500" },
+              { icon: Users, label: "Active Platform Users", value: 5000, suffix: "+", color: "text-green-500" },
+              { icon: Clock, label: "Average Time Saved per Order", value: 40, suffix: "%", color: "text-purple-500" },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="glass p-6 md:p-8 rounded-2xl border border-border/50 text-center hover:border-orange-500/30 transition-all group"
+              >
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <stat.icon className={`w-7 h-7 ${stat.color}`} />
+                </div>
+                <div className={`text-3xl md:text-4xl font-bold mb-2 ${stat.color}`}>
+                  <AnimatedCounter end={stat.value} suffix={stat.suffix} />
+                </div>
+                <p className="text-sm md:text-base text-muted-foreground font-medium">{stat.label}</p>
               </motion.div>
             ))}
           </div>
@@ -465,13 +488,11 @@ export default function Home() {
               <div className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">Babangida Market FHA Lugbe</p>
-                  <p className="text-sm text-muted-foreground">Abuja, Nigeria</p>
+                  <p className="font-medium">Abuja, Nigeria</p>
                 </div>
               </div>
             </div>
 
-            {/* ✅ Response Time Info */}
             <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
               <div className="flex items-start gap-3">
                 <Clock className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
@@ -555,7 +576,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 🦶 FOOTER WITH LOGO - UPDATED WITH BLOG LINK */}
+      {/* 🦶 FOOTER WITH LOGO */}
       <footer className="py-12 px-4 md:px-6 border-t border-border bg-background">
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
           <div>
@@ -609,7 +630,7 @@ export default function Home() {
         </div>
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground">
           <p className="mb-2">© {new Date().getFullYear()} EWA Logistics Limited. All rights reserved.</p>
-          <p className="text-xs">Babangida Market FHA Lugbe, Abuja, Nigeria | RC: 9608218</p>
+          <p className="text-xs">Abuja, Nigeria | RC: 9608218</p>
         </div>
       </footer>
     </div>
