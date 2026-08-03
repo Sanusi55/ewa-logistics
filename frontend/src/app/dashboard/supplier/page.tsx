@@ -25,7 +25,7 @@ export default function SupplierDashboardPage() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "orders" | "tracking" | "account">("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
@@ -35,15 +35,35 @@ export default function SupplierDashboardPage() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState<any>(null);
   
-  // New: Evidence Upload State
+  // Evidence Upload State
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
   const [evidenceOrder, setEvidenceOrder] = useState<any>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidenceNotes, setEvidenceNotes] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
+  // ✅ NEW: Account Details State
+  const [accountDetails, setAccountDetails] = useState({
+    bankName: "",
+    accountNumber: "",
+    accountName: "",
+  });
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+
+  // ✅ NEW: Nigerian Banks List for Dropdown
+  const nigerianBanks = [
+    "Access Bank", "Citibank", "Ecobank", "Fidelity Bank", "First Bank",
+    "First City Monument Bank (FCMB)", "Globus Bank", "Guaranty Trust Bank (GTBank)",
+    "Heritage Bank", "Jaiz Bank", "Keystone Bank", "Kuda Bank", "Opay",
+    "Palmpay", "Polaris Bank", "Providus Bank", "Stanbic IBTC Bank",
+    "Standard Chartered Bank", "Sterling Bank", "SunTrust Bank",
+    "Titan Trust Bank", "Union Bank", "United Bank for Africa (UBA)",
+    "Unity Bank", "Wema Bank", "Zenith Bank"
+  ];
+
   useEffect(() => {
     loadOrders();
+    loadAccountDetails();
   }, []);
 
   const loadOrders = async () => {
@@ -73,6 +93,62 @@ export default function SupplierDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Failed to load orders" });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ✅ NEW: Load existing account details
+  const loadAccountDetails = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("supplier_profiles") 
+      .select("bank_name, account_number, account_name")
+      .eq("user_id", user.id)
+      .single();
+
+    if (data && !error) {
+      setAccountDetails({
+        bankName: data.bank_name || "",
+        accountNumber: data.account_number || "",
+        accountName: data.account_name || "",
+      });
+    }
+  };
+
+  // ✅ NEW: Save account details
+  const handleSaveAccountDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAccount(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("supplier_profiles")
+        .upsert({
+          user_id: user.id,
+          bank_name: accountDetails.bankName,
+          account_number: accountDetails.accountNumber,
+          account_name: accountDetails.accountName,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      addToast({ 
+        type: "success", 
+        title: "Account Details Saved! ✅", 
+        message: "Your payout information has been updated successfully." 
+      });
+    } catch (error: any) {
+      addToast({ 
+        type: "error", 
+        title: "Error", 
+        message: error.message || "Failed to save account details" 
+      });
+    } finally {
+      setIsSavingAccount(false);
     }
   };
 
@@ -123,7 +199,6 @@ export default function SupplierDashboardPage() {
     setShowTrackingModal(true);
   };
 
-  // New: Evidence Upload Handlers
   const handleOpenEvidenceModal = (order: any) => {
     setEvidenceOrder(order);
     setEvidenceFile(null);
@@ -314,19 +389,19 @@ export default function SupplierDashboardPage() {
             </motion.div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 border-b border-border">
-            {["overview", "orders", "tracking"].map((tab) => (
+          {/* ✅ UPDATED: Tabs now include "account" */}
+          <div className="flex gap-2 border-b border-border overflow-x-auto">
+            {["overview", "orders", "tracking", "account"].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 ${
+                onClick={() => setActiveTab(tab as any)}
+                className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 whitespace-nowrap ${
                   activeTab === tab 
                     ? "border-orange-500 text-orange-500" 
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab}
+                {tab === "account" ? "Account Details" : tab}
               </button>
             ))}
           </div>
@@ -415,11 +490,12 @@ export default function SupplierDashboardPage() {
                     <MagneticButton className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
                       <Download className="w-4 h-4" /> Download Reports
                     </MagneticButton>
-                    <Link href="/dashboard/settings">
-                      <MagneticButton className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                        <MapPin className="w-4 h-4" /> Update Settings
-                      </MagneticButton>
-                    </Link>
+                    <button 
+                      onClick={() => setActiveTab("account")} 
+                      className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer border-none"
+                    >
+                      <Building2 className="w-4 h-4" /> Update Account Details
+                    </button>
                   </div>
                 </div>
               </div>
@@ -548,7 +624,6 @@ export default function SupplierDashboardPage() {
                           </MagneticButton>
                         )}
                         
-                        {/* ✅ NEW: Upload Evidence Button for Delivered Orders */}
                         {order.status === "delivered" && (
                           <MagneticButton
                             onClick={() => handleOpenEvidenceModal(order)}
@@ -615,6 +690,80 @@ export default function SupplierDashboardPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ✅ NEW: Account Details Tab */}
+          {activeTab === "account" && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
+              <div className="glass rounded-2xl border border-border p-6 md:p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 bg-orange-500/10 rounded-xl">
+                    <Building2 className="w-6 h-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Account Details</h2>
+                    <p className="text-sm text-muted-foreground">Add your bank account information to receive payouts for completed orders.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveAccountDetails} className="space-y-6">
+                  {/* ✅ UPDATED: Bank Name is now a Dropdown */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Bank Name <span className="text-red-500">*</span></label>
+                    <select
+                      value={accountDetails.bankName}
+                      onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="" disabled>Select your bank</option>
+                      {nigerianBanks.map((bank) => (
+                        <option key={bank} value={bank}>{bank}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Account Number <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={accountDetails.accountNumber}
+                      onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                      placeholder="e.g. 0123456789"
+                      maxLength={10}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Account Name <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={accountDetails.accountName}
+                      onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                      placeholder="e.g. John Doe Enterprises"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={isSavingAccount}
+                      className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isSavingAccount ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                      ) : (
+                        <><CheckCircle className="w-4 h-4" /> Save Account Details</>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           )}
@@ -698,7 +847,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Upload Evidence Modal */}
+      {/* Upload Evidence Modal */}
       <AnimatePresence>
         {showEvidenceModal && evidenceOrder && (
           <>

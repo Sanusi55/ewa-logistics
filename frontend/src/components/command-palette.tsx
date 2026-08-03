@@ -45,7 +45,7 @@ export default function CommandPalette() {
     { id: "settings", label: "Settings", description: "Account preferences", icon: Settings, category: "Navigation", href: "/dashboard/settings" },
     { id: "driver", label: "Driver View", description: "Switch to driver dashboard", icon: Truck, category: "Navigation", href: "/dashboard/driver" },
     { id: "supplier", label: "Supplier View", description: "Switch to supplier dashboard", icon: Package, category: "Navigation", href: "/dashboard/supplier" },
-    { id: "admin", label: "Admin Control", description: "Platform management", icon: Shield, category: "Navigation", href: "/dashboard/admin" },
+    // ✅ REMOVED: Admin Control entry
     
     // Quick Actions
     { id: "new-order", label: "Create New Order", description: "Start a new material order", icon: Plus, category: "Quick Actions", href: "/order" },

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Plus, Edit2, Trash2, Search, Eye, EyeOff,
-  DollarSign, CheckCircle, Loader2, X, ArrowLeft, Upload, Image as ImageIcon
+  DollarSign, CheckCircle, Loader2, X, ArrowLeft, Upload, 
+  Image as ImageIcon, Clock
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
@@ -19,6 +20,7 @@ interface Material {
   unit: string;
   image_url: string;
   is_active: boolean;
+  approval_status: "pending" | "approved" | "rejected"; // ✅ NEW: Admin approval status
   created_at: string;
 }
 
@@ -30,7 +32,10 @@ export default function SupplierMaterialsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  
+  // ✅ UPDATED: Filter by approval status instead of active/inactive
+  const [filterStatus, setFilterStatus] = useState<"all" | "approved" | "pending" | "rejected">("all");
+  
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -64,7 +69,12 @@ export default function SupplierMaterialsPage() {
       .order("created_at", { ascending: false });
 
     if (data) {
-      setMaterials(data);
+      // Ensure approval_status has a fallback for older records
+      const formattedData = data.map((m: any) => ({
+        ...m,
+        approval_status: m.approval_status || "pending"
+      }));
+      setMaterials(formattedData);
     }
 
     setIsLoading(false);
@@ -100,21 +110,16 @@ export default function SupplierMaterialsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         addToast({ type: "error", title: "Invalid File", message: "Please select an image file." });
         return;
       }
-      
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         addToast({ type: "error", title: "File Too Large", message: "Image must be less than 5MB." });
         return;
       }
 
       setSelectedFile(file);
-      
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -134,21 +139,16 @@ export default function SupplierMaterialsPage() {
         return null;
       }
 
-      // Create unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${materialId || Date.now()}.${fileExt}`;
       const filePath = `materials/${fileName}`;
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('material-images')
         .upload(filePath, file, { upsert: true });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('material-images')
         .getPublicUrl(filePath);
@@ -173,12 +173,9 @@ export default function SupplierMaterialsPage() {
 
     let imageUrl = formData.image_url;
 
-    // Upload image if file selected
     if (selectedFile) {
       const uploadedUrl = await uploadImageToSupabase(selectedFile);
-      if (uploadedUrl) {
-        imageUrl = uploadedUrl;
-      }
+      if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
     const { error } = await supabase
@@ -191,10 +188,11 @@ export default function SupplierMaterialsPage() {
         unit: formData.unit,
         image_url: imageUrl,
         is_active: true,
+        approval_status: "pending", // ✅ NEW: All new materials require admin approval
       });
 
     if (!error) {
-      addToast({ type: "success", title: "Material Added! 🎉", message: "Your material has been added successfully." });
+      addToast({ type: "success", title: "Material Submitted! 🎉", message: "Your material is pending admin approval." });
       setShowAddModal(false);
       setSelectedFile(null);
       setImagePreview("");
@@ -212,12 +210,9 @@ export default function SupplierMaterialsPage() {
 
     let imageUrl = formData.image_url;
 
-    // Upload new image if file selected
     if (selectedFile) {
       const uploadedUrl = await uploadImageToSupabase(selectedFile, selectedMaterial.id);
-      if (uploadedUrl) {
-        imageUrl = uploadedUrl;
-      }
+      if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
     const { error } = await supabase
@@ -228,11 +223,13 @@ export default function SupplierMaterialsPage() {
         price_per_ton: parseFloat(formData.price_per_ton),
         unit: formData.unit,
         image_url: imageUrl,
+        // ✅ If edited, reset to pending so admin can review the changes
+        approval_status: "pending", 
       })
       .eq("id", selectedMaterial.id);
 
     if (!error) {
-      addToast({ type: "success", title: "Material Updated! ✅", message: "Your material has been updated successfully." });
+      addToast({ type: "success", title: "Material Updated! ✅", message: "Changes submitted for admin review." });
       setShowEditModal(false);
       setSelectedFile(null);
       setImagePreview("");
@@ -252,7 +249,7 @@ export default function SupplierMaterialsPage() {
       addToast({ 
         type: "success", 
         title: material.is_active ? "Material Hidden" : "Material Visible", 
-        message: `Material is now ${material.is_active ? "hidden" : "visible"} to customers.` 
+        message: `Material is now ${material.is_active ? "hidden" : "visible"} in your dashboard.` 
       });
       fetchMaterials();
     }
@@ -276,12 +273,11 @@ export default function SupplierMaterialsPage() {
     }
   };
 
+  // ✅ UPDATED: Filter logic for approval status
   const filteredMaterials = materials.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           m.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterActive === "all" || 
-                          (filterActive === "active" && m.is_active) ||
-                          (filterActive === "inactive" && !m.is_active);
+    const matchesFilter = filterStatus === "all" || m.approval_status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -302,7 +298,7 @@ export default function SupplierMaterialsPage() {
             </Link>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">My Materials</h1>
-              <p className="text-muted-foreground mt-1">Manage your material inventory and pricing.</p>
+              <p className="text-muted-foreground mt-1">Manage your inventory. New items require admin approval.</p>
             </div>
           </div>
           <button
@@ -313,12 +309,13 @@ export default function SupplierMaterialsPage() {
           </button>
         </div>
 
+        {/* ✅ UPDATED: Stats now show Approval Status breakdown */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Materials", value: materials.length, icon: Package, color: "text-orange-500", bg: "bg-orange-500/10" },
-            { label: "Active", value: materials.filter(m => m.is_active).length, icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
-            { label: "Hidden", value: materials.filter(m => !m.is_active).length, icon: EyeOff, color: "text-gray-500", bg: "bg-gray-500/10" },
-            { label: "Avg Price", value: materials.length > 0 ? formatNaira(materials.reduce((sum, m) => sum + m.price_per_ton, 0) / materials.length) : "₦0", icon: DollarSign, color: "text-blue-500", bg: "bg-blue-500/10" },
+            { label: "Approved", value: materials.filter(m => m.approval_status === "approved").length, icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
+            { label: "Pending Review", value: materials.filter(m => m.approval_status === "pending").length, icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10" },
+            { label: "Rejected", value: materials.filter(m => m.approval_status === "rejected").length, icon: X, color: "text-red-500", bg: "bg-red-500/10" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -349,18 +346,19 @@ export default function SupplierMaterialsPage() {
               className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm"
             />
           </div>
+          {/* ✅ UPDATED: Filter buttons for approval status */}
           <div className="flex gap-2">
-            {["all", "active", "inactive"].map((filter) => (
+            {["all", "approved", "pending", "rejected"].map((filter) => (
               <button
                 key={filter}
-                onClick={() => setFilterActive(filter as any)}
+                onClick={() => setFilterStatus(filter as any)}
                 className={`px-4 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                  filterActive === filter
+                  filterStatus === filter
                     ? "bg-orange-500 text-white"
                     : "bg-muted hover:bg-muted/80"
                 }`}
               >
-                {filter}
+                {filter === "all" ? "All" : filter}
               </button>
             ))}
           </div>
@@ -393,12 +391,23 @@ export default function SupplierMaterialsPage() {
                     </div>
                   )}
                   
-                  <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold ${
-                    material.is_active
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-500 text-white"
-                  }`}>
-                    {material.is_active ? "Active" : "Hidden"}
+                  {/* ✅ NEW: Approval Status Badge */}
+                  <div className="absolute top-3 right-3">
+                    {material.approval_status === "approved" && (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white flex items-center gap-1 shadow-sm">
+                        <CheckCircle className="w-3 h-3" /> Approved
+                      </span>
+                    )}
+                    {material.approval_status === "pending" && (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500 text-white flex items-center gap-1 shadow-sm">
+                        <Clock className="w-3 h-3" /> Pending
+                      </span>
+                    )}
+                    {material.approval_status === "rejected" && (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white flex items-center gap-1 shadow-sm">
+                        <X className="w-3 h-3" /> Rejected
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -451,11 +460,11 @@ export default function SupplierMaterialsPage() {
             className="glass rounded-2xl p-12 border border-border border-dashed text-center"
           >
             <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-xl font-bold mb-2">No materials yet</h3>
+            <h3 className="text-xl font-bold mb-2">No materials found</h3>
             <p className="text-muted-foreground mb-6">
               {materials.length === 0
                 ? "Start by adding your first material to sell."
-                : "No materials match your filters."}
+                : "No materials match your current filters."}
             </p>
             {materials.length === 0 && (
               <button
@@ -469,6 +478,7 @@ export default function SupplierMaterialsPage() {
         )}
       </motion.div>
 
+      {/* Add Modal (Unchanged, but inserts with approval_status: "pending") */}
       <AnimatePresence>
         {showAddModal && (
           <>
@@ -544,25 +554,17 @@ export default function SupplierMaterialsPage() {
                     </div>
                   </div>
 
-                  {/* Image Upload Section */}
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Material Image</label>
                     <div className="space-y-3">
-                      {/* Image Preview */}
                       {imagePreview && (
                         <div className="relative rounded-xl overflow-hidden border border-border bg-muted/30">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="w-full h-48 object-cover"
-                          />
+                          <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
                           <button
                             onClick={() => {
                               setImagePreview("");
                               setSelectedFile(null);
-                              if (fileInputRef.current) {
-                                fileInputRef.current.value = "";
-                              }
+                              if (fileInputRef.current) fileInputRef.current.value = "";
                             }}
                             className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer"
                           >
@@ -571,24 +573,16 @@ export default function SupplierMaterialsPage() {
                         </div>
                       )}
                       
-                      {/* Upload Button */}
                       <div
                         onClick={() => fileInputRef.current?.click()}
                         className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer"
                       >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
+                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                         <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-sm font-medium text-foreground">Click to upload image</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
                       </div>
 
-                      {/* Optional URL Input */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <span className="text-xs text-muted-foreground">Or use image URL</span>
@@ -609,10 +603,7 @@ export default function SupplierMaterialsPage() {
                 </div>
 
                 <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer"
-                  >
+                  <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer">
                     Cancel
                   </button>
                   <button
@@ -620,13 +611,7 @@ export default function SupplierMaterialsPage() {
                     disabled={isUploading}
                     className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
-                      </>
-                    ) : (
-                      "Add Material"
-                    )}
+                    {isUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : "Submit for Approval"}
                   </button>
                 </div>
               </div>
@@ -635,6 +620,7 @@ export default function SupplierMaterialsPage() {
         )}
       </AnimatePresence>
 
+      {/* Edit Modal (Unchanged, but resets approval_status to "pending" on edit) */}
       <AnimatePresence>
         {showEditModal && selectedMaterial && (
           <>
@@ -707,25 +693,17 @@ export default function SupplierMaterialsPage() {
                     </div>
                   </div>
 
-                  {/* Image Upload Section */}
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Material Image</label>
                     <div className="space-y-3">
-                      {/* Image Preview */}
                       {imagePreview && (
                         <div className="relative rounded-xl overflow-hidden border border-border bg-muted/30">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="w-full h-48 object-cover"
-                          />
+                          <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
                           <button
                             onClick={() => {
                               setImagePreview("");
                               setSelectedFile(null);
-                              if (fileInputRef.current) {
-                                fileInputRef.current.value = "";
-                              }
+                              if (fileInputRef.current) fileInputRef.current.value = "";
                             }}
                             className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer"
                           >
@@ -734,24 +712,16 @@ export default function SupplierMaterialsPage() {
                         </div>
                       )}
                       
-                      {/* Upload Button */}
                       <div
                         onClick={() => fileInputRef.current?.click()}
                         className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer"
                       >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
+                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                         <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-sm font-medium text-foreground">Click to upload new image</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
                       </div>
 
-                      {/* Optional URL Input */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <span className="text-xs text-muted-foreground">Or use image URL</span>
@@ -772,10 +742,7 @@ export default function SupplierMaterialsPage() {
                 </div>
 
                 <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer"
-                  >
+                  <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer">
                     Cancel
                   </button>
                   <button
@@ -783,13 +750,7 @@ export default function SupplierMaterialsPage() {
                     disabled={isUploading}
                     className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Saving...
-                      </>
-                    ) : (
-                      "Save Changes"
-                    )}
+                    {isUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : "Submit Changes"}
                   </button>
                 </div>
               </div>

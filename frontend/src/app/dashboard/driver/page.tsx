@@ -6,13 +6,12 @@ import {
   Truck, MapPin, Wallet, Star, Navigation, Phone, MessageCircle, 
   CheckCircle, Clock, AlertCircle, Calendar, TrendingUp, Power,
   Package, Settings, ChevronRight, Loader2, DollarSign, X, Key,
-  Camera, FileUp
+  Camera, FileUp, Building2
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
-// ✅ FIXED: Updated import to use confirmDriverDelivery
 import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/actions/orders";
 import MagneticButton from "@/components/magnetic-button";
 
@@ -88,11 +87,31 @@ export default function DriverDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // ✅ NEW: Account Details State
+  const [accountDetails, setAccountDetails] = useState({
+    bankName: "",
+    accountNumber: "",
+    accountName: "",
+  });
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+
+  // ✅ NEW: Nigerian Banks List
+  const nigerianBanks = [
+    "Access Bank", "Citibank", "Ecobank", "Fidelity Bank", "First Bank",
+    "First City Monument Bank (FCMB)", "Globus Bank", "Guaranty Trust Bank (GTBank)",
+    "Heritage Bank", "Jaiz Bank", "Keystone Bank", "Kuda Bank", "Opay",
+    "Palmpay", "Polaris Bank", "Providus Bank", "Stanbic IBTC Bank",
+    "Standard Chartered Bank", "Sterling Bank", "SunTrust Bank",
+    "Titan Trust Bank", "Union Bank", "United Bank for Africa (UBA)",
+    "Unity Bank", "Wema Bank", "Zenith Bank"
+  ];
   
   const supabase = createClient();
 
   useEffect(() => {
     fetchDriverData();
+    loadAccountDetails();
   }, []);
 
   async function fetchDriverData() {
@@ -142,6 +161,62 @@ export default function DriverDashboardPage() {
     setIsLoading(false);
   }
 
+  // ✅ NEW: Load existing account details
+  const loadAccountDetails = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("driver_profiles") 
+      .select("bank_name, account_number, account_name")
+      .eq("user_id", user.id)
+      .single();
+
+    if (data && !error) {
+      setAccountDetails({
+        bankName: data.bank_name || "",
+        accountNumber: data.account_number || "",
+        accountName: data.account_name || "",
+      });
+    }
+  };
+
+  // ✅ NEW: Save account details
+  const handleSaveAccountDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAccount(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("driver_profiles")
+        .upsert({
+          user_id: user.id,
+          bank_name: accountDetails.bankName,
+          account_number: accountDetails.accountNumber,
+          account_name: accountDetails.accountName,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      addToast({ 
+        type: "success", 
+        title: "Account Details Saved! ✅", 
+        message: "Your payout information has been updated successfully." 
+      });
+    } catch (error: any) {
+      addToast({ 
+        type: "error", 
+        title: "Error", 
+        message: error.message || "Failed to save account details" 
+      });
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
   const handleOpenBidModal = (order: Order) => {
     setSelectedOrder(order);
     setBidAmount("");
@@ -190,7 +265,6 @@ export default function DriverDashboardPage() {
     setShowCodeModal(true);
   };
 
-  // ✅ FIXED: Updated function call to use confirmDriverDelivery
   const handleVerifyCode = async () => {
     if (!selectedOrder || !deliveryCode) {
       addToast({ type: "error", title: "Error", message: "Please enter the delivery code." });
@@ -514,6 +588,68 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* ✅ UPDATED: Account Details Card with Fixed Button */}
+                <div className="glass p-6 rounded-2xl border border-border mb-10">
+                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-orange-500" /> Account Details
+                  </h3>
+                  <form onSubmit={handleSaveAccountDetails} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Bank Name <span className="text-red-500">*</span></label>
+                      <select
+                        value={accountDetails.bankName}
+                        onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
+                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none cursor-pointer text-sm"
+                        required
+                      >
+                        <option value="" disabled>Select your bank</option>
+                        {nigerianBanks.map((bank) => (
+                          <option key={bank} value={bank}>{bank}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Account Number <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={accountDetails.accountNumber}
+                        onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
+                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
+                        placeholder="0123456789"
+                        maxLength={10}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Account Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={accountDetails.accountName}
+                        onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
+                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
+                        placeholder="Account Name"
+                        required
+                      />
+                    </div>
+                    
+                    {/* ✅ Button is now wrapped in a div with padding so it never gets cut off */}
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={isSavingAccount}
+                        className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
+                      >
+                        {isSavingAccount ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                        ) : (
+                          <><CheckCircle className="w-4 h-4" /> Save Account Details</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
               </div>
             </div>
           </motion.div>

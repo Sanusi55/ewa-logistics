@@ -8,7 +8,7 @@ import {
   Search, Filter, Download, Settings, Bell, Activity, BarChart3,
   Truck, Building2, User, ArrowUpRight, ArrowDownRight, Clock,
   Mail, Phone, MapPin, Star, Calendar, CreditCard, Lock, Globe,
-  Percent, FileText, Database, Zap, Award, MessageSquare, Check, MoreHorizontal
+  Percent, FileText, Database, Zap, Award, MessageSquare, Check, MoreHorizontal, Layers, X
 } from "lucide-react";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
@@ -16,6 +16,28 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend 
 } from "recharts";
+
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: "customer" | "driver" | "supplier";
+  status: "active" | "pending" | "suspended";
+  joined: string;
+  orders: number;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+}
+
+interface ListingData {
+  id: string;
+  supplier: string;
+  material: string;
+  price: number;
+  status: "pending" | "approved" | "rejected";
+  date: string;
+}
 
 // 📊 Platform-Wide Stats
 const platformStats = [
@@ -42,16 +64,16 @@ const userDistribution = [
   { name: "Suppliers", value: 355, color: "#10b981" },
 ];
 
-// 👤 Users Data
-const allUsers = [
+// 👤 Users Data (Updated with Bank Details for Drivers/Suppliers)
+const allUsers: UserData[] = [
   { id: "U-001", name: "Chioma Adeyemi", email: "chioma@buildright.com", role: "customer", status: "active", joined: "2026-01-15", orders: 24 },
-  { id: "U-002", name: "Emmanuel Okafor", email: "emma.driver@gmail.com", role: "driver", status: "active", joined: "2026-02-03", orders: 156 },
-  { id: "U-003", name: "Sagamu Quarry Ltd", email: "info@sagamuquarry.ng", role: "supplier", status: "pending", joined: "2026-05-28", orders: 0 },
-  { id: "U-004", name: "Musa Abdullahi", email: "musa.trucks@yahoo.com", role: "driver", status: "active", joined: "2026-03-12", orders: 89 },
+  { id: "U-002", name: "Emmanuel Okafor", email: "emma.driver@gmail.com", role: "driver", status: "active", joined: "2026-02-03", orders: 156, bankName: "Access Bank", accountNumber: "0123456789", accountName: "Emmanuel Okafor" },
+  { id: "U-003", name: "Sagamu Quarry Ltd", email: "info@sagamuquarry.ng", role: "supplier", status: "pending", joined: "2026-05-28", orders: 0, bankName: "GTBank", accountNumber: "0987654321", accountName: "Sagamu Quarry Ltd" },
+  { id: "U-004", name: "Musa Abdullahi", email: "musa.trucks@yahoo.com", role: "driver", status: "active", joined: "2026-03-12", orders: 89, bankName: "Kuda Bank", accountNumber: "1122334455", accountName: "Musa Abdullahi" },
   { id: "U-005", name: "Lekki Construction Co", email: "ops@lekkicon.ng", role: "customer", status: "active", joined: "2026-01-28", orders: 67 },
-  { id: "U-006", name: "Adebayo Stones", email: "adebayo@stones.ng", role: "supplier", status: "active", joined: "2026-02-20", orders: 312 },
+  { id: "U-006", name: "Adebayo Stones", email: "adebayo@stones.ng", role: "supplier", status: "active", joined: "2026-02-20", orders: 312, bankName: "Zenith Bank", accountNumber: "9988776655", accountName: "Adebayo Stones Ltd" },
   { id: "U-007", name: "Grace Nwankwo", email: "grace.n@gmail.com", role: "customer", status: "suspended", joined: "2026-04-05", orders: 8 },
-  { id: "U-008", name: "Ibadan Granite Hub", email: "sales@ibadangranite.ng", role: "supplier", status: "pending", joined: "2026-05-30", orders: 0 },
+  { id: "U-008", name: "Ibadan Granite Hub", email: "sales@ibadangranite.ng", role: "supplier", status: "pending", joined: "2026-05-30", orders: 0, bankName: "Opay", accountNumber: "5544332211", accountName: "Ibadan Granite Hub" },
 ];
 
 // 📦 Recent Orders
@@ -72,16 +94,29 @@ const pendingPayouts = [
   { id: "PAY-104", recipient: "Musa Abdullahi", role: "driver", amount: "$890", method: "Mobile Money", requested: "1 day ago" },
 ];
 
+// 📋 Pending Listings (For Admin Approval)
+const listings: ListingData[] = [
+  { id: "L-001", supplier: "Sagamu Quarry Ltd", material: "1-Inch Granite", price: 45000, status: "pending", date: "2026-05-28" },
+  { id: "L-002", supplier: "Adebayo Stones", material: "Sharp Sand", price: 15000, status: "approved", date: "2026-05-20" },
+  { id: "L-003", supplier: "Ibadan Granite Hub", material: "3/4 Granite", price: 40000, status: "pending", date: "2026-05-30" },
+  { id: "L-004", supplier: "Sagamu Quarry Ltd", material: "Stone Base", price: 30000, status: "rejected", date: "2026-05-15" },
+];
+
 export default function AdminDashboardPage() {
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   const [userFilter, setUserFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  
+  // ✅ NEW: States for User Details Modal & Password Change
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "users", label: "Users", icon: Users },
+    { id: "listings", label: "Listings", icon: Layers }, // ✅ NEW: Listings Tab
     { id: "orders", label: "Orders", icon: Package },
     { id: "payouts", label: "Payouts", icon: DollarSign },
     { id: "analytics", label: "Analytics", icon: Activity },
@@ -287,11 +322,9 @@ export default function AdminDashboardPage() {
             </motion.div>
           )}
 
-          {/* 👥 USERS TAB (ENHANCED) */}
+          {/* 👥 USERS TAB */}
           {activeTab === "users" && (
             <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-              
-              {/* Filters & Bulk Actions */}
               <div className="glass p-4 rounded-xl border border-border flex flex-col md:flex-row gap-3">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -320,7 +353,6 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Bulk Action Bar */}
               <AnimatePresence>
                 {selectedUsers.length > 0 && (
                   <motion.div 
@@ -344,7 +376,6 @@ export default function AdminDashboardPage() {
                 )}
               </AnimatePresence>
 
-              {/* Users Table */}
               <div className="glass rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -421,7 +452,14 @@ export default function AdminDashboardPage() {
                             </td>
                             <td className="p-4">
                               <div className="flex items-center justify-end gap-1">
-                                <button className="p-1.5 hover:bg-muted rounded transition-colors cursor-pointer" title="View"><Eye className="w-4 h-4" /></button>
+                                {/* ✅ UPDATED: View button now opens the details modal */}
+                                <button 
+                                  onClick={() => setSelectedUser(user)}
+                                  className="p-1.5 hover:bg-muted rounded transition-colors cursor-pointer" 
+                                  title="View Details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
                                 <button className="p-1.5 hover:bg-muted rounded transition-colors cursor-pointer" title="Edit"><Edit2 className="w-4 h-4" /></button>
                                 <button className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded transition-colors cursor-pointer" title="Ban"><Ban className="w-4 h-4" /></button>
                               </div>
@@ -438,6 +476,90 @@ export default function AdminDashboardPage() {
                     <p>No users match your filters</p>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ✅ NEW: LISTINGS TAB (For Admin Approval) */}
+          {activeTab === "listings" && (
+            <motion.div key="listings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="glass p-4 rounded-xl border border-border flex flex-col md:flex-row gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input 
+                    type="text" 
+                    placeholder="Search listings by material or supplier..." 
+                    className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  {["all", "pending", "approved", "rejected"].map((filter) => (
+                    <button key={filter} className="px-3 py-2 rounded-lg text-xs font-medium capitalize bg-muted hover:bg-muted/80 transition-all cursor-pointer">
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="glass rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-muted-foreground">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Listing ID</th>
+                        <th className="text-left p-4 font-medium">Supplier</th>
+                        <th className="text-left p-4 font-medium">Material</th>
+                        <th className="text-left p-4 font-medium">Price</th>
+                        <th className="text-left p-4 font-medium">Date</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listings.map((listing) => {
+                        const statusConfig = {
+                          pending: { color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400", label: "Pending" },
+                          approved: { color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", label: "Approved" },
+                          rejected: { color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", label: "Rejected" },
+                        };
+                        const status = statusConfig[listing.status];
+                        
+                        return (
+                          <tr key={listing.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                            <td className="p-4 font-mono text-xs">{listing.id}</td>
+                            <td className="p-4 font-medium">{listing.supplier}</td>
+                            <td className="p-4">{listing.material}</td>
+                            <td className="p-4">₦{listing.price.toLocaleString()}</td>
+                            <td className="p-4 text-muted-foreground">{listing.date}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                                {status.label}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              {listing.status === "pending" && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button 
+                                    onClick={() => addToast({ type: "success", title: "Listing Approved", message: `${listing.material} is now live on the marketplace.` })}
+                                    className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Check className="w-3 h-3" /> Approve
+                                  </button>
+                                  <button 
+                                    onClick={() => addToast({ type: "error", title: "Listing Rejected", message: `${listing.material} has been rejected.` })}
+                                    className="px-3 py-1.5 text-xs bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer flex items-center gap-1"
+                                  >
+                                    <XCircle className="w-3 h-3" /> Reject
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -676,6 +798,63 @@ export default function AdminDashboardPage() {
           {/* ⚙️ SETTINGS TAB */}
           {activeTab === "settings" && (
             <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              
+              {/* ✅ NEW: Change Password Section */}
+              <div className="glass p-6 rounded-xl border border-border">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-orange-500" /> Change Admin Password
+                </h3>
+                <div className="space-y-4 max-w-md">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Current Password</label>
+                    <input 
+                      type="password" 
+                      value={passwordForm.current}
+                      onChange={(e) => setPasswordForm({...passwordForm, current: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">New Password</label>
+                    <input 
+                      type="password" 
+                      value={passwordForm.new}
+                      onChange={(e) => setPasswordForm({...passwordForm, new: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Confirm New Password</label>
+                    <input 
+                      type="password" 
+                      value={passwordForm.confirm}
+                      onChange={(e) => setPasswordForm({...passwordForm, confirm: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (passwordForm.new !== passwordForm.confirm) {
+                        addToast({ type: "error", title: "Error", message: "New passwords do not match." });
+                        return;
+                      }
+                      if (!passwordForm.current || !passwordForm.new) {
+                        addToast({ type: "error", title: "Error", message: "Please fill in all password fields." });
+                        return;
+                      }
+                      addToast({ type: "success", title: "Password Updated", message: "Your admin password has been changed successfully." });
+                      setPasswordForm({ current: "", new: "", confirm: "" });
+                    }}
+                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium cursor-pointer transition-colors"
+                  >
+                    Update Password
+                  </button>
+                </div>
+              </div>
+
               <div className="glass p-6 rounded-xl border border-border">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <Percent className="w-5 h-5 text-orange-500" /> Commission & Fees
@@ -767,6 +946,110 @@ export default function AdminDashboardPage() {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* ✅ NEW: View User Details Modal */}
+      <AnimatePresence>
+        {selectedUser && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedUser(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <User className="w-5 h-5 text-orange-500" /> User Details
+                  </h3>
+                  <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-xl border border-border">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-lg font-bold">
+                      {selectedUser.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-lg">{selectedUser.name}</p>
+                      <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Role</p>
+                      <p className="font-semibold capitalize">{selectedUser.role}</p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Status</p>
+                      <p className="font-semibold capitalize">{selectedUser.status}</p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Joined</p>
+                      <p className="font-semibold">{selectedUser.joined}</p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Total Orders</p>
+                      <p className="font-semibold">{selectedUser.orders}</p>
+                    </div>
+                  </div>
+
+                  {/* ✅ Show Account Details ONLY for Drivers and Suppliers */}
+                  {(selectedUser.role === "supplier" || selectedUser.role === "driver") && (
+                    <div className="p-4 bg-green-500/5 rounded-xl border border-green-500/20">
+                      <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-green-600 dark:text-green-400">
+                        <CreditCard className="w-4 h-4" /> Account Details
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Bank Name:</span>
+                          <span className="font-medium">{selectedUser.bankName || "Not provided"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Account Number:</span>
+                          <span className="font-medium">{selectedUser.accountNumber || "Not provided"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Account Name:</span>
+                          <span className="font-medium">{selectedUser.accountName || "Not provided"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button 
+                    onClick={() => setSelectedUser(null)}
+                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button 
+                    onClick={() => {
+                      addToast({ type: "info", title: "Action", message: `Manage ${selectedUser.name}'s account` });
+                      setSelectedUser(null);
+                    }}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors cursor-pointer"
+                  >
+                    Manage User
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }
