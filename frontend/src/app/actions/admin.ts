@@ -24,12 +24,12 @@ async function requireAdmin() {
   return { user, profile, isAdmin: true };
 }
 
-// ✅ Log admin action (Fixed: Removed invalid .catch())
+// ✅ Log admin action
 async function logAdminAction(
   adminId: string,
   action: string,
   targetType?: string,
-  targetId?: string, // Changed to allow undefined
+  targetId?: string,
   details?: any
 ) {
   const supabase = await createClient();
@@ -53,9 +53,8 @@ export async function getAdminStats() {
 
   const supabase = await createClient();
 
-  const { data: users } = await supabase.from("profiles").select("id, role, created_at, is_suspended");
+  const { data: users } = await supabase.from("profiles").select("id, role, created_at, is_suspended, is_approved");
   const { data: orders } = await supabase.from("orders").select("id, status, total_amount, created_at, delivery_fee, driver_id");
-  
   const { data: deliveries } = await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount");
   const { data: bids } = await supabase.from("driver_bids").select("id, status, bid_amount, created_at");
 
@@ -151,10 +150,17 @@ export async function suspendUser(userId: string, reason: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ is_suspended: true, suspension_reason: reason, updated_at: new Date().toISOString() })
+    .update({ 
+      is_suspended: true, 
+      suspension_reason: reason, 
+      updated_at: new Date().toISOString() 
+    })
     .eq("id", userId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error("❌ Suspend User Error:", error);
+    return { success: false, error: error.message };
+  }
 
   await logAdminAction(admin.user!.id, "suspend_user", "user", userId, { reason });
   return { success: true };
@@ -171,7 +177,10 @@ export async function unsuspendUser(userId: string) {
     .update({ is_suspended: false, suspension_reason: null, updated_at: new Date().toISOString() })
     .eq("id", userId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error("❌ Unsuspend User Error:", error);
+    return { success: false, error: error.message };
+  }
 
   await logAdminAction(admin.user!.id, "unsuspend_user", "user", userId);
   return { success: true };
@@ -193,7 +202,10 @@ export async function changeUserRole(userId: string, newRole: string) {
     .update({ role: newRole, updated_at: new Date().toISOString() })
     .eq("id", userId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error("❌ Change Role Error:", error);
+    return { success: false, error: error.message };
+  }
 
   await logAdminAction(admin.user!.id, "change_role", "user", userId, { newRole });
   return { success: true };
@@ -205,15 +217,32 @@ export async function deleteUser(userId: string) {
   if (!admin.isAdmin) return { success: false, error: admin.error };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+  
+  // Note: If the user has existing orders, deliveries, or bids, 
+  // this delete will fail due to Foreign Key Constraints (which protects your data).
+  // It is highly recommended to "Suspend" users instead of deleting them.
+  const { error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error("❌ Delete User Error:", error);
+    const isForeignKeyError = error.message.includes("foreign key constraint") || error.message.includes("violates foreign key");
+    
+    return { 
+      success: false, 
+      error: isForeignKeyError 
+        ? "Cannot delete user: They have existing orders or records. Please suspend them instead." 
+        : error.message 
+    };
+  }
 
   await logAdminAction(admin.user!.id, "delete_user", "user", userId);
   return { success: true };
 }
 
-// ✅ Get all orders (WITH CUSTOMER NAMES RESTORED)
+// ✅ Get all orders
 export async function getAdminOrders(status: string = "all", search: string = "") {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: [] };
@@ -237,7 +266,6 @@ export async function getAdminOrders(status: string = "all", search: string = ""
   }
 
   const { data, error } = await query;
-  
   if (error) {
     console.error("❌ [ADMIN] getAdminOrders database error:", error);
     return { error: error.message, data: [] };
@@ -304,7 +332,6 @@ export async function broadcastNotification(title: string, message: string, targ
 
   if (error) return { success: false, error: error.message };
 
-  // ✅ Fixed: Removed invalid .catch()
   const { error: broadcastError } = await supabase.from("broadcast_notifications").insert({
     admin_id: admin.user!.id,
     title,
@@ -317,7 +344,6 @@ export async function broadcastNotification(title: string, message: string, targ
     console.error("Failed to log broadcast notification:", broadcastError);
   }
 
-  // ✅ FIXED: Changed 'null' to 'undefined' to satisfy TypeScript
   await logAdminAction(admin.user!.id, "broadcast_notification", "users", undefined, { 
     title, 
     targetRoles, 
@@ -373,8 +399,31 @@ export async function updatePlatformSetting(key: string, value: string) {
     .update({ value, updated_at: new Date().toISOString() })
     .eq("key", key);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error("❌ Update Setting Error:", error);
+    return { success: false, error: error.message };
+  }
 
   await logAdminAction(admin.user!.id, "update_setting", "setting", key, { value });
+  return { success: true };
+}
+
+// ✅ NEW: Approve user (for pending supplier/driver registrations)
+export async function approveUser(userId: string) {
+  const admin = await requireAdmin();
+  if (!admin.isAdmin) return { success: false, error: admin.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_approved: true, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) {
+    console.error("❌ Approve User Error:", error);
+    return { success: false, error: error.message };
+  }
+
+  await logAdminAction(admin.user!.id, "approve_user", "user", userId);
   return { success: true };
 }

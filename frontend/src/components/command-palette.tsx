@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Search, Home, Package, Truck, MapPin, CreditCard, Settings, 
-  LayoutDashboard, Moon, Sun, Plus, FileText, MessageCircle,
-  ArrowRight, Shield, X
+  Search, Home, Package, Truck, MapPin, Settings, 
+  LayoutDashboard, Moon, Sun, MessageCircle,
+  ArrowRight, X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -31,25 +31,17 @@ export default function CommandPalette() {
 
   useEffect(() => setMounted(true), []);
 
-  // All available commands
+  // ✅ UPDATED: Exact list requested by the client
   const commands: CommandItem[] = useMemo(() => [
     // Navigation
     { id: "home", label: "Home", description: "Go to homepage", icon: Home, category: "Navigation", href: "/" },
     { id: "materials", label: "Materials", description: "Browse construction materials", icon: Package, category: "Navigation", href: "/materials" },
     { id: "services", label: "Services", description: "View our logistics services", icon: Truck, category: "Navigation", href: "/services" },
     { id: "dashboard", label: "Dashboard", description: "Go to your dashboard", icon: LayoutDashboard, category: "Navigation", href: "/dashboard" },
-    { id: "orders", label: "My Orders", description: "View your order history", icon: Package, category: "Navigation", href: "/dashboard/orders" },
-    { id: "deliveries", label: "Deliveries", description: "Track your deliveries", icon: Truck, category: "Navigation", href: "/dashboard/deliveries" },
     { id: "tracking", label: "Live Tracking", description: "Track active delivery", icon: MapPin, category: "Navigation", href: "/dashboard/tracking" },
-    { id: "payments", label: "Payments", description: "View transactions & escrow", icon: CreditCard, category: "Navigation", href: "/dashboard/payments" },
     { id: "settings", label: "Settings", description: "Account preferences", icon: Settings, category: "Navigation", href: "/dashboard/settings" },
-    { id: "driver", label: "Driver View", description: "Switch to driver dashboard", icon: Truck, category: "Navigation", href: "/dashboard/driver" },
-    { id: "supplier", label: "Supplier View", description: "Switch to supplier dashboard", icon: Package, category: "Navigation", href: "/dashboard/supplier" },
-    // ✅ REMOVED: Admin Control entry
     
     // Quick Actions
-    { id: "new-order", label: "Create New Order", description: "Start a new material order", icon: Plus, category: "Quick Actions", href: "/order" },
-    { id: "reports", label: "View Reports", description: "Analytics & insights", icon: FileText, category: "Quick Actions", href: "/dashboard/analytics" },
     { 
       id: "support", 
       label: "Contact Support", 
@@ -167,7 +159,7 @@ export default function CommandPalette() {
         transition={{ delay: 1 }}
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 left-6 z-40 flex items-center gap-2 px-3 md:px-4 py-2.5 glass rounded-full border border-border hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/10 transition-all cursor-pointer group"
-        title="Command Menu (⌘K)"
+        title="Command Menu (K)"
       >
         <Search className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
         <span className="text-sm font-medium text-foreground hidden md:inline">Search</span>

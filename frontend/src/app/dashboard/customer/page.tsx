@@ -1,15 +1,17 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Truck, Clock, CheckCircle, DollarSign, 
-  User, MapPin, Calendar, Loader2, AlertCircle, Star, Plus, KeyRound
+  User, MapPin, Calendar, Loader2, AlertCircle, Star, Plus, KeyRound,
+  AlertTriangle, X
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getUserOrders, customerAcceptBid } from "@/app/actions/orders";
+import { createDispute } from "@/app/actions/disputes";
 import { useToast } from "@/components/providers/toast-provider";
 import DashboardLayout from "@/components/dashboard-layout";
 import MagneticButton from "@/components/magnetic-button";
@@ -23,6 +25,12 @@ export default function CustomerDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [acceptingBidId, setAcceptingBidId] = useState<string | null>(null);
+
+  // ✅ NEW: Dispute State
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -80,6 +88,34 @@ export default function CustomerDashboardPage() {
       addToast({ type: "error", title: "Error", message: error.message || "Failed to accept bid" });
     } finally {
       setAcceptingBidId(null);
+    }
+  };
+
+  // ✅ NEW: Handle Dispute Submission
+  const handleCreateDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disputeOrderId || !disputeReason.trim()) return;
+
+    setIsSubmittingDispute(true);
+    try {
+      const result = await createDispute(disputeOrderId, disputeReason, "customer");
+      
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ 
+          type: "success", 
+          title: "Dispute Reported! 🚨", 
+          message: "Our admin team will review this and contact you shortly." 
+        });
+        setShowDisputeModal(false);
+        setDisputeReason("");
+        setDisputeOrderId(null);
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to report dispute" });
+    } finally {
+      setIsSubmittingDispute(false);
     }
   };
 
@@ -177,6 +213,16 @@ export default function CustomerDashboardPage() {
                         <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>
                           {getStatusLabel(order.status)}
                         </span>
+                        
+                        {/* ✅ NEW: Report Dispute Button (Hidden for cancelled/pending orders) */}
+                        {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
+                          <button
+                            onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
+                            className="ml-auto sm:ml-2 px-3 py-1.5 text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5" /> Report Dispute
+                          </button>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
@@ -300,7 +346,7 @@ export default function CustomerDashboardPage() {
                         </div>
                       </div>
                       
-                      {/* ✅ ENHANCED: Delivery Code Reminder (Shows as soon as driver is assigned or in transit) */}
+                      {/* ✅ ENHANCED: Delivery Code Reminder */}
                       {(order.status === "in_transit" || order.status === "loading" || order.status === "driver_assigned" || order.status === "supplier_driver_assigned") && order.delivery_code && (
                         <div className="mt-6 p-5 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/40 rounded-xl flex items-start gap-4">
                           <div className="p-3 bg-orange-500 rounded-full flex-shrink-0">
@@ -337,6 +383,88 @@ export default function CustomerDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ✅ NEW: Dispute Modal */}
+      <AnimatePresence>
+        {showDisputeModal && disputeOrderId && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
+                    <AlertTriangle className="w-6 h-6" /> Report Dispute
+                  </h3>
+                  <button 
+                    onClick={() => setShowDisputeModal(false)}
+                    disabled={isSubmittingDispute}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    ⚠️ Are you experiencing an issue with this order?
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Our admin team will review your dispute and contact you shortly. Please provide as much detail as possible.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateDispute} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Reason for Dispute <span className="text-red-500">*</span></label>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all resize-none"
+                      placeholder="e.g. Driver arrived late, material was damaged, incorrect quantity delivered..."
+                      required
+                      disabled={isSubmittingDispute}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowDisputeModal(false)}
+                      disabled={isSubmittingDispute}
+                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingDispute || !disputeReason.trim()}
+                      className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSubmittingDispute ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+                      ) : (
+                        <><AlertTriangle className="w-4 h-4" /> Submit Dispute</>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

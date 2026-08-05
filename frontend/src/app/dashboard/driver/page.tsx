@@ -6,13 +6,14 @@ import {
   Truck, MapPin, Wallet, Star, Navigation, Phone, MessageCircle, 
   CheckCircle, Clock, AlertCircle, Calendar, TrendingUp, Power,
   Package, Settings, ChevronRight, Loader2, DollarSign, X, Key,
-  Camera, FileUp, Building2
+  Camera, FileUp, Building2, Plus, AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/actions/orders";
+import { createDispute } from "@/app/actions/disputes";
 import MagneticButton from "@/components/magnetic-button";
 
 interface Order {
@@ -88,7 +89,7 @@ export default function DriverDashboardPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // ✅ NEW: Account Details State
+  // Account Details State
   const [accountDetails, setAccountDetails] = useState({
     bankName: "",
     accountNumber: "",
@@ -96,7 +97,18 @@ export default function DriverDashboardPage() {
   });
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-  // ✅ NEW: Nigerian Banks List
+  // ✅ NEW: Withdrawal State
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+
+  // ✅ NEW: Dispute State
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
   const nigerianBanks = [
     "Access Bank", "Citibank", "Ecobank", "Fidelity Bank", "First Bank",
     "First City Monument Bank (FCMB)", "Globus Bank", "Guaranty Trust Bank (GTBank)",
@@ -112,6 +124,7 @@ export default function DriverDashboardPage() {
   useEffect(() => {
     fetchDriverData();
     loadAccountDetails();
+    loadWithdrawals();
   }, []);
 
   async function fetchDriverData() {
@@ -123,7 +136,6 @@ export default function DriverDashboardPage() {
       return;
     }
 
-    // 1. Fetch Profile
     const { data: profile } = await supabase
       .from("profiles")
       .select("full_name, state")
@@ -133,13 +145,11 @@ export default function DriverDashboardPage() {
     if (profile?.full_name) setDriverName(profile.full_name);
     if (profile?.state) setDriverState(profile.state);
 
-    // 2. Fetch Available Jobs
     const jobsResult = await getAvailableJobs();
     if (!jobsResult.error) {
       setAvailableJobs(jobsResult.jobs || []);
     }
 
-    // 3. Fetch My Bids
     const { data: bidsData } = await supabase
       .from("driver_bids")
       .select("*")
@@ -148,7 +158,6 @@ export default function DriverDashboardPage() {
 
     if (bidsData) setMyBids(bidsData);
 
-    // 4. Fetch Active Orders (where I am the driver)
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*")
@@ -161,7 +170,6 @@ export default function DriverDashboardPage() {
     setIsLoading(false);
   }
 
-  // ✅ NEW: Load existing account details
   const loadAccountDetails = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -181,7 +189,20 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Save account details
+  // ✅ NEW: Load Withdrawal History
+  const loadWithdrawals = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("withdrawal_requests")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (data) setWithdrawals(data);
+  };
+
   const handleSaveAccountDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingAccount(true);
@@ -214,6 +235,76 @@ export default function DriverDashboardPage() {
       });
     } finally {
       setIsSavingAccount(false);
+    }
+  };
+
+  // ✅ NEW: Handle Withdrawal Request
+  const handleRequestWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(withdrawalAmount);
+    if (isNaN(amount) || amount <= 0) {
+      addToast({ type: "error", title: "Error", message: "Please enter a valid amount." });
+      return;
+    }
+    if (amount > totalEarnings) {
+      addToast({ type: "error", title: "Error", message: "Insufficient balance." });
+      return;
+    }
+    if (!accountDetails.bankName) {
+      addToast({ type: "error", title: "Error", message: "Please set up your account details first." });
+      return;
+    }
+
+    setIsRequestingWithdrawal(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("withdrawal_requests").insert({
+      user_id: user.id,
+      role: "driver",
+      amount: amount,
+      status: "pending",
+      bank_name: accountDetails.bankName,
+      account_number: accountDetails.accountNumber,
+      account_name: accountDetails.accountName,
+    });
+
+    if (error) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to request withdrawal." });
+    } else {
+      addToast({ type: "success", title: "Success! 🎉", message: "Withdrawal request submitted. Admin will review it shortly." });
+      setShowWithdrawalModal(false);
+      setWithdrawalAmount("");
+      loadWithdrawals();
+    }
+    setIsRequestingWithdrawal(false);
+  };
+
+  // ✅ NEW: Handle Dispute Submission
+  const handleCreateDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disputeOrderId || !disputeReason.trim()) return;
+
+    setIsSubmittingDispute(true);
+    try {
+      const result = await createDispute(disputeOrderId, disputeReason, "driver");
+      
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ 
+          type: "success", 
+          title: "Dispute Reported! 🚨", 
+          message: "Our admin team will review this and contact you shortly." 
+        });
+        setShowDisputeModal(false);
+        setDisputeReason("");
+        setDisputeOrderId(null);
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to report dispute" });
+    } finally {
+      setIsSubmittingDispute(false);
     }
   };
 
@@ -354,6 +445,9 @@ export default function DriverDashboardPage() {
   const activeDelivery = activeOrders.find(o => o.status === "in_transit" || o.status === "loading");
   const completedDeliveries = activeOrders.filter(o => o.status === "delivered");
   const todayEarnings = completedDeliveries.reduce((sum, o) => sum + (o.delivery_fee || 0), 0);
+  
+  // ✅ Total lifetime earnings for withdrawal balance
+  const totalEarnings = completedDeliveries.reduce((sum, o) => sum + (o.delivery_fee || 0), 0);
 
   if (isLoading) {
     return (
@@ -548,6 +642,16 @@ export default function DriverDashboardPage() {
                           <Key className="w-4 h-4" /> Complete with Code
                         </MagneticButton>
                       </div>
+
+                      {/* ✅ NEW: Report Dispute Button */}
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <button
+                          onClick={() => { setDisputeOrderId(activeDelivery.id); setShowDisputeModal(true); }}
+                          className="w-full sm:w-auto px-4 py-3 text-sm font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <AlertTriangle className="w-4 h-4" /> Report Dispute
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -589,7 +693,6 @@ export default function DriverDashboardPage() {
                   </div>
                 </div>
 
-                {/* ✅ UPDATED: Account Details Card with Fixed Button */}
                 <div className="glass p-6 rounded-2xl border border-border mb-10">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-orange-500" /> Account Details
@@ -633,7 +736,6 @@ export default function DriverDashboardPage() {
                       />
                     </div>
                     
-                    {/* ✅ Button is now wrapped in a div with padding so it never gets cut off */}
                     <div className="pt-2">
                       <button
                         type="submit"
@@ -649,9 +751,84 @@ export default function DriverDashboardPage() {
                     </div>
                   </form>
                 </div>
-
               </div>
             </div>
+
+            {/* ✅ NEW: Withdrawals Section */}
+            <div className="glass rounded-2xl border border-border p-6 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Wallet className="w-6 h-6 text-green-500" /> Withdrawals
+                  </h2>
+                  <p className="text-sm text-muted-foreground">Request a payout of your earned delivery fees.</p>
+                </div>
+                <button
+                  onClick={() => setShowWithdrawalModal(true)}
+                  className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-green-500/20"
+                >
+                  <Plus className="w-4 h-4" /> Request Withdrawal
+                </button>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4 mb-8">
+                <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
+                  <p className="text-3xl font-bold text-green-500">{formatNaira(totalEarnings)}</p>
+                </div>
+                <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
+                  <p className="text-3xl font-bold text-blue-500">
+                    {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                  </p>
+                </div>
+                <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
+                  <p className="text-3xl font-bold text-purple-500">
+                    {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                  </p>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-muted-foreground">
+                    <tr>
+                      <th className="text-left p-4 font-medium">Date</th>
+                      <th className="text-left p-4 font-medium">Amount</th>
+                      <th className="text-left p-4 font-medium">Bank Account</th>
+                      <th className="text-left p-4 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withdrawals.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
+                      </tr>
+                    ) : (
+                      withdrawals.map((w) => (
+                        <tr key={w.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                          <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
+                          <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
+                          <td className="p-4 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                              w.status === "approved" ? "bg-green-500/10 text-green-600 border-green-500/30" :
+                              w.status === "rejected" ? "bg-red-500/10 text-red-600 border-red-500/30" :
+                              "bg-yellow-500/10 text-yellow-600 border-yellow-500/30"
+                            }`}>
+                              {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </motion.div>
         </AnimatePresence>
       </motion.div>
@@ -928,6 +1105,182 @@ export default function DriverDashboardPage() {
                     )}
                   </MagneticButton>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Withdrawal Request Modal */}
+      <AnimatePresence>
+        {showWithdrawalModal && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isRequestingWithdrawal && setShowWithdrawalModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Wallet className="w-6 h-6 text-green-500" /> Request Withdrawal
+                  </h3>
+                  <button 
+                    onClick={() => setShowWithdrawalModal(false)}
+                    disabled={isRequestingWithdrawal}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+                  <p className="text-sm text-muted-foreground">Available Balance</p>
+                  <p className="text-2xl font-bold text-green-500">{formatNaira(totalEarnings)}</p>
+                </div>
+
+                <form onSubmit={handleRequestWithdrawal} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Withdrawal Amount (₦) <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      value={withdrawalAmount}
+                      onChange={(e) => setWithdrawalAmount(e.target.value)}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-lg font-bold"
+                      placeholder="0.00"
+                      required
+                      disabled={isRequestingWithdrawal}
+                    />
+                  </div>
+
+                  <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-2">Funds will be sent to:</p>
+                    <p>{accountDetails.bankName || "No bank account set"}</p>
+                    <p>{accountDetails.accountNumber || "****"}</p>
+                    <p>{accountDetails.accountName || "****"}</p>
+                    {!accountDetails.bankName && (
+                      <button 
+                        type="button"
+                        onClick={() => { setShowWithdrawalModal(false); }}
+                        className="mt-2 text-orange-500 hover:underline font-medium"
+                      >
+                        Update Account Details Above
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowWithdrawalModal(false)}
+                      disabled={isRequestingWithdrawal}
+                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isRequestingWithdrawal || !accountDetails.bankName}
+                      className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isRequestingWithdrawal ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                      ) : (
+                        <><CheckCircle className="w-4 h-4" /> Submit Request</>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Dispute Modal */}
+      <AnimatePresence>
+        {showDisputeModal && disputeOrderId && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
+                    <AlertTriangle className="w-6 h-6" /> Report Dispute
+                  </h3>
+                  <button 
+                    onClick={() => setShowDisputeModal(false)}
+                    disabled={isSubmittingDispute}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    ⚠️ Are you experiencing an issue with this delivery?
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Our admin team will review your dispute and contact you shortly. Please provide as much detail as possible.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateDispute} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Reason for Dispute <span className="text-red-500">*</span></label>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all resize-none"
+                      placeholder="e.g. Customer unreachable, incorrect delivery location, payment issue..."
+                      required
+                      disabled={isSubmittingDispute}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowDisputeModal(false)}
+                      disabled={isSubmittingDispute}
+                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingDispute || !disputeReason.trim()}
+                      className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSubmittingDispute ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+                      ) : (
+                        <><AlertTriangle className="w-4 h-4" /> Submit Dispute</>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           </>

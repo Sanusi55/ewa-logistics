@@ -79,6 +79,15 @@ export default function LoginPage() {
                 placeholder="••••••••"
               />
             </div>
+            {/* ✅ NEW: Forgot Password Link */}
+            <div className="mt-2 text-right">
+              <Link 
+                href="/forgot-password" 
+                className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors"
+              >
+                Forgot Password?
+              </Link>
+            </div>
           </div>
 
           <button 
@@ -97,7 +106,6 @@ export default function LoginPage() {
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-8">
           Don't have an account?{" "}
-          {/* ✅ FIXED: Changed from /register to /signup */}
           <Link href="/signup" className="text-orange-500 hover:text-orange-600 font-medium transition-colors">
             Create one here
           </Link>

@@ -3,8 +3,7 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Calculator, Package, Truck, Clock, ArrowRight, 
-  Ruler, Layers, DollarSign, Info, CheckCircle, X
+  Calculator, Package, Ruler, Layers, Info, CheckCircle, X, ArrowRight
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,10 +16,13 @@ interface MaterialInfo {
 
 const materials: Record<string, MaterialInfo> = {
   "1-inch-granite": { name: "1-Inch Granite", density: 2.7, pricePerTon: 45000, icon: "🪨" },
-  "3-4-granite": { name: "3/4 Granite", density: 2.6, pricePerTon: 40000, icon: "" },
+  "3-4-granite": { name: "3/4 Granite", density: 2.6, pricePerTon: 40000, icon: "🪨" },
+  "1-2-inch-granite": { name: "1/2-Inch Granite", density: 1.5, pricePerTon: 42000, icon: "🪨" },
+  "3-8-inch-granite": { name: "3/8-Inch Granite", density: 1.45, pricePerTon: 40000, icon: "🪨" },
   "sharp-sand": { name: "Sharp Sand", density: 1.6, pricePerTon: 15000, icon: "⏳" },
   "stone-base": { name: "Stone Base", density: 2.4, pricePerTon: 30000, icon: "🏗️" },
-  "gravel": { name: "Gravel", density: 1.8, pricePerTon: 25000, icon: "" },
+  "gravel": { name: "Gravel", density: 1.8, pricePerTon: 25000, icon: "🪨" },
+  "laterite": { name: "Laterite", density: 1.9, pricePerTon: 12000, icon: "🟤" },
 };
 
 export default function MaterialCalculator() {
@@ -51,30 +53,13 @@ export default function MaterialCalculator() {
     const volumeCubicMeters = lMeters * wMeters * tMeters;
     const material = materials[selectedMaterial];
     const tonsNeeded = volumeCubicMeters * material.density;
-    const totalCost = tonsNeeded * material.pricePerTon;
-    
-    // Estimate delivery time based on quantity
-    let deliveryDays = 1;
-    if (tonsNeeded > 50) deliveryDays = 2;
-    if (tonsNeeded > 100) deliveryDays = 3;
-    if (tonsNeeded > 200) deliveryDays = 5;
 
     return {
       volume: volumeCubicMeters.toFixed(2),
       tons: tonsNeeded.toFixed(2),
-      cost: totalCost,
-      deliveryDays,
       material: material.name,
     };
   }, [length, width, thickness, selectedMaterial, unit]);
-
-  const formatNaira = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { 
-      style: 'currency', 
-      currency: 'NGN', 
-      maximumFractionDigits: 0 
-    }).format(amount);
-  };
 
   const resetCalculator = () => {
     setLength("");
@@ -84,7 +69,7 @@ export default function MaterialCalculator() {
 
   return (
     <>
-      {/*  Floating Calculator Button (CENTERED AT BOTTOM) */}
+      {/* Floating Calculator Button (CENTERED AT BOTTOM) */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -129,7 +114,7 @@ export default function MaterialCalculator() {
                       </div>
                       <div>
                         <h2 className="text-xl font-bold">Material Calculator</h2>
-                        <p className="text-sm text-muted-foreground">Estimate quantity & cost for your project</p>
+                        <p className="text-sm text-muted-foreground">Estimate quantity for your project</p>
                       </div>
                     </div>
                     <button
@@ -164,7 +149,7 @@ export default function MaterialCalculator() {
                           <div className="text-2xl mb-1">{material.icon}</div>
                           <div className="text-xs font-medium">{material.name}</div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {formatNaira(material.pricePerTon)}/ton
+                            {material.density} tons/m³
                           </div>
                         </button>
                       ))}
@@ -255,7 +240,7 @@ export default function MaterialCalculator() {
                     <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                     <div className="text-xs text-blue-700 dark:text-blue-300">
                       <p className="font-medium mb-1">How it works:</p>
-                      <p>Enter your project dimensions above. We'll calculate the exact volume, convert it to tons based on material density, and estimate the total cost including delivery.</p>
+                      <p>Enter your project dimensions above. We'll calculate the exact volume and convert it to tons based on the material's density so you know exactly how much to order.</p>
                     </div>
                   </div>
 
@@ -284,18 +269,6 @@ export default function MaterialCalculator() {
                               <p className="text-xs text-muted-foreground mb-1">Weight Required</p>
                               <p className="text-2xl font-bold">{results.tons} <span className="text-sm font-normal text-muted-foreground">tons</span></p>
                             </div>
-                            <div className="p-4 bg-background/50 rounded-xl border border-border/50">
-                              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                                <DollarSign className="w-3 h-3" /> Estimated Cost
-                              </p>
-                              <p className="text-2xl font-bold text-orange-500">{formatNaira(results.cost)}</p>
-                            </div>
-                            <div className="p-4 bg-background/50 rounded-xl border border-border/50">
-                              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Delivery Time
-                              </p>
-                              <p className="text-2xl font-bold">{results.deliveryDays} <span className="text-sm font-normal text-muted-foreground">days</span></p>
-                            </div>
                           </div>
 
                           <div className="flex gap-3">
@@ -305,9 +278,10 @@ export default function MaterialCalculator() {
                             >
                               Reset
                             </button>
-                            <Link href="/order" onClick={() => setIsOpen(false)}>
+                            {/* ✅ UPDATED: Redirects to Marketplace */}
+                            <Link href="/materials" onClick={() => setIsOpen(false)}>
                               <button className="flex-[2] flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-lg shadow-orange-500/20">
-                                Order {results.tons} tons <ArrowRight className="w-4 h-4" />
+                                Order Materials <ArrowRight className="w-4 h-4" />
                               </button>
                             </Link>
                           </div>
@@ -319,8 +293,7 @@ export default function MaterialCalculator() {
                           <ul className="space-y-1 text-xs text-muted-foreground">
                             <li>• Material: {results.material}</li>
                             <li>• Density: {materials[selectedMaterial].density} tons/m³</li>
-                            <li>• Price: {formatNaira(materials[selectedMaterial].pricePerTon)} per ton</li>
-                            <li>• Total: {results.tons} tons × {formatNaira(materials[selectedMaterial].pricePerTon)} = {formatNaira(results.cost)}</li>
+                            <li>• Total Weight: {results.tons} tons</li>
                           </ul>
                         </div>
                       </motion.div>
