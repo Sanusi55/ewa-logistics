@@ -30,7 +30,7 @@ import {
   getAuditLogs,
   getPlatformSettings,
   updatePlatformSetting,
-  approveUser, // ✅ NEW: Import approveUser action
+  approveUser,
 } from "@/app/actions/admin";
 
 // ✅ Premium Chart Imports
@@ -48,7 +48,7 @@ interface UserProfile {
   state?: string;
   is_suspended?: boolean;
   suspension_reason?: string;
-  is_approved?: boolean; // ✅ NEW: Added is_approved flag
+  is_approved?: boolean;
   created_at: string;
   bank_name?: string;
   account_number?: string;
@@ -114,7 +114,6 @@ interface Listing {
   created_at: string;
 }
 
-// ✅ NEW: Dispute Interface
 interface Dispute {
   id: string;
   order_id: string;
@@ -129,7 +128,7 @@ interface Dispute {
   user_role?: string;
 }
 
-// ✅ Premium Mock Data for Charts (Replace with real API data later)
+// ✅ Premium Mock Data for Charts
 const revenueData = [
   { name: "Jan", revenue: 1250000, orders: 45 },
   { name: "Feb", revenue: 1800000, orders: 62 },
@@ -205,10 +204,7 @@ export default function AdminPage() {
     { id: "L-003", supplier_name: "Ibadan Granite Hub", material_name: "3/4 Granite", price_per_ton: 40000, unit: "tons", status: "pending", created_at: "2026-05-30T10:00:00Z" },
   ]);
 
-  // ✅ NEW: Withdrawal State
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-
-  // ✅ NEW: Dispute State
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
@@ -274,7 +270,7 @@ export default function AdminPage() {
     if (activeTab === "settings") fetchSettings();
     if (activeTab === "messages") fetchMessages();
     if (activeTab === "payments") fetchWithdrawals();
-    if (activeTab === "disputes") fetchDisputes(); // ✅ Fetch disputes when tab is active
+    if (activeTab === "disputes") fetchDisputes();
   }, [authState, activeTab, userFilter, userSearch, orderFilter, deliveryFilter]);
 
   async function fetchAllData() {
@@ -325,7 +321,6 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ UPDATED: Robust Withdrawal Fetching (Bypasses foreign key join issues)
   async function fetchWithdrawals() {
     const { data, error } = await supabase
       .from("withdrawal_requests")
@@ -360,7 +355,6 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ NEW: Robust Dispute Fetching
   async function fetchDisputes() {
     const { data, error } = await supabase
       .from("disputes")
@@ -396,7 +390,6 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ NEW: Handle Withdrawal Action (Approve/Reject)
   async function handleWithdrawalAction(withdrawalId: string, action: "approved" | "rejected") {
     const { error } = await supabase
       .from("withdrawal_requests")
@@ -415,7 +408,6 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ NEW: Handle Dispute Resolution
   async function handleResolveDispute(disputeId: string, status: "resolved" | "rejected") {
     if (!selectedDispute) return;
     setIsResolvingDispute(true);
@@ -700,7 +692,6 @@ export default function AdminPage() {
     );
   }
 
-  // ✅ UPDATED: Added Disputes to sidebar
   const sidebarNavItems = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "users", label: "Users", icon: Users },
@@ -713,7 +704,6 @@ export default function AdminPage() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
-  // ✅ UPDATED: Added Disputes to top tabs
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "users", label: `Users (${stats?.users?.total || 0})`, icon: Users },
@@ -755,7 +745,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex overflow-hidden">
-      {/* Left Sidebar Navigation */}
       <aside className="w-64 bg-slate-900/80 backdrop-blur-md border-r border-slate-700 hidden lg:flex flex-col">
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
@@ -802,9 +791,7 @@ export default function AdminPage() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
         <div className="border-b border-slate-700 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -842,7 +829,6 @@ export default function AdminPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
             
-            {/* Tab Navigation */}
             <div className="w-full overflow-x-auto pb-2 custom-scrollbar">
               <div className="flex gap-2 min-w-max px-4 sm:px-0">
                 {tabs.map((tab) => (
@@ -869,10 +855,8 @@ export default function AdminPage() {
             ) : (
               <AnimatePresence mode="wait">
                 
-                {/* ✅ PREMIUM OVERVIEW TAB WITH CHARTS */}
                 {activeTab === "overview" && stats && (
                   <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    {/* Row 1: Key Metrics */}
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {[ 
                         { label: "Total Revenue", value: formatNaira(stats.revenue?.total || 0), icon: DollarSign, color: "text-green-400", bg: "bg-green-500/10", change: "+12%" },
@@ -901,9 +885,7 @@ export default function AdminPage() {
                       ))}
                     </div>
 
-                    {/* Row 2: Revenue Chart & User Distribution */}
                     <div className="grid lg:grid-cols-3 gap-6">
-                      {/* Revenue Area Chart */}
                       <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                         <div className="flex items-center justify-between mb-6">
                           <h3 className="font-semibold text-white flex items-center gap-2">
@@ -924,9 +906,10 @@ export default function AdminPage() {
                               <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                               <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
                               <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
+                              {/* ✅ FIXED: Changed 'value: number' to 'value: any' and wrapped in Number() to prevent TS build errors */}
                               <Tooltip 
                                 contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }}
-                                formatter={(value: number) => [`₦${value.toLocaleString()}`, "Revenue"]}
+                                formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]}
                               />
                               <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                             </AreaChart>
@@ -934,7 +917,6 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* User Distribution Pie Chart */}
                       <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                         <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
                           <Users className="w-5 h-5 text-blue-400" />
@@ -976,9 +958,7 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Row 3: Order Status Bar Chart & Top Regions */}
                     <div className="grid lg:grid-cols-3 gap-6">
-                      {/* Order Status Bar Chart */}
                       <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                         <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
                           <Package className="w-5 h-5 text-purple-400" />
@@ -1004,7 +984,6 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Top Regions */}
                       <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                         <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
                           <MapPin className="w-5 h-5 text-green-400" />
@@ -1043,7 +1022,6 @@ export default function AdminPage() {
                   </motion.div>
                 )}
 
-                {/* All other tabs remain exactly as you had them */}
                 {activeTab === "users" && (
                   <motion.div key="users" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
                     <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-3">
@@ -1132,14 +1110,13 @@ export default function AdminPage() {
                                   <td className="p-4 text-slate-400 text-xs hidden lg:table-cell">{formatDate(user.created_at)}</td>
                                   <td className="p-4">
                                     <div className="flex items-center justify-end gap-1">
-                                      {/* ✅ NEW: Approve Button for Pending Users */}
                                       {user.is_approved === false && (
                                         <button 
                                           onClick={async () => {
                                             const result = await approveUser(user.id);
                                             if (result?.success) {
                                               addToast({ type: "success", title: "Approved!", message: "User can now log in." });
-                                              fetchUsers(); // Refresh the list
+                                              fetchUsers();
                                             } else {
                                               addToast({ type: "error", title: "Error", message: result?.error || "Failed to approve user." });
                                             }
@@ -1413,7 +1390,6 @@ export default function AdminPage() {
                   </motion.div>
                 )}
 
-                {/* ✅ UPDATED: Payments & Escrow Tab with Dynamic Withdrawals */}
                 {activeTab === "payments" && (
                   <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                     <div className="grid md:grid-cols-3 gap-4">
@@ -1528,7 +1504,6 @@ export default function AdminPage() {
                   </motion.div>
                 )}
 
-                {/* ✅ NEW: Disputes Tab */}
                 {activeTab === "disputes" && (
                   <motion.div key="disputes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                     <div className="grid md:grid-cols-3 gap-4">
@@ -1930,7 +1905,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Modals (User Details, Broadcast, Messages) remain exactly as they were */}
       <AnimatePresence>
         {selectedUser && (
           <>
@@ -1972,7 +1946,6 @@ export default function AdminPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Dispute Resolution Modal */}
       <AnimatePresence>
         {showResolveModal && selectedDispute && (
           <>
