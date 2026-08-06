@@ -27,6 +27,12 @@ export const metadata: Metadata = {
   creator: "EWA Logistics",
   publisher: "EWA Logistics Limited",
   manifest: "/manifest.json",
+  
+  // ✅ NEW: Google Search Console Verification
+  verification: {
+    google: "cjuYcuTzi9SOUy-bZkwQff5_DTlc0TQJcNdUrFMxR4E",
+  },
+
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

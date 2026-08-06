@@ -35,6 +35,9 @@ export async function createOrder(orderData: {
 
     // ✅ FIXED: Generates a random 4-digit number (e.g., "4829")
     const deliveryCode = Math.floor(1000 + Math.random() * 9000).toString();
+    
+    // ✅ NEW: Flat 5k service charge for customers
+    const service_charge = 5000; 
 
     const { data, error } = await supabase
       .from("orders")
@@ -48,6 +51,7 @@ export async function createOrder(orderData: {
         customer_notes: orderData.customer_notes,
         delivery_code: deliveryCode,
         total_amount: orderData.total_amount,
+        service_charge: service_charge, // ✅ NEW: Record the service charge
         status: "pending_supplier_acceptance",
       })
       .select()
@@ -249,7 +253,7 @@ export async function getOrderById(orderId: string) {
 }
 
 // ============================================
-// ✅ SUPPLIER ACCEPTS ORDER
+// ✅ SUPPLIER ACCEPTS ORDER (Calculates Supplier Commission)
 // ============================================
 export async function supplierAcceptOrder(orderId: string, materialPrice: number) {
   const supabase = await createClient();
@@ -261,11 +265,29 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       return { error: "Unauthorized" };
     }
 
+    // ✅ NEW: Fetch order to calculate commission based on material type and tonnage
+    const { data: order, error: orderFetchError } = await supabase
+      .from("orders")
+      .select("material_type, tonnage")
+      .eq("id", orderId)
+      .single();
+
+    let supplier_commission = 0;
+    if (order) {
+      const isGranite = order.material_type.toLowerCase().includes("granite");
+      if (isGranite) {
+        supplier_commission = order.tonnage * 500; // ✅ ₦500 per ton for granite
+      } else {
+        supplier_commission = 5000; // ✅ Fixed ₦5000 per trip for sand, stone base, etc.
+      }
+    }
+
     const { data, error } = await supabase
       .from("orders")
       .update({
         supplier_id: user.id,
         material_price: materialPrice,
+        supplier_commission: supplier_commission, // ✅ NEW: Save calculated commission
         status: "driver_searching",
         supplier_accepted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -395,7 +417,7 @@ export async function submitDriverBid(orderId: string, bidData: {
 }
 
 // ============================================
-// ✅ CUSTOMER ACCEPTS DRIVER BID
+// ✅ CUSTOMER ACCEPTS DRIVER BID (Calculates Driver Commission)
 // ============================================
 export async function customerAcceptBid(orderId: string, bidId: string) {
   const supabase = await createClient();
@@ -424,6 +446,9 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
       .eq("id", bid.driver_id)
       .single();
 
+    // ✅ NEW: Calculate Driver Commission (5% of accepted delivery charge)
+    const driver_commission = bid.bid_amount * 0.05;
+
     await supabase
       .from("driver_bids")
       .update({ status: "accepted", updated_at: new Date().toISOString() })
@@ -442,6 +467,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
         driver_name: driver?.full_name || "Unknown",
         driver_phone: driver?.phone || "Not provided",
         delivery_fee: bid.bid_amount,
+        driver_commission: driver_commission, // ✅ NEW: Save calculated commission
         status: "driver_assigned",
         driver_assigned_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -628,8 +654,8 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
         order_id: orderId,
         driver_id: user.id,
         file_url: evidenceUrl,
-        file_type: evidenceFile?.type || "application/octet-stream", // ✅ FIXED: Optional chaining
-        file_name: evidenceFile?.name || "delivery_proof",           // ✅ FIXED: Optional chaining
+        file_type: evidenceFile?.type || "application/octet-stream",
+        file_name: evidenceFile?.name || "delivery_proof",
         notes: "Delivery proof uploaded by driver",
       });
     }
@@ -711,7 +737,7 @@ export async function uploadSupplierEvidence(orderId: string, evidenceFile: File
 }
 
 // ============================================
-// ✅ CUSTOMER CONFIRMS DELIVERY (RELEASES ESCROW)
+// ✅ CUSTOMER CONFIRMS DELIVERY (RELEASES ESCROW & AUTO-DEDUCTS COMMISSIONS)
 // ============================================
 export async function confirmCustomerDelivery(orderId: string) {
   const supabase = await createClient();
@@ -719,37 +745,91 @@ export async function confirmCustomerDelivery(orderId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
+    // 1. Fetch full order details for financial calculation
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("customer_id, status")
+      .select("*")
       .eq("id", orderId)
       .single();
 
     if (orderError || !order) return { error: "Order not found" };
     if (order.customer_id !== user.id) return { error: "You are not the customer for this order" };
+    if (order.status === "completed") return { error: "Order is already completed" };
 
+    // 2. Calculate EWA Commissions & Net Payouts
+    const service_charge = order.service_charge || 5000;
+    const supplier_commission = order.supplier_commission || 0;
+    const driver_commission = order.driver_commission || 0;
+    
+    // ✅ EWA Revenue = Service Charge + Supplier Commission + Driver Commission
+    const ewa_revenue = service_charge + supplier_commission + driver_commission;
+
+    // ✅ Net Payouts (Gross Amount - Commission)
+    // Note: Assuming material_price is the total agreed material cost. 
+    // If material_price is per-ton in your system, change this to: (order.material_price || 0) * (order.tonnage || 1)
+    const gross_supplier_amount = order.material_price || 0; 
+    const net_supplier_payout = Math.max(0, gross_supplier_amount - supplier_commission);
+
+    const gross_driver_amount = order.delivery_fee || 0;
+    const net_driver_payout = Math.max(0, gross_driver_amount - driver_commission);
+
+    // 3. Update Order to Completed and store financial breakdown
     const { error: updateError } = await supabase
       .from("orders")
       .update({
-        status: "delivered",
+        status: "completed",
         delivery_code_confirmed: true,
         delivered_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        ewa_revenue: ewa_revenue,
+        net_supplier_payout: net_supplier_payout,
+        net_driver_payout: net_driver_payout,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
 
     if (updateError) return { error: "Failed to confirm delivery" };
 
+    // 4. Credit EWA Wallet (Admin Revenue)
+    await supabase.from("ewa_wallet_transactions").insert({
+      order_id: orderId,
+      amount: ewa_revenue,
+      type: "revenue",
+      description: `Commission & Service Charge for Order ${orderId}`,
+    });
+
+    // 5. Credit Supplier Earnings Dashboard
+    if (net_supplier_payout > 0 && order.supplier_id) {
+      await supabase.from("supplier_earnings").insert({
+        user_id: order.supplier_id,
+        order_id: orderId,
+        amount: net_supplier_payout,
+        status: "available",
+      });
+    }
+
+    // 6. Credit Driver Earnings Dashboard
+    if (net_driver_payout > 0 && order.driver_id) {
+      await supabase.from("driver_earnings").insert({
+        user_id: order.driver_id,
+        order_id: orderId,
+        amount: net_driver_payout,
+        status: "available",
+      });
+    }
+
+    // 7. Record status history
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: order.status,
-      new_status: "delivered",
+      new_status: "completed",
       changed_by: user.id,
-      notes: "Delivery confirmed by customer",
+      notes: "Delivery confirmed by customer. Escrow released and commissions auto-deducted.",
     });
 
-    return { success: true, message: "Delivery confirmed successfully! Payment will be released." };
+    return { success: true, message: "Delivery confirmed successfully! Escrow released and earnings credited." };
   } catch (error: any) {
+    console.error("❌ Confirm delivery exception:", error);
     return { error: error.message || "An unexpected error occurred" };
   }
 }

@@ -9,6 +9,7 @@ export async function getMaterials() {
     .from("materials")
     .select("*")
     .eq("is_active", true)
+    .eq("status", "approved") // ✅ FIXED: Only show materials that the admin has approved
     .order("created_at", { ascending: false });
 
   if (error) {

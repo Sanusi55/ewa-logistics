@@ -23,15 +23,9 @@ export async function login(formData: FormData) {
   if (authData.user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, is_approved")
+      .select("role")
       .eq("id", authData.user.id)
       .maybeSingle();
-
-    // ✅ NEW: Block unapproved suppliers and drivers
-    if ((profile?.role === "supplier" || profile?.role === "driver") && profile?.is_approved === false) {
-      await supabase.auth.signOut(); // Log them out immediately
-      return { error: "Your account is pending admin approval. Please check back later." };
-    }
 
     if (profile?.role === "admin") {
       redirect("/admin");
@@ -67,17 +61,7 @@ export async function signup(formData: FormData) {
     return { error: error.message };
   }
 
-  // ✅ NEW: Explicitly set is_approved to false for suppliers and drivers
-  if (authData.user && (role === "supplier" || role === "driver")) {
-    await supabase
-      .from("profiles")
-      .update({ is_approved: false })
-      .eq("id", authData.user.id);
-      
-    // Redirect to dashboard with a pending flag so the UI can show a message
-    redirect("/dashboard?pending=true");
-  }
-
+  // ✅ REMOVED: Admin approval requirement. Users can now log in immediately.
   redirect("/dashboard");
 }
 
@@ -172,24 +156,6 @@ export async function adminLogin(formData: FormData) {
     await supabase.auth.signOut();
     return { error: error.message || "An unexpected error occurred" };
   }
-}
-
-// ============================================
-// ✅ NEW: Approve User (For Admin Dashboard)
-// ============================================
-export async function approveUser(userId: string) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from("profiles")
-    .update({ is_approved: true, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { success: true };
 }
 
 // ============================================

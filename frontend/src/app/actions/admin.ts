@@ -2,23 +2,33 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-// ✅ Verify admin access
+// ✅ Verify admin access with detailed logging
 async function requireAdmin() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError) {
+    console.error("❌ Supabase Auth Error in requireAdmin:", authError.message);
+  }
   
   if (!user) {
-    return { error: "Not authenticated", isAdmin: false };
+    console.warn("⚠️ No user found in requireAdmin. This usually means the auth cookie is missing, expired, or not being read correctly by the server. Try refreshing the page.");
+    return { error: "Not authenticated. Please refresh the page and try again.", isAdmin: false };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role, full_name, email")
     .eq("id", user.id)
     .single();
 
+  if (profileError) {
+    console.error("❌ Profile Fetch Error in requireAdmin:", profileError.message);
+  }
+
   if (!profile || profile.role !== "admin") {
-    return { error: "Admin privileges required", isAdmin: false };
+    console.warn(`⚠️ User ${user.id} does not have admin privileges. Role in database:`, profile?.role || "none");
+    return { error: "Admin privileges required. Please check your profile role in the database.", isAdmin: false };
   }
 
   return { user, profile, isAdmin: true };
@@ -218,9 +228,6 @@ export async function deleteUser(userId: string) {
 
   const supabase = await createClient();
   
-  // Note: If the user has existing orders, deliveries, or bids, 
-  // this delete will fail due to Foreign Key Constraints (which protects your data).
-  // It is highly recommended to "Suspend" users instead of deleting them.
   const { error } = await supabase
     .from("profiles")
     .delete()
@@ -425,5 +432,31 @@ export async function approveUser(userId: string) {
   }
 
   await logAdminAction(admin.user!.id, "approve_user", "user", userId);
+  return { success: true };
+}
+
+// ✅ NEW: Approve or Reject a Material Listing
+export async function updateListingStatus(listingId: string, status: "approved" | "rejected") {
+  console.log(`🔄 Attempting to update listing ${listingId} to ${status}...`);
+  
+  const admin = await requireAdmin();
+  if (!admin.isAdmin) {
+    console.error("❌ updateListingStatus failed admin check:", admin.error);
+    return { success: false, error: admin.error };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("materials")
+    .update({ status: status, updated_at: new Date().toISOString() })
+    .eq("id", listingId);
+
+  if (error) {
+    console.error("❌ Update Listing Status Database Error:", error);
+    return { success: false, error: error.message };
+  }
+
+  await logAdminAction(admin.user!.id, `listing_${status}`, "material", listingId, { status });
+  console.log(`✅ Successfully updated listing ${listingId} to ${status}`);
   return { success: true };
 }

@@ -30,7 +30,7 @@ import {
   getAuditLogs,
   getPlatformSettings,
   updatePlatformSetting,
-  approveUser,
+  updateListingStatus,
 } from "@/app/actions/admin";
 
 // ✅ Premium Chart Imports
@@ -48,7 +48,6 @@ interface UserProfile {
   state?: string;
   is_suspended?: boolean;
   suspension_reason?: string;
-  is_approved?: boolean;
   created_at: string;
   bank_name?: string;
   account_number?: string;
@@ -198,11 +197,7 @@ export default function AdminPage() {
   const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const [listings, setListings] = useState<Listing[]>([
-    { id: "L-001", supplier_name: "Sagamu Quarry Ltd", material_name: "1-Inch Granite", price_per_ton: 45000, unit: "tons", status: "pending", created_at: "2026-05-28T10:00:00Z" },
-    { id: "L-002", supplier_name: "Adebayo Stones", material_name: "Sharp Sand", price_per_ton: 15000, unit: "tons", status: "approved", created_at: "2026-05-20T10:00:00Z" },
-    { id: "L-003", supplier_name: "Ibadan Granite Hub", material_name: "3/4 Granite", price_per_ton: 40000, unit: "tons", status: "pending", created_at: "2026-05-30T10:00:00Z" },
-  ]);
+  const [listings, setListings] = useState<Listing[]>([]);
 
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -271,6 +266,7 @@ export default function AdminPage() {
     if (activeTab === "messages") fetchMessages();
     if (activeTab === "payments") fetchWithdrawals();
     if (activeTab === "disputes") fetchDisputes();
+    if (activeTab === "listings") fetchListings();
   }, [authState, activeTab, userFilter, userSearch, orderFilter, deliveryFilter]);
 
   async function fetchAllData() {
@@ -387,6 +383,42 @@ export default function AdminPage() {
       }) || [];
 
       setDisputes(mergedData);
+    }
+  }
+
+  async function fetchListings() {
+    const { data: materials, error } = await supabase
+      .from("materials")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching listings:", error);
+      return;
+    }
+
+    if (materials && materials.length > 0) {
+      const supplierIds = [...new Set(materials.map((m: any) => m.supplier_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", supplierIds);
+
+      const profileMap: Record<string, string> = {};
+      profiles?.forEach((p: any) => { profileMap[p.id] = p.full_name; });
+
+      const mappedListings = materials.map((m: any) => ({
+        id: m.id,
+        supplier_name: profileMap[m.supplier_id] || "Unknown Supplier",
+        material_name: m.name || "Unnamed Material",
+        price_per_ton: m.price_per_ton,
+        unit: m.unit,
+        status: m.status || "pending",
+        created_at: m.created_at,
+      }));
+      setListings(mappedListings);
+    } else {
+      setListings([]);
     }
   }
 
@@ -538,12 +570,22 @@ export default function AdminPage() {
   };
 
   const handleListingAction = async (listingId: string, action: "approved" | "rejected") => {
-    setListings(prev => prev.map(l => l.id === listingId ? { ...l, status: action } : l));
-    addToast({ 
-      type: action === "approved" ? "success" : "info", 
-      title: action === "approved" ? "Listing Approved" : "Listing Rejected", 
-      message: `The material has been ${action}.` 
-    });
+    const result = await updateListingStatus(listingId, action);
+    
+    if (result.success) {
+      addToast({ 
+        type: action === "approved" ? "success" : "info", 
+        title: action === "approved" ? "Listing Approved" : "Listing Rejected", 
+        message: `The material has been ${action}.` 
+      });
+      fetchListings();
+    } else {
+      addToast({ 
+        type: "error", 
+        title: "Error", 
+        message: result.error || "Failed to update listing status." 
+      });
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -859,7 +901,8 @@ export default function AdminPage() {
                   <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {[ 
-                        { label: "Total Revenue", value: formatNaira(stats.revenue?.total || 0), icon: DollarSign, color: "text-green-400", bg: "bg-green-500/10", change: "+12%" },
+                        // ✅ UPDATED: Label changed to "Total EWA Revenue" to reflect actual platform earnings
+                        { label: "Total EWA Revenue", value: formatNaira(stats.revenue?.total || 0), icon: DollarSign, color: "text-green-400", bg: "bg-green-500/10", change: "+12%" },
                         { label: "Total Users", value: stats.users?.total || 0, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10", change: "+8%" },
                         { label: "Total Orders", value: stats.orders?.total || 0, icon: Package, color: "text-orange-400", bg: "bg-orange-500/10", change: "+15%" },
                         { label: "Success Rate", value: `${stats.performance?.successRate || 0}%`, icon: Target, color: "text-purple-400", bg: "bg-purple-500/10", change: "+3%" },
@@ -906,7 +949,6 @@ export default function AdminPage() {
                               <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                               <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
                               <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
-                              {/* ✅ FIXED: Changed 'value: number' to 'value: any' and wrapped in Number() to prevent TS build errors */}
                               <Tooltip 
                                 contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }}
                                 formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]}
@@ -1110,24 +1152,6 @@ export default function AdminPage() {
                                   <td className="p-4 text-slate-400 text-xs hidden lg:table-cell">{formatDate(user.created_at)}</td>
                                   <td className="p-4">
                                     <div className="flex items-center justify-end gap-1">
-                                      {user.is_approved === false && (
-                                        <button 
-                                          onClick={async () => {
-                                            const result = await approveUser(user.id);
-                                            if (result?.success) {
-                                              addToast({ type: "success", title: "Approved!", message: "User can now log in." });
-                                              fetchUsers();
-                                            } else {
-                                              addToast({ type: "error", title: "Error", message: result?.error || "Failed to approve user." });
-                                            }
-                                          }}
-                                          className="p-1.5 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors cursor-pointer" 
-                                          title="Approve User"
-                                        >
-                                          <CheckCircle className="w-4 h-4" />
-                                        </button>
-                                      )}
-
                                       <button 
                                         onClick={() => setSelectedUser(user)} 
                                         className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors cursor-pointer" 

@@ -20,7 +20,7 @@ interface Material {
   unit: string;
   image_url: string;
   is_active: boolean;
-  approval_status: "pending" | "approved" | "rejected"; // ✅ NEW: Admin approval status
+  status: "pending" | "approved" | "rejected"; // ✅ UPDATED: Matches database column name
   created_at: string;
 }
 
@@ -33,7 +33,7 @@ export default function SupplierMaterialsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // ✅ UPDATED: Filter by approval status instead of active/inactive
+  // ✅ UPDATED: Filter by status instead of active/inactive
   const [filterStatus, setFilterStatus] = useState<"all" | "approved" | "pending" | "rejected">("all");
   
   const [isUploading, setIsUploading] = useState(false);
@@ -69,10 +69,10 @@ export default function SupplierMaterialsPage() {
       .order("created_at", { ascending: false });
 
     if (data) {
-      // Ensure approval_status has a fallback for older records
+      // ✅ Ensure status has a fallback for older records
       const formattedData = data.map((m: any) => ({
         ...m,
-        approval_status: m.approval_status || "pending"
+        status: m.status || "pending"
       }));
       setMaterials(formattedData);
     }
@@ -188,7 +188,7 @@ export default function SupplierMaterialsPage() {
         unit: formData.unit,
         image_url: imageUrl,
         is_active: true,
-        approval_status: "pending", // ✅ NEW: All new materials require admin approval
+        status: "pending", // ✅ NEW: All new materials require admin approval
       });
 
     if (!error) {
@@ -224,7 +224,7 @@ export default function SupplierMaterialsPage() {
         unit: formData.unit,
         image_url: imageUrl,
         // ✅ If edited, reset to pending so admin can review the changes
-        approval_status: "pending", 
+        status: "pending", 
       })
       .eq("id", selectedMaterial.id);
 
@@ -273,11 +273,11 @@ export default function SupplierMaterialsPage() {
     }
   };
 
-  // ✅ UPDATED: Filter logic for approval status
+  // ✅ UPDATED: Filter logic for status
   const filteredMaterials = materials.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           m.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === "all" || m.approval_status === filterStatus;
+    const matchesFilter = filterStatus === "all" || m.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -309,13 +309,13 @@ export default function SupplierMaterialsPage() {
           </button>
         </div>
 
-        {/* ✅ UPDATED: Stats now show Approval Status breakdown */}
+        {/* ✅ UPDATED: Stats now show Status breakdown */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Materials", value: materials.length, icon: Package, color: "text-orange-500", bg: "bg-orange-500/10" },
-            { label: "Approved", value: materials.filter(m => m.approval_status === "approved").length, icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
-            { label: "Pending Review", value: materials.filter(m => m.approval_status === "pending").length, icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-            { label: "Rejected", value: materials.filter(m => m.approval_status === "rejected").length, icon: X, color: "text-red-500", bg: "bg-red-500/10" },
+            { label: "Approved", value: materials.filter(m => m.status === "approved").length, icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
+            { label: "Pending Review", value: materials.filter(m => m.status === "pending").length, icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10" },
+            { label: "Rejected", value: materials.filter(m => m.status === "rejected").length, icon: X, color: "text-red-500", bg: "bg-red-500/10" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -346,7 +346,7 @@ export default function SupplierMaterialsPage() {
               className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm"
             />
           </div>
-          {/* ✅ UPDATED: Filter buttons for approval status */}
+          {/* ✅ UPDATED: Filter buttons for status */}
           <div className="flex gap-2">
             {["all", "approved", "pending", "rejected"].map((filter) => (
               <button
@@ -391,19 +391,19 @@ export default function SupplierMaterialsPage() {
                     </div>
                   )}
                   
-                  {/* ✅ NEW: Approval Status Badge */}
+                  {/* ✅ NEW: Status Badge */}
                   <div className="absolute top-3 right-3">
-                    {material.approval_status === "approved" && (
+                    {material.status === "approved" && (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white flex items-center gap-1 shadow-sm">
                         <CheckCircle className="w-3 h-3" /> Approved
                       </span>
                     )}
-                    {material.approval_status === "pending" && (
+                    {material.status === "pending" && (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500 text-white flex items-center gap-1 shadow-sm">
                         <Clock className="w-3 h-3" /> Pending
                       </span>
                     )}
-                    {material.approval_status === "rejected" && (
+                    {material.status === "rejected" && (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white flex items-center gap-1 shadow-sm">
                         <X className="w-3 h-3" /> Rejected
                       </span>
@@ -478,7 +478,7 @@ export default function SupplierMaterialsPage() {
         )}
       </motion.div>
 
-      {/* Add Modal (Unchanged, but inserts with approval_status: "pending") */}
+      {/* Add Modal */}
       <AnimatePresence>
         {showAddModal && (
           <>
@@ -620,7 +620,7 @@ export default function SupplierMaterialsPage() {
         )}
       </AnimatePresence>
 
-      {/* Edit Modal (Unchanged, but resets approval_status to "pending" on edit) */}
+      {/* Edit Modal */}
       <AnimatePresence>
         {showEditModal && selectedMaterial && (
           <>

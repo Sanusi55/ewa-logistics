@@ -5,7 +5,7 @@ import {
   Package, Truck, Clock, CheckCircle, DollarSign, 
   MapPin, Calendar, Loader2, AlertCircle, Building2,
   TrendingUp, Users, BarChart3, Eye, Phone, Navigation,
-  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle
+  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle, LogOut
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
+import { logout } from "@/app/actions/auth";
 import { useToast } from "@/components/providers/toast-provider";
 import DashboardLayout from "@/components/dashboard-layout";
 import MagneticButton from "@/components/magnetic-button";
@@ -51,11 +52,12 @@ export default function SupplierDashboardPage() {
   });
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-  // ✅ NEW: Withdrawal State
+  // ✅ NEW: Withdrawal & Earnings State
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [availableBalance, setAvailableBalance] = useState(0); // ✅ Tracks actual net payouts
 
   // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -77,6 +79,7 @@ export default function SupplierDashboardPage() {
     loadOrders();
     loadAccountDetails();
     loadWithdrawals();
+    loadEarnings(); // ✅ Load actual available balance
   }, []);
 
   const loadOrders = async () => {
@@ -128,7 +131,6 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ NEW: Load Withdrawal History
   const loadWithdrawals = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -140,6 +142,23 @@ export default function SupplierDashboardPage() {
       .order("created_at", { ascending: false });
 
     if (data) setWithdrawals(data);
+  };
+
+  // ✅ NEW: Fetch actual available balance from supplier_earnings table
+  const loadEarnings = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("supplier_earnings")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("status", "available");
+
+    if (data) {
+      const total = data.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+      setAvailableBalance(total);
+    }
   };
 
   const handleSaveAccountDetails = async (e: React.FormEvent) => {
@@ -177,7 +196,6 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ NEW: Handle Withdrawal Request
   const handleRequestWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(withdrawalAmount);
@@ -185,7 +203,8 @@ export default function SupplierDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please enter a valid amount." });
       return;
     }
-    if (amount > stats.revenue) {
+    // ✅ UPDATED: Check against actual available balance
+    if (amount > availableBalance) {
       addToast({ type: "error", title: "Error", message: "Insufficient balance." });
       return;
     }
@@ -215,11 +234,11 @@ export default function SupplierDashboardPage() {
       setShowWithdrawalModal(false);
       setWithdrawalAmount("");
       loadWithdrawals();
+      loadEarnings(); // ✅ Refresh balance after request
     }
     setIsRequestingWithdrawal(false);
   };
 
-  // ✅ NEW: Handle Dispute Submission
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!disputeOrderId || !disputeReason.trim()) return;
@@ -342,6 +361,7 @@ export default function SupplierDashboardPage() {
       loading: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
       in_transit: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30",
       delivered: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+      completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
       cancelled: "bg-red-500/10 text-red-600 border-red-500/30",
     };
     return colors[status] || "bg-gray-500/10 text-gray-600 border-gray-500/30";
@@ -357,6 +377,7 @@ export default function SupplierDashboardPage() {
       loading: "Loading",
       in_transit: "In Transit",
       delivered: "Delivered",
+      completed: "Completed",
       cancelled: "Cancelled",
     };
     return labels[status] || status.replace(/_/g, " ");
@@ -374,12 +395,13 @@ export default function SupplierDashboardPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // ✅ UPDATED: Revenue now reflects the actual available balance from earnings table
   const stats = {
     total: orders.length,
     pending: orders.filter(o => o.status === "pending_supplier_acceptance").length,
-    active: orders.filter(o => ["driver_searching", "driver_assigned", "in_transit", "loading"].includes(o.status)).length,
-    completed: orders.filter(o => o.status === "delivered").length,
-    revenue: orders.filter(o => o.status === "delivered").reduce((sum, o) => sum + (o.total_amount || 0), 0)
+    active: orders.filter(o => ["driver_searching", "driver_assigned", "in_transit", "loading", "delivered", "completed"].includes(o.status)).length,
+    completed: orders.filter(o => o.status === "completed" || o.status === "delivered").length,
+    revenue: availableBalance,
   };
 
   if (isLoading) {
@@ -450,11 +472,11 @@ export default function SupplierDashboardPage() {
                 <div className="p-2 rounded-lg bg-green-500/10"><DollarSign className="w-5 h-5 text-green-500" /></div>
               </div>
               <p className="text-2xl font-bold text-green-500">{formatNaira(stats.revenue)}</p>
-              <p className="text-xs text-muted-foreground mt-1">From completed orders</p>
+              <p className="text-xs text-muted-foreground mt-1">Available for withdrawal</p>
             </motion.div>
           </div>
 
-          {/* ✅ UPDATED: Tabs now include "withdrawals" */}
+          {/* Tabs */}
           <div className="flex gap-2 border-b border-border overflow-x-auto">
             {["overview", "orders", "tracking", "withdrawals", "account"].map((tab) => (
               <button
@@ -502,7 +524,7 @@ export default function SupplierDashboardPage() {
                 <div className="glass rounded-2xl border border-border p-6">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> Order Status Distribution</h3>
                   <div className="space-y-3">
-                    {["pending_supplier_acceptance", "driver_searching", "in_transit", "delivered"].map((status) => {
+                    {["pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => {
                       const count = orders.filter(o => o.status === status).length;
                       const percentage = orders.length > 0 ? (count / orders.length) * 100 : 0;
                       return (
@@ -549,7 +571,7 @@ export default function SupplierDashboardPage() {
                   <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-sm" />
                 </div>
                 <div className="flex gap-2 overflow-x-auto">
-                  {["all", "pending_supplier_acceptance", "driver_searching", "in_transit", "delivered"].map((status) => (
+                  {["all", "pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => (
                     <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all ${statusFilter === status ? "bg-orange-500 text-white" : "bg-muted hover:bg-muted/80 text-muted-foreground"}`}>
                       {getStatusLabel(status)}
                     </button>
@@ -573,7 +595,7 @@ export default function SupplierDashboardPage() {
                             <h3 className="text-xl font-bold">{order.material_type}</h3>
                             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
                             
-                            {/* ✅ NEW: Report Dispute Button */}
+                            {/* Report Dispute Button */}
                             {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
                               <button
                                 onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
@@ -609,7 +631,7 @@ export default function SupplierDashboardPage() {
                             <CheckCircle className="w-4 h-4" /> Accept Order
                           </MagneticButton>
                         )}
-                        {order.status === "delivered" && (
+                        {(order.status === "delivered" || order.status === "completed") && (
                           <MagneticButton onClick={() => handleOpenEvidenceModal(order)} className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2">
                             <Upload className="w-4 h-4" /> Upload Evidence
                           </MagneticButton>
@@ -659,7 +681,7 @@ export default function SupplierDashboardPage() {
             </motion.div>
           )}
 
-          {/* ✅ NEW: Withdrawals Tab */}
+          {/* Withdrawals Tab */}
           {activeTab === "withdrawals" && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <div className="glass rounded-2xl border border-border p-6 md:p-8">
@@ -679,20 +701,21 @@ export default function SupplierDashboardPage() {
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4 mb-8">
+                  {/* ✅ UPDATED: Shows actual available balance from earnings table */}
                   <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
                     <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
-                    <p className="text-3xl font-bold text-green-500">{formatNaira(stats.revenue)}</p>
+                    <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                   </div>
                   <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                     <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
                     <p className="text-3xl font-bold text-blue-500">
-                      {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                      {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
                     </p>
                   </div>
                   <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
                     <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
                     <p className="text-3xl font-bold text-purple-500">
-                      {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                      {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
                     </p>
                   </div>
                 </div>
@@ -714,7 +737,7 @@ export default function SupplierDashboardPage() {
                           <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
                         </tr>
                       ) : (
-                        withdrawals.map((w) => (
+                        withdrawals.map((w: any) => (
                           <tr key={w.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                             <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
                             <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
@@ -738,7 +761,7 @@ export default function SupplierDashboardPage() {
             </motion.div>
           )}
 
-          {/* Account Details Tab */}
+          {/* ✅ UPDATED: Account Details Tab with Sign Out Button */}
           {activeTab === "account" && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
               <div className="glass rounded-2xl border border-border p-6 md:p-8">
@@ -807,6 +830,15 @@ export default function SupplierDashboardPage() {
                     </button>
                   </div>
                 </form>
+
+                {/* ✅ NEW: Prominent Sign Out Button */}
+                <div className="mt-8 pt-6 border-t border-border">
+                  <form action={logout}>
+                    <button className="w-full py-3 bg-red-500/10 text-red-600 border border-red-500/20 rounded-xl font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                      <LogOut className="w-4 h-4" /> Sign Out
+                    </button>
+                  </form>
+                </div>
               </div>
             </motion.div>
           )}
@@ -933,6 +965,7 @@ export default function SupplierDashboardPage() {
                         { status: "loading", label: "Loading Material", icon: Truck },
                         { status: "in_transit", label: "In Transit", icon: Navigation },
                         { status: "delivered", label: "Delivered", icon: CheckCircle },
+                        { status: "completed", label: "Completed", icon: CheckCircle },
                       ].map((step, index) => {
                         const isCompleted = Object.keys(getStatusLabel).indexOf(trackingOrder.status) >= Object.keys(getStatusLabel).indexOf(step.status);
                         const StepIcon = step.icon;
@@ -954,7 +987,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Withdrawal Request Modal */}
+      {/* Withdrawal Request Modal */}
       <AnimatePresence>
         {showWithdrawalModal && (
           <>
@@ -985,9 +1018,10 @@ export default function SupplierDashboardPage() {
                   </button>
                 </div>
 
+                {/* ✅ UPDATED: Shows actual available balance */}
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
                   <p className="text-sm text-muted-foreground">Available Balance</p>
-                  <p className="text-2xl font-bold text-green-500">{formatNaira(stats.revenue)}</p>
+                  <p className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
 
                 <form onSubmit={handleRequestWithdrawal} className="space-y-4">
@@ -1048,7 +1082,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Dispute Modal */}
+      {/* Dispute Modal */}
       <AnimatePresence>
         {showDisputeModal && disputeOrderId && (
           <>

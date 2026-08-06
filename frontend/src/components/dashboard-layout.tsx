@@ -106,7 +106,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="flex h-screen bg-muted/30 overflow-hidden">
       
       {/* 📱 Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 z-40">
@@ -123,12 +123,12 @@ export default function DashboardLayout({
       </div>
 
       {/* 🧭 Sidebar */}
-      {/* ✅ FIXED: Changed to h-screen and added proper flex structure */}
+      {/* ✅ BULLETPROOF FIX: "fixed inset-y-0 left-0" guarantees full screen height on mobile */}
       <aside className={`
-        fixed md:relative z-50 h-screen w-64 bg-background border-r border-border flex flex-col transition-transform duration-300 ease-in-out
-        ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        fixed inset-y-0 left-0 z-50 w-64 bg-background border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+        ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
-        {/* Sidebar Header - Never shrinks */}
+        {/* Sidebar Header */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-600 to-red-600 flex items-center justify-center">
@@ -144,8 +144,9 @@ export default function DashboardLayout({
           </button>
         </div>
 
-        {/* Dynamic Menu Items - Scrollable, takes available space */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
+        {/* Dynamic Menu Items */}
+        {/* ✅ min-h-0 is the magic flexbox fix that allows this to shrink and push the footer down */}
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar min-h-0">
           {menuItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/dashboard/customer" && pathname.startsWith(item.href));
             
@@ -178,8 +179,8 @@ export default function DashboardLayout({
           })}
         </nav>
 
-        {/* ✅ FIXED: Sign Out Footer - Always visible at bottom, never shrinks */}
-        <div className="p-4 border-t border-border bg-background flex-shrink-0 safe-area-pb">
+        {/* Sign Out Footer */}
+        <div className="p-4 border-t border-border bg-background flex-shrink-0">
           <form action={logout}>
             <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer">
               <LogOut className="w-5 h-5" />
@@ -203,9 +204,9 @@ export default function DashboardLayout({
       </AnimatePresence>
 
       {/* 🖥️ Main Content Area */}
-      <main className="flex-1 flex flex-col min-h-screen w-full">
+      <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* Top Bar */}
-        <header className="sticky top-16 md:top-0 h-16 bg-background/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 md:px-6 z-30">
+        <header className="h-16 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 md:px-6 z-30 mt-16 md:mt-0">
           <h1 className="text-lg font-semibold hidden md:block capitalize">
             {userRole} Dashboard
           </h1>

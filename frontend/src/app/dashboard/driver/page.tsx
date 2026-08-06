@@ -6,7 +6,7 @@ import {
   Truck, MapPin, Wallet, Star, Navigation, Phone, MessageCircle, 
   CheckCircle, Clock, AlertCircle, Calendar, TrendingUp, Power,
   Package, Settings, ChevronRight, Loader2, DollarSign, X, Key,
-  Camera, FileUp, Building2, Plus, AlertTriangle
+  Camera, FileUp, Building2, Plus, AlertTriangle, LogOut
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
@@ -14,6 +14,7 @@ import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
+import { logout } from "@/app/actions/auth";
 import MagneticButton from "@/components/magnetic-button";
 
 interface Order {
@@ -97,11 +98,12 @@ export default function DriverDashboardPage() {
   });
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-  // ✅ NEW: Withdrawal State
+  // ✅ NEW: Withdrawal & Earnings State
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [availableBalance, setAvailableBalance] = useState(0); // ✅ Tracks actual net payouts
 
   // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -125,6 +127,7 @@ export default function DriverDashboardPage() {
     fetchDriverData();
     loadAccountDetails();
     loadWithdrawals();
+    loadEarnings(); // ✅ Load actual available balance
   }, []);
 
   async function fetchDriverData() {
@@ -162,7 +165,7 @@ export default function DriverDashboardPage() {
       .from("orders")
       .select("*")
       .eq("driver_id", user.id)
-      .in("status", ["loading", "in_transit", "delivered"])
+      .in("status", ["loading", "in_transit", "delivered", "completed"])
       .order("created_at", { ascending: false });
 
     if (ordersData) setActiveOrders(ordersData);
@@ -189,7 +192,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Load Withdrawal History
   const loadWithdrawals = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -201,6 +203,23 @@ export default function DriverDashboardPage() {
       .order("created_at", { ascending: false });
 
     if (data) setWithdrawals(data);
+  };
+
+  // ✅ NEW: Fetch actual available balance from driver_earnings table
+  const loadEarnings = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("driver_earnings")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("status", "available");
+
+    if (data) {
+      const total = data.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+      setAvailableBalance(total);
+    }
   };
 
   const handleSaveAccountDetails = async (e: React.FormEvent) => {
@@ -238,7 +257,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Handle Withdrawal Request
   const handleRequestWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(withdrawalAmount);
@@ -246,7 +264,8 @@ export default function DriverDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please enter a valid amount." });
       return;
     }
-    if (amount > totalEarnings) {
+    // ✅ UPDATED: Check against actual available balance
+    if (amount > availableBalance) {
       addToast({ type: "error", title: "Error", message: "Insufficient balance." });
       return;
     }
@@ -276,11 +295,11 @@ export default function DriverDashboardPage() {
       setShowWithdrawalModal(false);
       setWithdrawalAmount("");
       loadWithdrawals();
+      loadEarnings(); // ✅ Refresh balance after request
     }
     setIsRequestingWithdrawal(false);
   };
 
-  // ✅ NEW: Handle Dispute Submission
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!disputeOrderId || !disputeReason.trim()) return;
@@ -443,11 +462,10 @@ export default function DriverDashboardPage() {
   };
 
   const activeDelivery = activeOrders.find(o => o.status === "in_transit" || o.status === "loading");
-  const completedDeliveries = activeOrders.filter(o => o.status === "delivered");
-  const todayEarnings = completedDeliveries.reduce((sum, o) => sum + (o.delivery_fee || 0), 0);
+  const completedDeliveries = activeOrders.filter(o => o.status === "delivered" || o.status === "completed");
   
-  // ✅ Total lifetime earnings for withdrawal balance
-  const totalEarnings = completedDeliveries.reduce((sum, o) => sum + (o.delivery_fee || 0), 0);
+  // ✅ UPDATED: Today's earnings now reflects the actual available balance from earnings table
+  const todayEarnings = availableBalance;
 
   if (isLoading) {
     return (
@@ -489,7 +507,7 @@ export default function DriverDashboardPage() {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "Today's Earnings", value: formatNaira(todayEarnings), icon: Wallet, color: "text-green-500", bg: "bg-green-500/10" },
+                { label: "Available Balance", value: formatNaira(todayEarnings), icon: Wallet, color: "text-green-500", bg: "bg-green-500/10" },
                 { label: "Active Trips", value: activeDelivery ? 1 : 0, icon: Truck, color: "text-blue-500", bg: "bg-blue-500/10" },
                 { label: "My Bids", value: myBids.length, icon: DollarSign, color: "text-orange-500", bg: "bg-orange-500/10" },
                 { label: "Driver Rating", value: "4.9 / 5.0", icon: Star, color: "text-yellow-500", bg: "bg-yellow-500/10" },
@@ -643,7 +661,6 @@ export default function DriverDashboardPage() {
                         </MagneticButton>
                       </div>
 
-                      {/* ✅ NEW: Report Dispute Button */}
                       <div className="mt-4 pt-4 border-t border-border">
                         <button
                           onClick={() => { setDisputeOrderId(activeDelivery.id); setShowDisputeModal(true); }}
@@ -693,6 +710,7 @@ export default function DriverDashboardPage() {
                   </div>
                 </div>
 
+                {/* ✅ UPDATED: Account Details with Sign Out Button */}
                 <div className="glass p-6 rounded-2xl border border-border mb-10">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-orange-500" /> Account Details
@@ -750,11 +768,20 @@ export default function DriverDashboardPage() {
                       </button>
                     </div>
                   </form>
+
+                  {/* ✅ NEW: Prominent Sign Out Button */}
+                  <div className="mt-8 pt-6 border-t border-border">
+                    <form action={logout}>
+                      <button className="w-full py-3 bg-red-500/10 text-red-600 border border-red-500/20 rounded-lg font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                        <LogOut className="w-4 h-4" /> Sign Out
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* ✅ NEW: Withdrawals Section */}
+            {/* Withdrawals Section */}
             <div className="glass rounded-2xl border border-border p-6 md:p-8">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
@@ -772,20 +799,21 @@ export default function DriverDashboardPage() {
               </div>
 
               <div className="grid md:grid-cols-3 gap-4 mb-8">
+                {/* ✅ UPDATED: Shows actual available balance from earnings table */}
                 <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
-                  <p className="text-3xl font-bold text-green-500">{formatNaira(totalEarnings)}</p>
+                  <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
                 <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
                   <p className="text-3xl font-bold text-blue-500">
-                    {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                    {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
                   </p>
                 </div>
                 <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
                   <p className="text-3xl font-bold text-purple-500">
-                    {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum, w) => sum + (w.amount || 0), 0))}
+                    {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
                   </p>
                 </div>
               </div>
@@ -807,7 +835,7 @@ export default function DriverDashboardPage() {
                         <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
                       </tr>
                     ) : (
-                      withdrawals.map((w) => (
+                      withdrawals.map((w: any) => (
                         <tr key={w.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                           <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
                           <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
@@ -1111,7 +1139,7 @@ export default function DriverDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Withdrawal Request Modal */}
+      {/* Withdrawal Request Modal */}
       <AnimatePresence>
         {showWithdrawalModal && (
           <>
@@ -1142,9 +1170,10 @@ export default function DriverDashboardPage() {
                   </button>
                 </div>
 
+                {/* ✅ UPDATED: Shows actual available balance */}
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
                   <p className="text-sm text-muted-foreground">Available Balance</p>
-                  <p className="text-2xl font-bold text-green-500">{formatNaira(totalEarnings)}</p>
+                  <p className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
 
                 <form onSubmit={handleRequestWithdrawal} className="space-y-4">
@@ -1205,7 +1234,7 @@ export default function DriverDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Dispute Modal */}
+      {/* Dispute Modal */}
       <AnimatePresence>
         {showDisputeModal && disputeOrderId && (
           <>

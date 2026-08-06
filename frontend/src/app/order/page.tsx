@@ -12,10 +12,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/navbar";
 import { useToast } from "@/components/providers/toast-provider";
 import { getMaterialById } from "@/app/actions/materials";
-import { initializeSecurePayment } from "@/app/actions/paystack"; // ✅ SECURE PAYMENT
+import { initializeSecurePayment } from "@/app/actions/paystack";
 import { createClient } from "@/lib/supabase/client";
 
-// 🇳🇬 The 37 States of Nigeria (36 States + FCT)
 const nigerianStates = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
   "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo", "Jigawa", 
@@ -24,7 +23,6 @@ const nigerianStates = [
   "Federal Capital Territory"
 ];
 
-// ✅ 1. Inner component that safely uses useSearchParams
 function OrderPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,10 +106,10 @@ function OrderPageContent() {
   };
 
   const subtotal = material ? material.price_per_ton * formData.quantity : 0;
-  const deliveryFee = 15000; 
-  const totalAmount = subtotal + deliveryFee;
+  // ✅ UPDATED: Changed from deliveryFee to serviceCharge (₦5,000 flat fee)
+  const serviceCharge = 5000; 
+  const totalAmount = subtotal + serviceCharge;
 
-  // ✅ SECURE CHECKOUT HANDLER
   const handleCheckout = async () => {
     setIsSubmitting(true);
     
@@ -136,7 +134,6 @@ function OrderPageContent() {
         title: "Redirecting...", 
         message: "Taking you to secure Paystack checkout" 
       });
-      // Redirect user to the official Paystack payment page
       window.location.href = result.checkoutUrl;
     }
   };
@@ -423,9 +420,10 @@ function OrderPageContent() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₦{subtotal.toLocaleString()}</span>
                   </div>
+                  {/* ✅ UPDATED: Changed label from "Delivery Fee" to "Service Charge" */}
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Delivery Fee (Est.)</span>
-                    <span>₦{deliveryFee.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Service Charge</span>
+                    <span>₦{serviceCharge.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold pt-3 border-t border-border mt-3">
                     <span>Total</span>
@@ -480,7 +478,6 @@ function OrderPageContent() {
                     Cancel
                   </button>
                   
-                  {/* ✅ SECURE CHECKOUT BUTTON */}
                   <button 
                     onClick={handleCheckout}
                     disabled={isSubmitting}
@@ -502,7 +499,6 @@ function OrderPageContent() {
   );
 }
 
-// ✅ 2. Main default export wraps the content in a Suspense boundary
 export default function OrderPage() {
   return (
     <Suspense fallback={

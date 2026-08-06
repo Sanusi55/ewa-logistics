@@ -91,7 +91,6 @@ export default function CustomerDashboardPage() {
     }
   };
 
-  // ✅ NEW: Handle Dispute Submission
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!disputeOrderId || !disputeReason.trim()) return;
@@ -129,6 +128,7 @@ export default function CustomerDashboardPage() {
       loading: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
       in_transit: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30",
       delivered: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+      completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
       cancelled: "bg-red-500/10 text-red-600 border-red-500/30",
     };
     return colors[status] || "bg-gray-500/10 text-gray-600 border-gray-500/30";
@@ -144,6 +144,7 @@ export default function CustomerDashboardPage() {
       loading: "Loading Material",
       in_transit: "In Transit",
       delivered: "Delivered",
+      completed: "Completed",
       cancelled: "Cancelled",
     };
     return labels[status] || status.replace(/_/g, " ");
@@ -214,7 +215,7 @@ export default function CustomerDashboardPage() {
                           {getStatusLabel(order.status)}
                         </span>
                         
-                        {/* ✅ NEW: Report Dispute Button (Hidden for cancelled/pending orders) */}
+                        {/* Report Dispute Button */}
                         {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
                           <button
                             onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
@@ -237,10 +238,31 @@ export default function CustomerDashboardPage() {
                           <Calendar className="w-4 h-4 text-orange-500" />
                           <span>{new Date(order.created_at).toLocaleDateString()}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-green-500" />
-                          <span className="font-semibold text-foreground">{formatNaira(order.total_amount)}</span>
-                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ✅ NEW: Cost Breakdown Section */}
+                  <div className="mb-6 p-4 bg-muted/30 rounded-xl border border-border">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Order Cost Breakdown</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Material Cost</span>
+                        <span className="font-medium">{formatNaira(order.total_amount || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Delivery Fee</span>
+                        <span className="font-medium">{order.delivery_fee ? formatNaira(order.delivery_fee) : "Pending driver bid"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">EWA Service Charge</span>
+                        <span className="font-medium text-orange-500">{formatNaira(order.service_charge || 5000)}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-border mt-2">
+                        <span className="font-bold text-foreground">Total Order Value</span>
+                        <span className="font-bold text-orange-500 text-base">
+                          {formatNaira((order.total_amount || 0) + (order.delivery_fee || 0) + (order.service_charge || 5000))}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -346,7 +368,7 @@ export default function CustomerDashboardPage() {
                         </div>
                       </div>
                       
-                      {/* ✅ ENHANCED: Delivery Code Reminder */}
+                      {/* Delivery Code Reminder */}
                       {(order.status === "in_transit" || order.status === "loading" || order.status === "driver_assigned" || order.status === "supplier_driver_assigned") && order.delivery_code && (
                         <div className="mt-6 p-5 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/40 rounded-xl flex items-start gap-4">
                           <div className="p-3 bg-orange-500 rounded-full flex-shrink-0">
@@ -366,13 +388,13 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* Delivered State */}
-                  {order.status === "delivered" && (
+                  {/* Delivered / Completed State */}
+                  {(order.status === "delivered" || order.status === "completed") && (
                     <div className="mt-6 pt-6 border-t border-border">
                       <div className="p-6 bg-emerald-500/10 rounded-xl border border-emerald-500/30 text-center">
                         <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
                         <h4 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">Delivery Completed!</h4>
-                        <p className="text-sm text-muted-foreground mt-2">This order has been successfully delivered and payment has been released.</p>
+                        <p className="text-sm text-muted-foreground mt-2">This order has been successfully delivered and payment has been released to the supplier and driver.</p>
                       </div>
                     </div>
                   )}
@@ -384,7 +406,7 @@ export default function CustomerDashboardPage() {
         </div>
       </div>
 
-      {/* ✅ NEW: Dispute Modal */}
+      {/* Dispute Modal */}
       <AnimatePresence>
         {showDisputeModal && disputeOrderId && (
           <>
