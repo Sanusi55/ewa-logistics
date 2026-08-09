@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-// ✅ IMPORT THE NEW NOTIFICATION BELL
 import NotificationBell from "@/components/notification-bell";
 
 export default function Navbar() {
@@ -39,7 +38,6 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
           
-          {/* ✅ LOGO WITH IMAGE */}
           <Link href="/" className="flex items-center gap-3 group">
             <motion.div
               whileHover={{ rotate: 5, scale: 1.05 }}
@@ -57,7 +55,6 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
               <Link
@@ -71,9 +68,7 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Right Side Actions */}
           <div className="flex items-center gap-3">
-            {/* Theme Toggle */}
             {mounted && (
               <button
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -84,18 +79,16 @@ export default function Navbar() {
               </button>
             )}
 
-            {/* ✅ NEW: Notification Bell (Only shows when logged in) */}
             <NotificationBell />
 
-            {/* ✅ CTA Button - Now links to Dashboard */}
+            {/* ✅ FIXED: Changed to /signup */}
             <Link
-              href="/dashboard"
+              href="/signup"
               className="hidden md:inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-full hover:opacity-90 transition-opacity cursor-pointer"
             >
               Get Started
             </Link>
 
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer"
@@ -107,7 +100,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
@@ -118,7 +110,6 @@ export default function Navbar() {
             className="md:hidden glass border-t border-border overflow-hidden"
           >
             <div className="px-6 py-4 space-y-3">
-              {/* ✅ Mobile Logo */}
               <div className="flex items-center gap-3 pb-3 border-b border-border mb-3">
                 <img 
                   src="/logo.png" 
@@ -139,9 +130,9 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="pt-4 border-t border-border">
-                {/* ✅ Mobile CTA Button - Now links to Dashboard */}
+                {/* ✅ FIXED: Changed to /signup */}
                 <Link
-                  href="/dashboard"
+                  href="/signup"
                   onClick={() => setIsMenuOpen(false)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-medium rounded-full hover:opacity-90 transition-opacity cursor-pointer"
                 >

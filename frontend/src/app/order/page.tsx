@@ -45,6 +45,8 @@ function OrderPageContent() {
     quantity: 1,
     paymentMethod: "card",
     promoCode: "",
+    useCustomOffer: false,
+    customDeliveryOffer: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -106,9 +108,9 @@ function OrderPageContent() {
   };
 
   const subtotal = material ? material.price_per_ton * formData.quantity : 0;
-  // ✅ UPDATED: Changed from deliveryFee to serviceCharge (₦5,000 flat fee)
   const serviceCharge = 5000; 
-  const totalAmount = subtotal + serviceCharge;
+  const deliveryOffer = formData.useCustomOffer ? (parseInt(formData.customDeliveryOffer) || 0) : 0;
+  const totalAmount = subtotal + serviceCharge + deliveryOffer;
 
   const handleCheckout = async () => {
     setIsSubmitting(true);
@@ -119,8 +121,9 @@ function OrderPageContent() {
       pickup_location: "Supplier Warehouse", 
       delivery_location: `${formData.city}, ${formData.state}`,
       delivery_address: formData.address,
-      customer_notes: `Phone: ${formData.phone}${formData.promoCode ? ` | Promo: ${formData.promoCode}` : ''}`,
+      customer_notes: `Phone: ${formData.phone}${formData.promoCode ? ` | Promo: ${formData.promoCode}` : ''}${formData.useCustomOffer ? ` | Delivery Offer: ₦${formData.customDeliveryOffer}` : ''}`,
       total_amount: totalAmount,
+      delivery_fee_offer: formData.useCustomOffer ? (parseInt(formData.customDeliveryOffer) || 0) : null,
     };
 
     const result = await initializeSecurePayment(orderData);
@@ -397,6 +400,32 @@ function OrderPageContent() {
                 )}
 
                 <div className="mb-6">
+                  {/* ✅ NEW: Custom Delivery Offer Toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer mb-3">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.useCustomOffer}
+                      onChange={(e) => setFormData({...formData, useCustomOffer: e.target.checked, customDeliveryOffer: ""})}
+                      className="w-4 h-4 text-orange-500 rounded border-border focus:ring-orange-500/20"
+                    />
+                    <span className="text-sm font-medium">Make an offer for delivery</span>
+                  </label>
+                  
+                  {formData.useCustomOffer && (
+                    <div className="p-3 bg-orange-500/5 border border-orange-500/20 rounded-xl mb-4">
+                      <label className="block text-xs font-medium text-orange-600 dark:text-orange-400 mb-1.5">Your Delivery Offer (₦)</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={formData.customDeliveryOffer}
+                        onChange={(e) => setFormData({...formData, customDeliveryOffer: e.target.value})}
+                        className="w-full px-3 py-2 bg-background border border-orange-500/30 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        placeholder="e.g. 10000"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1.5">💡 Drivers can choose to accept or reject your offer.</p>
+                    </div>
+                  )}
+
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Promo Code</label>
                   <div className="flex gap-2">
                     <input 
@@ -420,11 +449,16 @@ function OrderPageContent() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₦{subtotal.toLocaleString()}</span>
                   </div>
-                  {/* ✅ UPDATED: Changed label from "Delivery Fee" to "Service Charge" */}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service Charge</span>
                     <span>₦{serviceCharge.toLocaleString()}</span>
                   </div>
+                  {formData.useCustomOffer && deliveryOffer > 0 && (
+                    <div className="flex justify-between text-sm text-orange-500">
+                      <span>Your Delivery Offer</span>
+                      <span>₦{deliveryOffer.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-lg font-bold pt-3 border-t border-border mt-3">
                     <span>Total</span>
                     <span className="text-orange-500">₦{totalAmount.toLocaleString()}</span>

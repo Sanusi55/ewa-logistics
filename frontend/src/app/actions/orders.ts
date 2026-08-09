@@ -19,6 +19,7 @@ export async function createOrder(orderData: {
   delivery_address: string;
   customer_notes?: string;
   total_amount: number;
+  delivery_fee_offer?: number | null; // ✅ NEW: Customer's delivery offer
 }) {
   const supabase = await createClient();
   
@@ -51,7 +52,8 @@ export async function createOrder(orderData: {
         customer_notes: orderData.customer_notes,
         delivery_code: deliveryCode,
         total_amount: orderData.total_amount,
-        service_charge: service_charge, // ✅ NEW: Record the service charge
+        service_charge: service_charge,
+        delivery_fee_offer: orderData.delivery_fee_offer || null, // ✅ NEW: Save the offer to the database
         status: "pending_supplier_acceptance",
       })
       .select()

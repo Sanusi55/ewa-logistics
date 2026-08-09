@@ -11,7 +11,7 @@ import {
   Megaphone, History, Send, RefreshCw, X, Loader2,
   Edit2, UserX, UserCheck, Target, Mail, Lock, ArrowRight, 
   AlertCircle as AlertIcon, Eye, MessageSquare, Key, Layers, CreditCard,
-  LogOut, ChevronRight, MapPin, Award
+  LogOut, MapPin, Award
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/providers/toast-provider";
@@ -33,10 +33,9 @@ import {
   updateListingStatus,
 } from "@/app/actions/admin";
 
-// ✅ Premium Chart Imports
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend 
+  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell
 } from "recharts";
 
 interface UserProfile {
@@ -127,7 +126,6 @@ interface Dispute {
   user_role?: string;
 }
 
-// ✅ Premium Mock Data for Charts
 const revenueData = [
   { name: "Jan", revenue: 1250000, orders: 45 },
   { name: "Feb", revenue: 1800000, orders: 62 },
@@ -198,7 +196,6 @@ export default function AdminPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [listings, setListings] = useState<Listing[]>([]);
-
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [showResolveModal, setShowResolveModal] = useState(false);
@@ -206,58 +203,31 @@ export default function AdminPage() {
   const [adminNotes, setAdminNotes] = useState("");
   const [isResolvingDispute, setIsResolvingDispute] = useState(false);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab) {
-      setActiveTab(tab);
-    }
+    if (tab) setActiveTab(tab);
   }, [searchParams]);
 
   async function checkAuth() {
     setAuthState("loading");
     const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      setAuthState("login");
-      return;
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role === "admin") {
-      setAuthState("dashboard");
-      fetchAllData();
-    } else {
-      setAuthState("login");
-    }
+    if (!user) { setAuthState("login"); return; }
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role === "admin") { setAuthState("dashboard"); fetchAllData(); } 
+    else { setAuthState("login"); }
   }
 
   async function handleAdminLogin(formData: FormData) {
-    setIsLoggingIn(true);
-    setLoginError("");
-    
+    setIsLoggingIn(true); setLoginError("");
     const result = await adminLogin(formData);
-    
-    if (result?.error) {
-      setLoginError(result.error);
-      setIsLoggingIn(false);
-    } else {
-      await checkAuth();
-      setIsLoggingIn(false);
-    }
+    if (result?.error) { setLoginError(result.error); setIsLoggingIn(false); } 
+    else { await checkAuth(); setIsLoggingIn(false); }
   }
 
   useEffect(() => {
     if (authState !== "dashboard") return;
-    
     if (activeTab === "users") fetchUsers();
     if (activeTab === "orders") fetchOrders();
     if (activeTab === "deliveries") fetchDeliveries();
@@ -272,170 +242,64 @@ export default function AdminPage() {
   async function fetchAllData() {
     setIsLoading(true);
     const result = await getAdminStats();
-    if (result.success) {
-      setStats(result.stats);
-    }
+    if (result.success) setStats(result.stats);
     await fetchUsers();
     setIsLoading(false);
   }
-
-  async function fetchUsers() {
-    const result = await getAdminUsers(userFilter, userSearch);
-    if (result.data) setUsers(result.data);
-  }
-
-  async function fetchOrders() {
-    const result = await getAdminOrders(orderFilter);
-    if (result.data) setOrders(result.data);
-  }
-
-  async function fetchDeliveries() {
-    const result = await getAdminDeliveries(deliveryFilter);
-    if (result.data) setDeliveries(result.data);
-  }
-
-  async function fetchAuditLogs() {
-    const result = await getAuditLogs(100);
-    if (result.data) setAuditLogs(result.data);
-  }
-
-  async function fetchSettings() {
-    const result = await getPlatformSettings();
-    if (result.data) setSettings(result.data);
-  }
-
+  async function fetchUsers() { const result = await getAdminUsers(userFilter, userSearch); if (result.data) setUsers(result.data); }
+  async function fetchOrders() { const result = await getAdminOrders(orderFilter); if (result.data) setOrders(result.data); }
+  async function fetchDeliveries() { const result = await getAdminDeliveries(deliveryFilter); if (result.data) setDeliveries(result.data); }
+  async function fetchAuditLogs() { const result = await getAuditLogs(100); if (result.data) setAuditLogs(result.data); }
+  async function fetchSettings() { const result = await getPlatformSettings(); if (result.data) setSettings(result.data); }
   async function fetchMessages() {
     try {
       const { getContactMessages, getUnreadCount } = await import("@/app/actions/contact");
       const result = await getContactMessages();
       if (result.data) setMessages(result.data);
-      
       const countResult = await getUnreadCount();
       setUnreadCount(countResult.count);
-    } catch (error: any) {
-      console.error("❌ Fetch messages error:", error);
-    }
+    } catch (error: any) { console.error("❌ Fetch messages error:", error); }
   }
-
   async function fetchWithdrawals() {
-    const { data, error } = await supabase
-      .from("withdrawal_requests")
-      .select("*")
-      .order("created_at", { ascending: false });
-    
-    if (error) {
-      console.error("❌ Error fetching withdrawals:", error);
-      addToast({ type: "error", title: "Error", message: "Failed to load withdrawals" });
-    } else {
+    const { data, error } = await supabase.from("withdrawal_requests").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("❌ Error fetching withdrawals:", error); addToast({ type: "error", title: "Error", message: "Failed to load withdrawals" }); } 
+    else {
       const userIds = data?.map((w: any) => w.user_id) || [];
       let profiles: any[] = [];
-      
-      if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, full_name, email")
-          .in("id", userIds);
-        profiles = profilesData || [];
-      }
-
-      const mergedData = data?.map((w: any) => {
-        const profile = profiles.find((p: any) => p.id === w.user_id);
-        return {
-          ...w,
-          full_name: profile?.full_name || "Unknown User",
-          email: profile?.email || "No Email",
-        };
-      }) || [];
-
+      if (userIds.length > 0) { const { data: profilesData } = await supabase.from("profiles").select("id, full_name, email").in("id", userIds); profiles = profilesData || []; }
+      const mergedData = data?.map((w: any) => { const profile = profiles.find((p: any) => p.id === w.user_id); return { ...w, full_name: profile?.full_name || "Unknown User", email: profile?.email || "No Email" }; }) || [];
       setWithdrawals(mergedData);
     }
   }
-
   async function fetchDisputes() {
-    const { data, error } = await supabase
-      .from("disputes")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("❌ Error fetching disputes:", error);
-      addToast({ type: "error", title: "Error", message: "Failed to load disputes" });
-    } else {
+    const { data, error } = await supabase.from("disputes").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("❌ Error fetching disputes:", error); addToast({ type: "error", title: "Error", message: "Failed to load disputes" }); } 
+    else {
       const userIds = data?.map((d: any) => d.raised_by) || [];
       let profiles: any[] = [];
-      
-      if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, full_name, email, role")
-          .in("id", userIds);
-        profiles = profilesData || [];
-      }
-
-      const mergedData = data?.map((d: any) => {
-        const profile = profiles.find((p: any) => p.id === d.raised_by);
-        return {
-          ...d,
-          full_name: profile?.full_name || "Unknown User",
-          email: profile?.email || "No Email",
-          user_role: profile?.role || d.raised_by_role,
-        };
-      }) || [];
-
+      if (userIds.length > 0) { const { data: profilesData } = await supabase.from("profiles").select("id, full_name, email, role").in("id", userIds); profiles = profilesData || []; }
+      const mergedData = data?.map((d: any) => { const profile = profiles.find((p: any) => p.id === d.raised_by); return { ...d, full_name: profile?.full_name || "Unknown User", email: profile?.email || "No Email", user_role: profile?.role || d.raised_by_role }; }) || [];
       setDisputes(mergedData);
     }
   }
-
   async function fetchListings() {
-    const { data: materials, error } = await supabase
-      .from("materials")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching listings:", error);
-      return;
-    }
-
+    const { data: materials, error } = await supabase.from("materials").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("Error fetching listings:", error); return; }
     if (materials && materials.length > 0) {
       const supplierIds = [...new Set(materials.map((m: any) => m.supplier_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", supplierIds);
-
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", supplierIds);
       const profileMap: Record<string, string> = {};
       profiles?.forEach((p: any) => { profileMap[p.id] = p.full_name; });
-
-      const mappedListings = materials.map((m: any) => ({
-        id: m.id,
-        supplier_name: profileMap[m.supplier_id] || "Unknown Supplier",
-        material_name: m.name || "Unnamed Material",
-        price_per_ton: m.price_per_ton,
-        unit: m.unit,
-        status: m.status || "pending",
-        created_at: m.created_at,
-      }));
+      const mappedListings = materials.map((m: any) => ({ id: m.id, supplier_name: profileMap[m.supplier_id] || "Unknown Supplier", material_name: m.name || "Unnamed Material", price_per_ton: m.price_per_ton, unit: m.unit, status: m.status || "pending", created_at: m.created_at }));
       setListings(mappedListings);
-    } else {
-      setListings([]);
-    }
+    } else { setListings([]); }
   }
 
   async function handleWithdrawalAction(withdrawalId: string, action: "approved" | "rejected") {
-    const { error } = await supabase
-      .from("withdrawal_requests")
-      .update({ status: action, updated_at: new Date().toISOString() })
-      .eq("id", withdrawalId);
-
-    if (error) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    } else {
-      addToast({ 
-        type: "success", 
-        title: `Withdrawal ${action === "approved" ? "Approved" : "Rejected"}`, 
-        message: `The withdrawal request has been ${action}.` 
-      });
+    const { error } = await supabase.from("withdrawal_requests").update({ status: action, updated_at: new Date().toISOString() }).eq("id", withdrawalId);
+    if (error) { addToast({ type: "error", title: "Error", message: error.message }); } 
+    else {
+      addToast({ type: "success", title: `Withdrawal ${action === "approved" ? "Approved" : "Rejected"}`, message: `The withdrawal request has been ${action}.` });
       fetchWithdrawals();
     }
   }
@@ -443,28 +307,11 @@ export default function AdminPage() {
   async function handleResolveDispute(disputeId: string, status: "resolved" | "rejected") {
     if (!selectedDispute) return;
     setIsResolvingDispute(true);
-    
-    const { error } = await supabase
-      .from("disputes")
-      .update({ 
-        status, 
-        admin_notes: adminNotes, 
-        updated_at: new Date().toISOString() 
-      })
-      .eq("id", disputeId);
-
-    if (error) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    } else {
-      addToast({ 
-        type: "success", 
-        title: `Dispute ${status === "resolved" ? "Resolved" : "Rejected"}`, 
-        message: `The dispute has been ${status}.` 
-      });
-      setShowResolveModal(false);
-      setSelectedDispute(null);
-      setAdminNotes("");
-      fetchDisputes();
+    const { error } = await supabase.from("disputes").update({ status, admin_notes: adminNotes, updated_at: new Date().toISOString() }).eq("id", disputeId);
+    if (error) { addToast({ type: "error", title: "Error", message: error.message }); } 
+    else {
+      addToast({ type: "success", title: `Dispute ${status === "resolved" ? "Resolved" : "Rejected"}`, message: `The dispute has been ${status}.` });
+      setShowResolveModal(false); setSelectedDispute(null); setAdminNotes(""); fetchDisputes();
     }
     setIsResolvingDispute(false);
   }
@@ -473,13 +320,8 @@ export default function AdminPage() {
     try {
       const { markMessageAsRead } = await import("@/app/actions/contact");
       const result = await markMessageAsRead(messageId);
-      if (result.success) {
-        addToast({ type: "success", title: "Marked as Read", message: "Message marked as read" });
-        fetchMessages();
-      }
-    } catch (error: any) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    }
+      if (result.success) { addToast({ type: "success", title: "Marked as Read", message: "Message marked as read" }); fetchMessages(); }
+    } catch (error: any) { addToast({ type: "error", title: "Error", message: error.message }); }
   }
 
   async function handleMarkAsResponded() {
@@ -487,16 +329,8 @@ export default function AdminPage() {
     try {
       const { markMessageAsResponded } = await import("@/app/actions/contact");
       const result = await markMessageAsResponded(selectedMessage.id, adminResponse);
-      if (result.success) {
-        addToast({ type: "success", title: "Response Saved", message: "Message marked as responded" });
-        setShowMessageModal(false);
-        setAdminResponse("");
-        setSelectedMessage(null);
-        fetchMessages();
-      }
-    } catch (error: any) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    }
+      if (result.success) { addToast({ type: "success", title: "Response Saved", message: "Message marked as responded" }); setShowMessageModal(false); setAdminResponse(""); setSelectedMessage(null); fetchMessages(); }
+    } catch (error: any) { addToast({ type: "error", title: "Error", message: error.message }); }
   }
 
   async function handleDeleteMessage(messageId: string) {
@@ -504,101 +338,56 @@ export default function AdminPage() {
     try {
       const { deleteMessage } = await import("@/app/actions/contact");
       const result = await deleteMessage(messageId);
-      if (result.success) {
-        addToast({ type: "success", title: "Deleted", message: "Message deleted" });
-        fetchMessages();
-      }
-    } catch (error: any) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    }
+      if (result.success) { addToast({ type: "success", title: "Deleted", message: "Message deleted" }); fetchMessages(); }
+    } catch (error: any) { addToast({ type: "error", title: "Error", message: error.message }); }
   }
 
   const handleSuspendUser = async (user: UserProfile) => {
     const reason = prompt(`Why are you suspending ${user.full_name || user.email}?`);
     if (!reason) return;
     const result = await suspendUser(user.id, reason);
-    if (result.success) {
-      addToast({ type: "success", title: "User Suspended", message: `${user.full_name || user.email} has been suspended.` });
-      fetchUsers();
-      fetchAllData();
-    }
+    if (result.success) { addToast({ type: "success", title: "User Suspended", message: `${user.full_name || user.email} has been suspended.` }); fetchUsers(); fetchAllData(); }
   };
 
   const handleUnsuspendUser = async (user: UserProfile) => {
     const result = await unsuspendUser(user.id);
-    if (result.success) {
-      addToast({ type: "success", title: "User Unsuspended", message: `${user.full_name || user.email} is now active.` });
-      fetchUsers();
-      fetchAllData();
-    }
+    if (result.success) { addToast({ type: "success", title: "User Unsuspended", message: `${user.full_name || user.email} is now active.` }); fetchUsers(); fetchAllData(); }
   };
 
   const handleChangeRole = async (user: UserProfile, newRole: string) => {
     if (!confirm(`Change ${user.full_name || user.email}'s role to ${newRole}?`)) return;
     const result = await changeUserRole(user.id, newRole);
-    if (result.success) {
-      addToast({ type: "success", title: "Role Updated", message: `Role changed to ${newRole}` });
-      fetchUsers();
-    }
+    if (result.success) { addToast({ type: "success", title: "Role Updated", message: `Role changed to ${newRole}` }); fetchUsers(); }
   };
 
   const handleDeleteUser = async (user: UserProfile) => {
     if (!confirm(`⚠️ DELETE ${user.full_name || user.email}? This cannot be undone!`)) return;
     const result = await deleteUser(user.id);
-    if (result.success) {
-      addToast({ type: "success", title: "User Deleted", message: `${user.full_name || user.email} has been removed.` });
-      fetchUsers();
-      fetchAllData();
-    }
+    if (result.success) { addToast({ type: "success", title: "User Deleted", message: `${user.full_name || user.email} has been removed.` }); fetchUsers(); fetchAllData(); }
   };
 
   const handleBroadcast = async () => {
-    if (!broadcastTitle || !broadcastMessage) {
-      addToast({ type: "error", title: "Error", message: "Please fill in all fields" });
-      return;
-    }
+    if (!broadcastTitle || !broadcastMessage) { addToast({ type: "error", title: "Error", message: "Please fill in all fields" }); return; }
     setIsBroadcasting(true);
     const result = await broadcastNotification(broadcastTitle, broadcastMessage, broadcastRoles);
     setIsBroadcasting(false);
-
-    if (result.success) {
-      addToast({ type: "success", title: "Broadcast Sent! ", message: `Notification sent to ${result.sentCount} users` });
-      setShowBroadcastModal(false);
-      setBroadcastTitle("");
-      setBroadcastMessage("");
-    }
+    if (result.success) { addToast({ type: "success", title: "Broadcast Sent! ", message: `Notification sent to ${result.sentCount} users` }); setShowBroadcastModal(false); setBroadcastTitle(""); setBroadcastMessage(""); }
   };
 
   const handleListingAction = async (listingId: string, action: "approved" | "rejected") => {
     const result = await updateListingStatus(listingId, action);
-    
     if (result.success) {
-      addToast({ 
-        type: action === "approved" ? "success" : "info", 
-        title: action === "approved" ? "Listing Approved" : "Listing Rejected", 
-        message: `The material has been ${action}.` 
-      });
+      addToast({ type: action === "approved" ? "success" : "info", title: action === "approved" ? "Listing Approved" : "Listing Rejected", message: `The material has been ${action}.` });
       fetchListings();
     } else {
-      addToast({ 
-        type: "error", 
-        title: "Error", 
-        message: result.error || "Failed to update listing status." 
-      });
+      addToast({ type: "error", title: "Error", message: result.error || "Failed to update listing status." });
     }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordForm.new !== passwordForm.confirm) {
-      addToast({ type: "error", title: "Error", message: "New passwords do not match." });
-      return;
-    }
-    if (!passwordForm.current || !passwordForm.new) {
-      addToast({ type: "error", title: "Error", message: "Please fill in all password fields." });
-      return;
-    }
-    
+    if (passwordForm.new !== passwordForm.confirm) { addToast({ type: "error", title: "Error", message: "New passwords do not match." }); return; }
+    if (!passwordForm.current || !passwordForm.new) { addToast({ type: "error", title: "Error", message: "Please fill in all password fields." }); return; }
     setIsChangingPassword(true);
     setTimeout(() => {
       addToast({ type: "success", title: "Password Updated", message: "Your admin password has been changed successfully." });
@@ -615,24 +404,13 @@ export default function AdminPage() {
 
   const handleSidebarNav = (tabId: string) => {
     setActiveTab(tabId);
-    if (tabId === "overview") {
-      router.push("/admin", { scroll: false });
-    } else {
-      router.push(`/admin?tab=${tabId}`, { scroll: false });
-    }
+    if (tabId === "overview") { router.push("/admin", { scroll: false }); } 
+    else { router.push(`/admin?tab=${tabId}`, { scroll: false }); }
   };
 
-  const formatNaira = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount || 0);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  };
-
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  };
+  const formatNaira = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount || 0);
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const formatTime = (dateString: string) => new Date(dateString).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   if (authState === "loading") {
     return (
@@ -648,11 +426,7 @@ export default function AdminPage() {
   if (authState === "login") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl">
           <div className="text-center mb-8">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/20">
               <Shield className="w-8 h-8 text-white" />
@@ -660,117 +434,47 @@ export default function AdminPage() {
             <h1 className="text-2xl font-bold mb-2 text-white">Admin Access</h1>
             <p className="text-slate-400 text-sm">Restricted area - Authorized personnel only</p>
           </div>
-
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
             <div className="flex items-start gap-3">
               <AlertIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-red-300 font-medium">Security Notice</p>
-                <p className="text-xs text-red-400/80 mt-1">All access attempts are logged and monitored.</p>
-              </div>
+              <div><p className="text-sm text-red-300 font-medium">Security Notice</p><p className="text-xs text-red-400/80 mt-1">All access attempts are logged and monitored.</p></div>
             </div>
           </div>
-
           {loginError && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400 text-sm"
-            >
-              <AlertIcon className="w-5 h-5 flex-shrink-0" />
-              <span>{loginError}</span>
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400 text-sm">
+              <AlertIcon className="w-5 h-5 flex-shrink-0" /><span>{loginError}</span>
             </motion.div>
           )}
-
           <form action={handleAdminLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Admin Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input 
-                  name="email"
-                  type="email" 
-                  required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500"
-                  placeholder="admin@ewalogistics.com"
-                />
+                <input name="email" type="email" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="admin@ewalogistics.com" />
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-300">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input 
-                  name="password"
-                  type="password" 
-                  required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500"
-                  placeholder="••••••••"
-                />
+                <input name="password" type="password" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="••••••••" />
               </div>
             </div>
-
-            <button 
-              type="submit" 
-              disabled={isLoggingIn}
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>Access Admin Panel <ArrowRight className="w-4 h-4" /></>
-              )}
+            <button type="submit" disabled={isLoggingIn} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20">
+              {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <><>Access Admin Panel</> <ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
-
           <div className="mt-6 text-center">
-            <Link href="/" className="text-sm text-slate-400 hover:text-white transition-colors">
-              ← Back to Home
-            </Link>
+            <Link href="/" className="text-sm text-slate-400 hover:text-white transition-colors">← Back to Home</Link>
           </div>
         </motion.div>
       </div>
     );
   }
 
-  const sidebarNavItems = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "users", label: "Users", icon: Users },
-    { id: "orders", label: "Orders", icon: Package },
-    { id: "deliveries", label: "Deliveries", icon: Truck },
-    { id: "payments", label: "Payments & Escrow", icon: CreditCard },
-    { id: "disputes", label: "Disputes", icon: AlertTriangle },
-    { id: "messages", label: "Messages", icon: Mail },
-    { id: "broadcast", label: "Broadcast", icon: Megaphone },
-    { id: "settings", label: "Settings", icon: Settings },
-  ];
-
-  const tabs = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "users", label: `Users (${stats?.users?.total || 0})`, icon: Users },
-    { id: "listings", label: "Listings", icon: Layers },
-    { id: "orders", label: `Orders (${stats?.orders?.total || 0})`, icon: Package },
-    { id: "deliveries", label: "Deliveries", icon: Truck },
-    { id: "payments", label: "Payments & Escrow", icon: CreditCard },
-    { id: "disputes", label: "Disputes", icon: AlertTriangle },
-    { id: "messages", label: `Messages (${unreadCount})`, icon: Mail },
-    { id: "broadcast", label: "Broadcast", icon: Megaphone },
-    { id: "audit", label: "Audit Logs", icon: History },
-    { id: "settings", label: "Settings", icon: Settings },
-  ];
-
   const orderStatuses = [
-    "all", 
-    "pending_supplier_acceptance", 
-    "driver_searching", 
-    "no_driver_available", 
-    "driver_assigned", 
-    "supplier_driver_assigned", 
-    "loading", 
-    "in_transit", 
-    "delivered", 
-    "cancelled"
+    "all", "pending_supplier_acceptance", "driver_searching", "no_driver_available", 
+    "driver_assigned", "supplier_driver_assigned", "loading", "in_transit", "delivered", "cancelled"
   ];
   
   const statusConfig: Record<string, { color: string; label: string }> = {
@@ -785,1150 +489,686 @@ export default function AdminPage() {
     "cancelled": { color: "bg-red-500/10 text-red-400 border-red-500/30", label: "Cancelled" },
   };
 
+  // ✅ CLEAN RETURN: Only the inner content, NO Sidebar, NO Header
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex overflow-hidden">
-      <aside className="w-64 bg-slate-900/80 backdrop-blur-md border-r border-slate-700 hidden lg:flex flex-col">
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl shadow-lg shadow-red-500/20">
-              <Shield className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">EWA Admin</h1>
-            </div>
-          </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
         </div>
-
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {sidebarNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleSidebarNav(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-orange-500/20"
-                    : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
-                }`}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="flex-1 text-left">{item.label}</span>
-                {isActive && <ChevronRight className="w-4 h-4" />}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-700">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="border-b border-slate-700 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl shadow-lg shadow-red-500/20">
-                <Shield className="w-6 h-6 text-white" />
+      ) : (
+        <AnimatePresence mode="wait">
+          {activeTab === "overview" && stats && (
+            <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[ 
+                  { label: "Total EWA Revenue", value: formatNaira(stats.revenue?.total || 0), icon: DollarSign, color: "text-green-400", bg: "bg-green-500/10", change: "+12%" },
+                  { label: "Total Users", value: stats.users?.total || 0, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10", change: "+8%" },
+                  { label: "Total Orders", value: stats.orders?.total || 0, icon: Package, color: "text-orange-400", bg: "bg-orange-500/10", change: "+15%" },
+                  { label: "Success Rate", value: `${stats.performance?.successRate || 0}%`, icon: Target, color: "text-purple-400", bg: "bg-purple-500/10", change: "+3%" },
+                ].map((stat, i) => (
+                  <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700 hover:border-slate-600 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`p-2.5 rounded-xl ${stat.bg}`}><stat.icon className={`w-5 h-5 ${stat.color}`} /></div>
+                      <span className="text-xs text-green-400 font-medium flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> {stat.change}</span>
+                    </div>
+                    <div className="text-2xl font-bold text-white">{stat.value}</div>
+                    <div className="text-sm text-slate-400 mt-1">{stat.label}</div>
+                  </motion.div>
+                ))}
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">Admin Control Center</h1>
-                <p className="text-xs text-slate-400">EWA Logistics Platform Management</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => fetchAllData()}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" /> Refresh
-              </button>
-              <button 
-                onClick={() => setShowBroadcastModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-lg shadow-red-500/20"
-              >
-                <Megaphone className="w-4 h-4" /> Broadcast
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" /> Logout
-              </button>
-            </div>
-          </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
-            
-            <div className="w-full overflow-x-auto pb-2 custom-scrollbar">
-              <div className="flex gap-2 min-w-max px-4 sm:px-0">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => handleSidebarNav(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
-                      activeTab === tab.id
-                        ? "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-orange-500/20"
-                        : "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700"
-                    }`}
-                  >
-                    <tab.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap">{tab.label}</span>
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-semibold text-white flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-400" /> Revenue Trend (Last 6 Months)</h3>
+                    <span className="text-xs text-slate-400 bg-slate-700/50 px-3 py-1 rounded-full">Updated Live</span>
+                  </div>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={revenueData}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]} />
+                        <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                  <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-400" /> User Distribution</h3>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={userDistributionData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                          {userDistributionData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-3 mt-2">
+                    {userDistributionData.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-slate-300">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-white">{item.value.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                  <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-purple-400" /> Order Status Overview</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={orderStatusData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} />
+                        <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={80} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
+                          {orderStatusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                  <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-green-400" /> Top Regions</h3>
+                  <div className="space-y-5">
+                    {topRegionsData.map((region, i) => (
+                      <div key={region.name}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-slate-200">{region.name}</span>
+                          <span className="text-xs text-slate-400">{region.count}</span>
+                        </div>
+                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${region.percent}%` }} transition={{ duration: 1, delay: i * 0.1 }} className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Award className="w-8 h-8 text-orange-400" />
+                      <div>
+                        <p className="text-sm font-semibold text-orange-300">Platform Growth</p>
+                        <p className="text-xs text-slate-400 mt-1">Lagos remains the top performing region with 45% of total orders.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "users" && (
+            <motion.div key="users" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input type="text" placeholder="Search users..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white text-sm" />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {["all", "customer", "driver", "supplier", "admin"].map((filter) => (
+                    <button key={filter} onClick={() => setUserFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${userFilter === filter ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[800px]">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">User</th>
+                        <th className="text-left p-4 font-medium">Role</th>
+                        <th className="text-left p-4 font-medium hidden md:table-cell">State</th>
+                        <th className="text-left p-4 font-medium hidden md:table-cell">Status</th>
+                        <th className="text-left p-4 font-medium hidden lg:table-cell">Joined</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => {
+                        const roleConfig: Record<string, { icon: any; color: string }> = {
+                          customer: { icon: User, color: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
+                          driver: { icon: Truck, color: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
+                          supplier: { icon: Building2, color: "bg-green-500/10 text-green-400 border-green-500/30" },
+                          admin: { icon: Shield, color: "bg-red-500/10 text-red-400 border-red-500/30" },
+                        };
+                        const role = roleConfig[user.role] || roleConfig.customer;
+                        const RoleIcon = role.icon;
+                        return (
+                          <tr key={user.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                  {user.full_name ? user.full_name.charAt(0).toUpperCase() : "U"}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-white truncate">{user.full_name || "No Name"}</p>
+                                  <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium capitalize border ${role.color}`}>
+                                <RoleIcon className="w-3 h-3" /> {user.role}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-300 hidden md:table-cell">{user.state || "-"}</td>
+                            <td className="p-4 hidden md:table-cell">
+                              {user.is_suspended ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30"><Ban className="w-3 h-3" /> Suspended</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/30"><CheckCircle className="w-3 h-3" /> Active</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-slate-400 text-xs hidden lg:table-cell">{formatDate(user.created_at)}</td>
+                            <td className="p-4">
+                              <div className="flex items-center justify-end gap-1">
+                                <button onClick={() => setSelectedUser(user)} className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors cursor-pointer" title="View Details"><Eye className="w-4 h-4" /></button>
+                                {user.is_suspended ? (
+                                  <button onClick={() => handleUnsuspendUser(user)} className="p-1.5 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors cursor-pointer" title="Unsuspend"><UserCheck className="w-4 h-4" /></button>
+                                ) : (
+                                  <button onClick={() => handleSuspendUser(user)} className="p-1.5 hover:bg-yellow-500/10 text-yellow-400 rounded-lg transition-colors cursor-pointer" title="Suspend"><UserX className="w-4 h-4" /></button>
+                                )}
+                                <select onChange={(e) => handleChangeRole(user, e.target.value)} value={user.role} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-xs text-white cursor-pointer">
+                                  <option value="customer">Customer</option>
+                                  <option value="driver">Driver</option>
+                                  <option value="supplier">Supplier</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                                <button onClick={() => handleDeleteUser(user)} className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors cursor-pointer" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "listings" && (
+            <motion.div key="listings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
+                {["all", "pending", "approved", "rejected"].map((filter) => (
+                  <button key={filter} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${filter === "all" ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>{filter}</button>
+                ))}
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[800px]">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Material</th>
+                        <th className="text-left p-4 font-medium">Supplier</th>
+                        <th className="text-left p-4 font-medium">Price</th>
+                        <th className="text-left p-4 font-medium">Date</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listings.map((listing) => {
+                        const statusColors = { pending: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30", approved: "bg-green-500/10 text-green-400 border-green-500/30", rejected: "bg-red-500/10 text-red-400 border-red-500/30" };
+                        return (
+                          <tr key={listing.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4"><p className="font-medium text-white">{listing.material_name}</p><p className="text-xs text-slate-400 capitalize">per {listing.unit}</p></td>
+                            <td className="p-4 text-slate-300">{listing.supplier_name}</td>
+                            <td className="p-4 font-semibold text-white">{formatNaira(listing.price_per_ton)}</td>
+                            <td className="p-4 text-slate-400 text-xs">{formatDate(listing.created_at)}</td>
+                            <td className="p-4"><span className={`px-2 py-1 rounded-lg text-xs font-medium border ${statusColors[listing.status]}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
+                            <td className="p-4 text-right">
+                              {listing.status === "pending" && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => handleListingAction(listing.id, "approved")} className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 cursor-pointer flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Approve</button>
+                                  <button onClick={() => handleListingAction(listing.id, "rejected")} className="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 cursor-pointer flex items-center gap-1"><X className="w-3.5 h-3.5" /> Reject</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "orders" && (
+            <motion.div key="orders" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
+                {orderStatuses.map((filter) => (
+                  <button key={filter} onClick={() => setOrderFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${orderFilter === filter ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>
+                    {filter === "all" ? "All" : filter.replace(/_/g, " ")}
                   </button>
                 ))}
               </div>
-            </div>
-
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[900px]">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Order ID</th>
+                        <th className="text-left p-4 font-medium">Customer</th>
+                        <th className="text-left p-4 font-medium hidden lg:table-cell">Material</th>
+                        <th className="text-left p-4 font-medium">Amount</th>
+                        <th className="text-left p-4 font-medium">Delivery Code</th>
+                        <th className="text-left p-4 font-medium hidden md:table-cell">Status</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => {
+                        const status = statusConfig[order.status] || { color: "bg-slate-500/10 text-slate-400 border-slate-500/30", label: order.status };
+                        return (
+                          <tr key={order.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4 font-mono text-xs text-slate-300">ORD-{order.id.slice(0, 8).toUpperCase()}</td>
+                            <td className="p-4">
+                              <div className="min-w-0">
+                                <p className="text-sm text-white truncate">{order.profiles?.full_name || "Unknown"}</p>
+                                <p className="text-xs text-slate-400 truncate">{order.profiles?.email}</p>
+                              </div>
+                            </td>
+                            <td className="p-4 hidden lg:table-cell">
+                              <p className="text-sm text-white">{order.material_type || "N/A"}</p>
+                              <p className="text-xs text-slate-400">{order.tonnage ? `${order.tonnage} Tons` : ""}</p>
+                            </td>
+                            <td className="p-4 font-semibold text-white">{formatNaira(order.total_amount)}</td>
+                            <td className="p-4">
+                              {order.delivery_code ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-orange-500/10 text-orange-400 border border-orange-500/30 font-mono tracking-wider">
+                                  <Key className="w-3.5 h-3.5" /> {order.delivery_code}
+                                </span>
+                              ) : (<span className="text-xs text-slate-500">-</span>)}
+                            </td>
+                            <td className="p-4 hidden md:table-cell">
+                              <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>{status.label}</span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <Link href={`/dashboard/tracking?id=${order.id}`} target="_blank">
+                                <button className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5 ml-auto">
+                                  <Eye className="w-3.5 h-3.5" /> Track
+                                </button>
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            ) : (
-              <AnimatePresence mode="wait">
-                
-                {activeTab === "overview" && stats && (
-                  <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {[ 
-                        // ✅ UPDATED: Label changed to "Total EWA Revenue" to reflect actual platform earnings
-                        { label: "Total EWA Revenue", value: formatNaira(stats.revenue?.total || 0), icon: DollarSign, color: "text-green-400", bg: "bg-green-500/10", change: "+12%" },
-                        { label: "Total Users", value: stats.users?.total || 0, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10", change: "+8%" },
-                        { label: "Total Orders", value: stats.orders?.total || 0, icon: Package, color: "text-orange-400", bg: "bg-orange-500/10", change: "+15%" },
-                        { label: "Success Rate", value: `${stats.performance?.successRate || 0}%`, icon: Target, color: "text-purple-400", bg: "bg-purple-500/10", change: "+3%" },
-                      ].map((stat, i) => (
-                        <motion.div 
-                          key={stat.label}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.1 }}
-                          className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700 hover:border-slate-600 transition-all"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className={`p-2.5 rounded-xl ${stat.bg}`}>
-                              <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                            </div>
-                            <span className="text-xs text-green-400 font-medium flex items-center gap-1">
-                              <ArrowUpRight className="w-3 h-3" /> {stat.change}
+            </motion.div>
+          )}
+
+          {activeTab === "deliveries" && (
+            <motion.div key="deliveries" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
+                {orderStatuses.map((filter) => (
+                  <button key={filter} onClick={() => setDeliveryFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${deliveryFilter === filter ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>
+                    {filter === "all" ? "All" : filter.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[800px]">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Material</th>
+                        <th className="text-left p-4 font-medium">Driver</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-left p-4 font-medium">Bid Amount</th>
+                        <th className="text-left p-4 font-medium hidden md:table-cell">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveries.map((delivery) => {
+                        const status = statusConfig[delivery.status] || { color: "bg-slate-500/10 text-slate-400 border-slate-500/30", label: delivery.status };
+                        return (
+                          <tr key={delivery.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4"><p className="font-medium text-white">{delivery.material_name || "N/A"}</p><p className="text-xs text-slate-400">ID: {delivery.id.slice(0, 8)}</p></td>
+                            <td className="p-4"><p className="text-sm text-slate-300">{delivery.profiles?.full_name || "Not Assigned"}</p><p className="text-xs text-slate-400">{delivery.profiles?.email || "-"}</p></td>
+                            <td className="p-4"><span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>{status.label}</span></td>
+                            <td className="p-4 font-semibold text-white">{delivery.accepted_bid_amount ? formatNaira(delivery.accepted_bid_amount) : "-"}</td>
+                            <td className="p-4 text-slate-400 text-xs hidden md:table-cell">{formatDate(delivery.created_at)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "payments" && (
+            <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><CreditCard className="w-5 h-5 text-blue-400" /><span className="text-sm text-slate-300">Total in Escrow</span></div>
+                  <div className="text-2xl font-bold text-white">{formatNaira(stats?.revenue?.pending || 0)}</div>
+                  <p className="text-xs text-slate-400 mt-1">Funds held for active orders</p>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><Clock className="w-5 h-5 text-yellow-400" /><span className="text-sm text-slate-300">Pending Withdrawals</span></div>
+                  <div className="text-2xl font-bold text-white">{formatNaira(withdrawals.filter((w: any) => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}</div>
+                  <p className="text-xs text-slate-400 mt-1">Awaiting admin approval</p>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-400" /><span className="text-sm text-slate-300">Total Released</span></div>
+                  <div className="text-2xl font-bold text-white">{formatNaira(withdrawals.filter((w: any) => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}</div>
+                  <p className="text-xs text-slate-400 mt-1">Successfully paid to users</p>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                  <h3 className="font-semibold text-white flex items-center gap-2"><CreditCard className="w-5 h-5 text-orange-400" /> Withdrawal Requests</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Date</th>
+                        <th className="text-left p-4 font-medium">User</th>
+                        <th className="text-left p-4 font-medium">Role</th>
+                        <th className="text-left p-4 font-medium">Amount</th>
+                        <th className="text-left p-4 font-medium">Bank Details</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {withdrawals.length === 0 ? (
+                        <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td></tr>
+                      ) : (
+                        withdrawals.map((w: any) => (
+                          <tr key={w.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4 text-slate-400 text-xs">{formatDate(w.created_at)}</td>
+                            <td className="p-4"><p className="text-white font-medium">{w.full_name}</p><p className="text-xs text-slate-400">{w.email}</p></td>
+                            <td className="p-4"><span className="px-2 py-1 rounded-lg text-xs font-medium capitalize bg-slate-700 text-slate-300">{w.role}</span></td>
+                            <td className="p-4 font-semibold text-white">{formatNaira(w.amount)}</td>
+                            <td className="p-4 text-slate-300 text-xs"><p>{w.bank_name}</p><p>{w.account_number}</p><p>{w.account_name}</p></td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${w.status === "approved" ? "bg-green-500/10 text-green-400 border-green-500/30" : w.status === "rejected" ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"}`}>
+                                {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              {w.status === "pending" && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => handleWithdrawalAction(w.id, "approved")} className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 cursor-pointer flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Approve</button>
+                                  <button onClick={() => handleWithdrawalAction(w.id, "rejected")} className="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 cursor-pointer flex items-center gap-1"><X className="w-3.5 h-3.5" /> Reject</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "disputes" && (
+            <motion.div key="disputes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><AlertTriangle className="w-5 h-5 text-yellow-400" /><span className="text-sm text-slate-300">Pending Disputes</span></div>
+                  <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "pending").length}</div>
+                  <p className="text-xs text-slate-400 mt-1">Require admin attention</p>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-400" /><span className="text-sm text-slate-300">Resolved</span></div>
+                  <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "resolved").length}</div>
+                  <p className="text-xs text-slate-400 mt-1">Successfully handled</p>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><X className="w-5 h-5 text-red-400" /><span className="text-sm text-slate-300">Rejected</span></div>
+                  <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "rejected").length}</div>
+                  <p className="text-xs text-slate-400 mt-1">Deemed invalid</p>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                  <h3 className="font-semibold text-white flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-400" /> Dispute Requests</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Date</th>
+                        <th className="text-left p-4 font-medium">User</th>
+                        <th className="text-left p-4 font-medium">Role</th>
+                        <th className="text-left p-4 font-medium">Order ID</th>
+                        <th className="text-left p-4 font-medium">Reason</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {disputes.length === 0 ? (
+                        <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No disputes reported yet.</td></tr>
+                      ) : (
+                        disputes.map((d: any) => (
+                          <tr key={d.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                            <td className="p-4 text-slate-400 text-xs">{formatDate(d.created_at)}</td>
+                            <td className="p-4"><p className="text-white font-medium">{d.full_name}</p><p className="text-xs text-slate-400">{d.email}</p></td>
+                            <td className="p-4"><span className="px-2 py-1 rounded-lg text-xs font-medium capitalize bg-slate-700 text-slate-300">{d.user_role || d.raised_by_role}</span></td>
+                            <td className="p-4 text-slate-300 text-xs font-mono">{d.order_id.slice(0, 8)}...</td>
+                            <td className="p-4"><p className="text-slate-300 line-clamp-2 max-w-xs">{d.reason}</p>{d.admin_notes && <p className="text-xs text-slate-500 mt-1 italic">Admin: {d.admin_notes}</p>}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${d.status === "resolved" ? "bg-green-500/10 text-green-400 border-green-500/30" : d.status === "rejected" ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"}`}>
+                                {d.status.charAt(0).toUpperCase() + d.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              {d.status === "pending" && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => { setSelectedDispute(d); setShowResolveModal(true); }} className="px-3 py-1.5 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 cursor-pointer flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Review</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "messages" && (
+            <motion.div key="messages" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><Mail className="w-5 h-5 text-blue-400" /><h3 className="font-semibold text-white">Total Messages</h3></div>
+                  <div className="text-3xl font-bold text-white">{messages.length}</div>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><AlertIcon className="w-5 h-5 text-yellow-400" /><h3 className="font-semibold text-white">Unread</h3></div>
+                  <div className="text-3xl font-bold text-yellow-400">{unreadCount}</div>
+                </div>
+                <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-400" /><h3 className="font-semibold text-white">Responded</h3></div>
+                  <div className="text-3xl font-bold text-green-400">{messages.filter(m => m.status === "responded").length}</div>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[800px]">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">From</th>
+                        <th className="text-left p-4 font-medium">Email</th>
+                        <th className="text-left p-4 font-medium">Message</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-left p-4 font-medium">Date</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {messages.map((msg) => (
+                        <tr key={msg.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                          <td className="p-4"><p className="font-medium text-white">{msg.name}</p></td>
+                          <td className="p-4"><a href={`mailto:${msg.email}`} className="text-blue-400 hover:underline">{msg.email}</a></td>
+                          <td className="p-4"><p className="text-slate-300 truncate max-w-xs">{msg.message}</p></td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded-lg text-xs font-medium ${msg.status === "unread" ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30" : msg.status === "read" ? "bg-blue-500/10 text-blue-400 border border-blue-500/30" : "bg-green-500/10 text-green-400 border border-green-500/30"}`}>
+                              {msg.status === "unread" ? "Unread" : msg.status === "read" ? "Read" : "Responded"}
                             </span>
-                          </div>
-                          <div className="text-2xl font-bold text-white">{stat.value}</div>
-                          <div className="text-sm text-slate-400 mt-1">{stat.label}</div>
-                        </motion.div>
+                          </td>
+                          <td className="p-4 text-slate-400 text-xs">{formatDate(msg.created_at)}</td>
+                          <td className="p-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => { setSelectedMessage(msg); setShowMessageModal(true); }} className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors cursor-pointer" title="View & Respond"><Eye className="w-4 h-4" /></button>
+                              {msg.status === "unread" && (
+                                <button onClick={() => handleMarkAsRead(msg.id)} className="p-1.5 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors cursor-pointer" title="Mark as Read"><CheckCircle className="w-4 h-4" /></button>
+                              )}
+                              <button onClick={() => handleDeleteMessage(msg.id)} className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors cursor-pointer" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </td>
+                        </tr>
                       ))}
-                    </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-                    <div className="grid lg:grid-cols-3 gap-6">
-                      <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                        <div className="flex items-center justify-between mb-6">
-                          <h3 className="font-semibold text-white flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-orange-400" />
-                            Revenue Trend (Last 6 Months)
-                          </h3>
-                          <span className="text-xs text-slate-400 bg-slate-700/50 px-3 py-1 rounded-full">Updated Live</span>
-                        </div>
-                        <div className="h-72">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={revenueData}>
-                              <defs>
-                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
-                                  <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                              <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                              <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
-                              <Tooltip 
-                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }}
-                                formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]}
-                              />
-                              <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                        <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
-                          <Users className="w-5 h-5 text-blue-400" />
-                          User Distribution
-                        </h3>
-                        <div className="h-56">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={userDistributionData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={80}
-                                paddingAngle={4}
-                                dataKey="value"
-                              >
-                                {userDistributionData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />
-                                ))}
-                              </Pie>
-                              <Tooltip 
-                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="space-y-3 mt-2">
-                          {userDistributionData.map((item) => (
-                            <div key={item.name} className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                                <span className="text-slate-300">{item.name}</span>
-                              </div>
-                              <span className="font-semibold text-white">{item.value.toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid lg:grid-cols-3 gap-6">
-                      <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                        <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
-                          <Package className="w-5 h-5 text-purple-400" />
-                          Order Status Overview
-                        </h3>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={orderStatusData} layout="vertical">
-                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} />
-                              <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                              <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={80} />
-                              <Tooltip 
-                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }}
-                              />
-                              <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
-                                {orderStatusData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                        <h3 className="font-semibold text-white mb-6 flex items-center gap-2">
-                          <MapPin className="w-5 h-5 text-green-400" />
-                          Top Regions
-                        </h3>
-                        <div className="space-y-5">
-                          {topRegionsData.map((region, i) => (
-                            <div key={region.name}>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-slate-200">{region.name}</span>
-                                <span className="text-xs text-slate-400">{region.count}</span>
-                              </div>
-                              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <motion.div 
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${region.percent}%` }}
-                                  transition={{ duration: 1, delay: i * 0.1 }}
-                                  className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full"
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="mt-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <Award className="w-8 h-8 text-orange-400" />
-                            <div>
-                              <p className="text-sm font-semibold text-orange-300">Platform Growth</p>
-                              <p className="text-xs text-slate-400 mt-1">Lagos remains the top performing region with 45% of total orders.</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "users" && (
-                  <motion.div key="users" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-3">
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <input 
-                          type="text" 
-                          placeholder="Search users..." 
-                          value={userSearch}
-                          onChange={(e) => setUserSearch(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white text-sm"
-                        />
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {["all", "customer", "driver", "supplier", "admin"].map((filter) => (
-                          <button 
-                            key={filter}
-                            onClick={() => setUserFilter(filter)}
-                            className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                              userFilter === filter 
-                                ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" 
-                                : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                            }`}
-                          >
-                            {filter}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[800px]">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">User</th>
-                              <th className="text-left p-4 font-medium">Role</th>
-                              <th className="text-left p-4 font-medium hidden md:table-cell">State</th>
-                              <th className="text-left p-4 font-medium hidden md:table-cell">Status</th>
-                              <th className="text-left p-4 font-medium hidden lg:table-cell">Joined</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {users.map((user) => {
-                              const roleConfig: Record<string, { icon: any; color: string }> = {
-                                customer: { icon: User, color: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
-                                driver: { icon: Truck, color: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
-                                supplier: { icon: Building2, color: "bg-green-500/10 text-green-400 border-green-500/30" },
-                                admin: { icon: Shield, color: "bg-red-500/10 text-red-400 border-red-500/30" },
-                              };
-                              const role = roleConfig[user.role] || roleConfig.customer;
-                              const RoleIcon = role.icon;
-                              
-                              return (
-                                <tr key={user.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                                        {user.full_name ? user.full_name.charAt(0).toUpperCase() : "U"}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="font-medium text-white truncate">{user.full_name || "No Name"}</p>
-                                        <p className="text-xs text-slate-400 truncate">{user.email}</p>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium capitalize border ${role.color}`}>
-                                      <RoleIcon className="w-3 h-3" />
-                                      {user.role}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-slate-300 hidden md:table-cell">{user.state || "-"}</td>
-                                  <td className="p-4 hidden md:table-cell">
-                                    {user.is_suspended ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30">
-                                        <Ban className="w-3 h-3" /> Suspended
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/30">
-                                        <CheckCircle className="w-3 h-3" /> Active
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="p-4 text-slate-400 text-xs hidden lg:table-cell">{formatDate(user.created_at)}</td>
-                                  <td className="p-4">
-                                    <div className="flex items-center justify-end gap-1">
-                                      <button 
-                                        onClick={() => setSelectedUser(user)} 
-                                        className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors cursor-pointer" 
-                                        title="View Details"
-                                      >
-                                        <Eye className="w-4 h-4" />
-                                      </button>
-
-                                      {user.is_suspended ? (
-                                        <button onClick={() => handleUnsuspendUser(user)} className="p-1.5 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors cursor-pointer" title="Unsuspend">
-                                          <UserCheck className="w-4 h-4" />
-                                        </button>
-                                      ) : (
-                                        <button onClick={() => handleSuspendUser(user)} className="p-1.5 hover:bg-yellow-500/10 text-yellow-400 rounded-lg transition-colors cursor-pointer" title="Suspend">
-                                          <UserX className="w-4 h-4" />
-                                        </button>
-                                      )}
-                                      <select 
-                                        onChange={(e) => handleChangeRole(user, e.target.value)}
-                                        value={user.role}
-                                        className="px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-xs text-white cursor-pointer"
-                                      >
-                                        <option value="customer">Customer</option>
-                                        <option value="driver">Driver</option>
-                                        <option value="supplier">Supplier</option>
-                                        <option value="admin">Admin</option>
-                                      </select>
-                                      <button onClick={() => handleDeleteUser(user)} className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors cursor-pointer" title="Delete">
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "listings" && (
-                  <motion.div key="listings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
-                      {["all", "pending", "approved", "rejected"].map((filter) => (
-                        <button 
-                          key={filter}
-                          className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                            filter === "all" 
-                              ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" 
-                              : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                          }`}
-                        >
-                          {filter}
+          {activeTab === "broadcast" && (
+            <motion.div key="broadcast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <h3 className="font-semibold text-white mb-4 flex items-center gap-2"><Megaphone className="w-5 h-5 text-orange-400" /> Send Broadcast Notification</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+                    <input type="text" value={broadcastTitle} onChange={(e) => setBroadcastTitle(e.target.value)} className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white" placeholder="e.g. Platform Maintenance Notice" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Message</label>
+                    <textarea rows={4} value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white resize-none" placeholder="Type your message here..." />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Target Roles</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {["customer", "supplier", "driver"].map((role) => (
+                        <button key={role} onClick={() => { setBroadcastRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]); }} className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-all cursor-pointer ${broadcastRoles.includes(role) ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>
+                          {role}
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <button onClick={handleBroadcast} disabled={isBroadcasting || !broadcastTitle || !broadcastMessage || broadcastRoles.length === 0} className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                    {isBroadcasting ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : <><Send className="w-4 h-4" /> Send Broadcast</>}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[800px]">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">Material</th>
-                              <th className="text-left p-4 font-medium">Supplier</th>
-                              <th className="text-left p-4 font-medium">Price</th>
-                              <th className="text-left p-4 font-medium">Date</th>
-                              <th className="text-left p-4 font-medium">Status</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {listings.map((listing) => {
-                              const statusColors = {
-                                pending: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
-                                approved: "bg-green-500/10 text-green-400 border-green-500/30",
-                                rejected: "bg-red-500/10 text-red-400 border-red-500/30",
-                              };
-                              return (
-                                <tr key={listing.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4">
-                                    <p className="font-medium text-white">{listing.material_name}</p>
-                                    <p className="text-xs text-slate-400 capitalize">per {listing.unit}</p>
-                                  </td>
-                                  <td className="p-4 text-slate-300">{listing.supplier_name}</td>
-                                  <td className="p-4 font-semibold text-white">{formatNaira(listing.price_per_ton)}</td>
-                                  <td className="p-4 text-slate-400 text-xs">{formatDate(listing.created_at)}</td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${statusColors[listing.status]}`}>
-                                      {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    {listing.status === "pending" && (
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button 
-                                          onClick={() => handleListingAction(listing.id, "approved")}
-                                          className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <CheckCircle className="w-3.5 h-3.5" /> Approve
-                                        </button>
-                                        <button 
-                                          onClick={() => handleListingAction(listing.id, "rejected")}
-                                          className="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <X className="w-3.5 h-3.5" /> Reject
-                                        </button>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+          {activeTab === "audit" && (
+            <motion.div key="audit" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                  <h3 className="font-semibold text-white flex items-center gap-2"><History className="w-5 h-5 text-orange-400" /> Recent Admin Actions</h3>
+                  <button onClick={fetchAuditLogs} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"><RefreshCw className="w-4 h-4 text-slate-400" /></button>
+                </div>
+                <div className="divide-y divide-slate-700">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="p-4 hover:bg-slate-700/30 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-orange-500/10 rounded-lg flex-shrink-0"><Activity className="w-4 h-4 text-orange-400" /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium">{log.action.replace(/_/g, " ")}</p>
+                          <p className="text-xs text-slate-400 mt-1">By: {log.profiles?.full_name || log.profiles?.email || "Unknown"}</p>
+                        </div>
+                        <span className="text-xs text-slate-400 flex-shrink-0">{formatTime(log.created_at)}</span>
                       </div>
                     </div>
-                  </motion.div>
-                )}
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-                {activeTab === "orders" && (
-                  <motion.div key="orders" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
-                      {orderStatuses.map((filter) => (
-                        <button 
-                          key={filter}
-                          onClick={() => setOrderFilter(filter)}
-                          className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                            orderFilter === filter 
-                              ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" 
-                              : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                          }`}
-                        >
-                          {filter === "all" ? "All" : filter.replace(/_/g, " ")}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[900px]">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">Order ID</th>
-                              <th className="text-left p-4 font-medium">Customer</th>
-                              <th className="text-left p-4 font-medium hidden lg:table-cell">Material</th>
-                              <th className="text-left p-4 font-medium">Amount</th>
-                              <th className="text-left p-4 font-medium">Delivery Code</th>
-                              <th className="text-left p-4 font-medium hidden md:table-cell">Status</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {orders.map((order) => {
-                              const status = statusConfig[order.status] || { color: "bg-slate-500/10 text-slate-400 border-slate-500/30", label: order.status };
-                              return (
-                                <tr key={order.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4 font-mono text-xs text-slate-300">ORD-{order.id.slice(0, 8).toUpperCase()}</td>
-                                  <td className="p-4">
-                                    <div className="min-w-0">
-                                      <p className="text-sm text-white truncate">{order.profiles?.full_name || "Unknown"}</p>
-                                      <p className="text-xs text-slate-400 truncate">{order.profiles?.email}</p>
-                                    </div>
-                                  </td>
-                                  <td className="p-4 hidden lg:table-cell">
-                                    <p className="text-sm text-white">{order.material_type || "N/A"}</p>
-                                    <p className="text-xs text-slate-400">{order.tonnage ? `${order.tonnage} Tons` : ""}</p>
-                                  </td>
-                                  <td className="p-4 font-semibold text-white">{formatNaira(order.total_amount)}</td>
-                                  <td className="p-4">
-                                    {order.delivery_code ? (
-                                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold bg-orange-500/10 text-orange-400 border border-orange-500/30 font-mono tracking-wider">
-                                        <Key className="w-3.5 h-3.5" />
-                                        {order.delivery_code}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-slate-500">-</span>
-                                    )}
-                                  </td>
-                                  <td className="p-4 hidden md:table-cell">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>
-                                      {status.label}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    <Link href={`/dashboard/tracking?id=${order.id}`} target="_blank">
-                                      <button className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5 ml-auto">
-                                        <Eye className="w-3.5 h-3.5" /> Track
-                                      </button>
-                                    </Link>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+          {activeTab === "settings" && (
+            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <h3 className="font-semibold text-white mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-orange-400" /> Change Admin Password</h3>
+                <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Current Password</label>
+                    <input type="password" value={passwordForm.current} onChange={(e) => setPasswordForm({...passwordForm, current: e.target.value})} className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white" placeholder="••••••••" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
+                    <input type="password" value={passwordForm.new} onChange={(e) => setPasswordForm({...passwordForm, new: e.target.value})} className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white" placeholder="••••••••" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Confirm New Password</label>
+                    <input type="password" value={passwordForm.confirm} onChange={(e) => setPasswordForm({...passwordForm, confirm: e.target.value})} className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white" placeholder="••••••••" required />
+                  </div>
+                  <button type="submit" disabled={isChangingPassword} className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                    {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />} Update Password
+                  </button>
+                </form>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <h3 className="font-semibold text-white mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-orange-400" /> Platform Settings</h3>
+                <div className="space-y-3">
+                  {Object.entries(settings).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-slate-700 hover:border-slate-600 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm text-white">{key.replace(/_/g, " ")}</p>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">{value}</p>
                       </div>
+                      <button onClick={() => {
+                        const newValue = prompt(`Update ${key}:`, value);
+                        if (newValue !== null && newValue !== value) {
+                          updatePlatformSetting(key, newValue).then(result => {
+                            if (result.success) { addToast({ type: "success", title: "Updated", message: `${key} has been updated` }); fetchSettings(); }
+                          });
+                        }
+                      }} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
+                        <Edit2 className="w-4 h-4 text-slate-400" />
+                      </button>
                     </div>
-                  </motion.div>
-                )}
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
-                {activeTab === "deliveries" && (
-                  <motion.div key="deliveries" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
-                      {orderStatuses.map((filter) => (
-                        <button 
-                          key={filter}
-                          onClick={() => setDeliveryFilter(filter)}
-                          className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                            deliveryFilter === filter 
-                              ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" 
-                              : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                          }`}
-                        >
-                          {filter === "all" ? "All" : filter.replace(/_/g, " ")}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[800px]">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">Material</th>
-                              <th className="text-left p-4 font-medium">Driver</th>
-                              <th className="text-left p-4 font-medium">Status</th>
-                              <th className="text-left p-4 font-medium">Bid Amount</th>
-                              <th className="text-left p-4 font-medium hidden md:table-cell">Created</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {deliveries.map((delivery) => {
-                              const status = statusConfig[delivery.status] || { color: "bg-slate-500/10 text-slate-400 border-slate-500/30", label: delivery.status };
-                              return (
-                                <tr key={delivery.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4">
-                                    <p className="font-medium text-white">{delivery.material_name || "N/A"}</p>
-                                    <p className="text-xs text-slate-400">ID: {delivery.id.slice(0, 8)}</p>
-                                  </td>
-                                  <td className="p-4">
-                                    <p className="text-sm text-slate-300">{delivery.profiles?.full_name || "Not Assigned"}</p>
-                                    <p className="text-xs text-slate-400">{delivery.profiles?.email || "-"}</p>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>
-                                      {status.label}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 font-semibold text-white">
-                                    {delivery.accepted_bid_amount ? formatNaira(delivery.accepted_bid_amount) : "-"}
-                                  </td>
-                                  <td className="p-4 text-slate-400 text-xs hidden md:table-cell">{formatDate(delivery.created_at)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "payments" && (
-                  <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CreditCard className="w-5 h-5 text-blue-400" />
-                          <span className="text-sm text-slate-300">Total in Escrow</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{formatNaira(stats?.revenue?.pending || 0)}</div>
-                        <p className="text-xs text-slate-400 mt-1">Funds held for active orders</p>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-5 h-5 text-yellow-400" />
-                          <span className="text-sm text-slate-300">Pending Withdrawals</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">
-                          {formatNaira(withdrawals.filter((w: any) => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">Awaiting admin approval</p>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                          <span className="text-sm text-slate-300">Total Released</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">
-                          {formatNaira(withdrawals.filter((w: any) => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">Successfully paid to users</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                          <CreditCard className="w-5 h-5 text-orange-400" />
-                          Withdrawal Requests
-                        </h3>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">Date</th>
-                              <th className="text-left p-4 font-medium">User</th>
-                              <th className="text-left p-4 font-medium">Role</th>
-                              <th className="text-left p-4 font-medium">Amount</th>
-                              <th className="text-left p-4 font-medium">Bank Details</th>
-                              <th className="text-left p-4 font-medium">Status</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {withdrawals.length === 0 ? (
-                              <tr>
-                                <td colSpan={7} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
-                              </tr>
-                            ) : (
-                              withdrawals.map((w: any) => (
-                                <tr key={w.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4 text-slate-400 text-xs">{formatDate(w.created_at)}</td>
-                                  <td className="p-4">
-                                    <p className="text-white font-medium">{w.full_name}</p>
-                                    <p className="text-xs text-slate-400">{w.email}</p>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className="px-2 py-1 rounded-lg text-xs font-medium capitalize bg-slate-700 text-slate-300">
-                                      {w.role}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 font-semibold text-white">{formatNaira(w.amount)}</td>
-                                  <td className="p-4 text-slate-300 text-xs">
-                                    <p>{w.bank_name}</p>
-                                    <p>{w.account_number}</p>
-                                    <p>{w.account_name}</p>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
-                                      w.status === "approved" ? "bg-green-500/10 text-green-400 border-green-500/30" :
-                                      w.status === "rejected" ? "bg-red-500/10 text-red-400 border-red-500/30" :
-                                      "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-                                    }`}>
-                                      {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    {w.status === "pending" && (
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button 
-                                          onClick={() => handleWithdrawalAction(w.id, "approved")}
-                                          className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <CheckCircle className="w-3.5 h-3.5" /> Approve
-                                        </button>
-                                        <button 
-                                          onClick={() => handleWithdrawalAction(w.id, "rejected")}
-                                          className="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <X className="w-3.5 h-3.5" /> Reject
-                                        </button>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "disputes" && (
-                  <motion.div key="disputes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                          <span className="text-sm text-slate-300">Pending Disputes</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "pending").length}</div>
-                        <p className="text-xs text-slate-400 mt-1">Require admin attention</p>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                          <span className="text-sm text-slate-300">Resolved</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "resolved").length}</div>
-                        <p className="text-xs text-slate-400 mt-1">Successfully handled</p>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <X className="w-5 h-5 text-red-400" />
-                          <span className="text-sm text-slate-300">Rejected</span>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{disputes.filter(d => d.status === "rejected").length}</div>
-                        <p className="text-xs text-slate-400 mt-1">Deemed invalid</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-orange-400" />
-                          Dispute Requests
-                        </h3>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">Date</th>
-                              <th className="text-left p-4 font-medium">User</th>
-                              <th className="text-left p-4 font-medium">Role</th>
-                              <th className="text-left p-4 font-medium">Order ID</th>
-                              <th className="text-left p-4 font-medium">Reason</th>
-                              <th className="text-left p-4 font-medium">Status</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {disputes.length === 0 ? (
-                              <tr>
-                                <td colSpan={7} className="p-8 text-center text-muted-foreground">No disputes reported yet.</td>
-                              </tr>
-                            ) : (
-                              disputes.map((d: any) => (
-                                <tr key={d.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                  <td className="p-4 text-slate-400 text-xs">{formatDate(d.created_at)}</td>
-                                  <td className="p-4">
-                                    <p className="text-white font-medium">{d.full_name}</p>
-                                    <p className="text-xs text-slate-400">{d.email}</p>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className="px-2 py-1 rounded-lg text-xs font-medium capitalize bg-slate-700 text-slate-300">
-                                      {d.user_role || d.raised_by_role}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-slate-300 text-xs font-mono">{d.order_id.slice(0, 8)}...</td>
-                                  <td className="p-4">
-                                    <p className="text-slate-300 line-clamp-2 max-w-xs">{d.reason}</p>
-                                    {d.admin_notes && (
-                                      <p className="text-xs text-slate-500 mt-1 italic">Admin: {d.admin_notes}</p>
-                                    )}
-                                  </td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
-                                      d.status === "resolved" ? "bg-green-500/10 text-green-400 border-green-500/30" :
-                                      d.status === "rejected" ? "bg-red-500/10 text-red-400 border-red-500/30" :
-                                      "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-                                    }`}>
-                                      {d.status.charAt(0).toUpperCase() + d.status.slice(1)}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    {d.status === "pending" && (
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button 
-                                          onClick={() => { setSelectedDispute(d); setShowResolveModal(true); }}
-                                          className="px-3 py-1.5 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <Eye className="w-3.5 h-3.5" /> Review
-                                        </button>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "messages" && (
-                  <motion.div key="messages" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Mail className="w-5 h-5 text-blue-400" />
-                          <h3 className="font-semibold text-white">Total Messages</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-white">{messages.length}</div>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertIcon className="w-5 h-5 text-yellow-400" />
-                          <h3 className="font-semibold text-white">Unread</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-yellow-400">{unreadCount}</div>
-                      </div>
-                      <div className="bg-slate-800/50 backdrop-blur-sm p-5 rounded-2xl border border-slate-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                          <h3 className="font-semibold text-white">Responded</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-green-400">
-                          {messages.filter(m => m.status === "responded").length}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[800px]">
-                          <thead className="bg-slate-900/50 text-slate-400">
-                            <tr>
-                              <th className="text-left p-4 font-medium">From</th>
-                              <th className="text-left p-4 font-medium">Email</th>
-                              <th className="text-left p-4 font-medium">Message</th>
-                              <th className="text-left p-4 font-medium">Status</th>
-                              <th className="text-left p-4 font-medium">Date</th>
-                              <th className="text-right p-4 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {messages.map((msg) => (
-                              <tr key={msg.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
-                                <td className="p-4">
-                                  <p className="font-medium text-white">{msg.name}</p>
-                                </td>
-                                <td className="p-4">
-                                  <a href={`mailto:${msg.email}`} className="text-blue-400 hover:underline">
-                                    {msg.email}
-                                  </a>
-                                </td>
-                                <td className="p-4">
-                                  <p className="text-slate-300 truncate max-w-xs">{msg.message}</p>
-                                </td>
-                                <td className="p-4">
-                                  <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                                    msg.status === "unread" 
-                                      ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30"
-                                      : msg.status === "read"
-                                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
-                                      : "bg-green-500/10 text-green-400 border border-green-500/30"
-                                  }`}>
-                                    {msg.status === "unread" ? "Unread" : msg.status === "read" ? "Read" : "Responded"}
-                                  </span>
-                                </td>
-                                <td className="p-4 text-slate-400 text-xs">
-                                  {formatDate(msg.created_at)}
-                                </td>
-                                <td className="p-4">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button 
-                                      onClick={() => { setSelectedMessage(msg); setShowMessageModal(true); }}
-                                      className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors cursor-pointer" 
-                                      title="View & Respond"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                    </button>
-                                    {msg.status === "unread" && (
-                                      <button 
-                                        onClick={() => handleMarkAsRead(msg.id)}
-                                        className="p-1.5 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors cursor-pointer" 
-                                        title="Mark as Read"
-                                      >
-                                        <CheckCircle className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                    <button 
-                                      onClick={() => handleDeleteMessage(msg.id)}
-                                      className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors cursor-pointer" 
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "broadcast" && (
-                  <motion.div key="broadcast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                      <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                        <Megaphone className="w-5 h-5 text-orange-400" />
-                        Send Broadcast Notification
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
-                          <input 
-                            type="text"
-                            value={broadcastTitle}
-                            onChange={(e) => setBroadcastTitle(e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white"
-                            placeholder="e.g. Platform Maintenance Notice"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">Message</label>
-                          <textarea 
-                            rows={4}
-                            value={broadcastMessage}
-                            onChange={(e) => setBroadcastMessage(e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white resize-none"
-                            placeholder="Type your message here..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">Target Roles</label>
-                          <div className="flex gap-2 flex-wrap">
-                            {["customer", "supplier", "driver"].map((role) => (
-                              <button
-                                key={role}
-                                onClick={() => {
-                                  setBroadcastRoles(prev => 
-                                    prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
-                                  );
-                                }}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-all cursor-pointer ${
-                                  broadcastRoles.includes(role)
-                                    ? "bg-gradient-to-r from-red-500 to-orange-500 text-white"
-                                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                                }`}
-                              >
-                                {role}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <button 
-                          onClick={handleBroadcast}
-                          disabled={isBroadcasting || !broadcastTitle || !broadcastMessage || broadcastRoles.length === 0}
-                          className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                          {isBroadcasting ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
-                          ) : (
-                            <><Send className="w-4 h-4" /> Send Broadcast</>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "audit" && (
-                  <motion.div key="audit" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
-                      <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                          <History className="w-5 h-5 text-orange-400" />
-                          Recent Admin Actions
-                        </h3>
-                        <button onClick={fetchAuditLogs} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
-                          <RefreshCw className="w-4 h-4 text-slate-400" />
-                        </button>
-                      </div>
-                      <div className="divide-y divide-slate-700">
-                        {auditLogs.map((log) => (
-                          <div key={log.id} className="p-4 hover:bg-slate-700/30 transition-colors">
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 bg-orange-500/10 rounded-lg flex-shrink-0">
-                                <Activity className="w-4 h-4 text-orange-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-white font-medium">{log.action.replace(/_/g, " ")}</p>
-                                <p className="text-xs text-slate-400 mt-1">
-                                  By: {log.profiles?.full_name || log.profiles?.email || "Unknown"}
-                                </p>
-                              </div>
-                              <span className="text-xs text-slate-400 flex-shrink-0">{formatTime(log.created_at)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "settings" && (
-                  <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                      <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                        <Lock className="w-5 h-5 text-orange-400" />
-                        Change Admin Password
-                      </h3>
-                      <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1.5">Current Password</label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.current}
-                            onChange={(e) => setPasswordForm({...passwordForm, current: e.target.value})}
-                            className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white"
-                            placeholder="••••••••"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.new}
-                            onChange={(e) => setPasswordForm({...passwordForm, new: e.target.value})}
-                            className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white"
-                            placeholder="••••••••"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1.5">Confirm New Password</label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.confirm}
-                            onChange={(e) => setPasswordForm({...passwordForm, confirm: e.target.value})}
-                            className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-white"
-                            placeholder="••••••••"
-                            required
-                          />
-                        </div>
-                        <button 
-                          type="submit"
-                          disabled={isChangingPassword}
-                          className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-2"
-                        >
-                          {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                          Update Password
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
-                      <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                        <Settings className="w-5 h-5 text-orange-400" />
-                        Platform Settings
-                      </h3>
-                      <div className="space-y-3">
-                        {Object.entries(settings).map(([key, value]) => (
-                          <div key={key} className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-slate-700 hover:border-slate-600 transition-colors">
-                            <div className="flex-1">
-                              <p className="font-medium text-sm text-white">{key.replace(/_/g, " ")}</p>
-                              <p className="text-xs text-slate-400 mt-0.5 font-mono">{value}</p>
-                            </div>
-                            <button 
-                              onClick={() => {
-                                const newValue = prompt(`Update ${key}:`, value);
-                                if (newValue !== null && newValue !== value) {
-                                  updatePlatformSetting(key, newValue).then(result => {
-                                    if (result.success) {
-                                      addToast({ type: "success", title: "Updated", message: `${key} has been updated` });
-                                      fetchSettings();
-                                    }
-                                  });
-                                }
-                              }}
-                              className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Edit2 className="w-4 h-4 text-slate-400" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            )}
-          </div>
-        </div>
-      </div>
-
+      {/* Modals */}
       <AnimatePresence>
         {selectedUser && (
           <>
@@ -1973,33 +1213,13 @@ export default function AdminPage() {
       <AnimatePresence>
         {showResolveModal && selectedDispute && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isResolvingDispute && setShowResolveModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isResolvingDispute && setShowResolveModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-500">
-                    <AlertTriangle className="w-6 h-6" /> Review Dispute
-                  </h3>
-                  <button 
-                    onClick={() => setShowResolveModal(false)}
-                    disabled={isResolvingDispute}
-                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-500"><AlertTriangle className="w-6 h-6" /> Review Dispute</h3>
+                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                 </div>
-
                 <div className="space-y-4 mb-6">
                   <div className="p-4 bg-muted/30 rounded-xl border border-border">
                     <p className="text-xs text-muted-foreground mb-1">Reported By</p>
@@ -2012,38 +1232,15 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Admin Notes / Resolution Details <span className="text-red-500">*</span></label>
-                    <textarea
-                      value={adminNotes}
-                      onChange={(e) => setAdminNotes(e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                      placeholder="e.g. Refunded the customer, warned the driver, etc."
-                      required
-                      disabled={isResolvingDispute}
-                    />
+                    <textarea value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} rows={3} className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none" placeholder="e.g. Refunded the customer, warned the driver, etc." required disabled={isResolvingDispute} />
                   </div>
                 </div>
-
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => setShowResolveModal(false)}
-                    disabled={isResolvingDispute}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={() => handleResolveDispute(selectedDispute.id, "rejected")}
-                    disabled={isResolvingDispute || !adminNotes.trim()}
-                    className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                  >
+                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer">Cancel</button>
+                  <button onClick={() => handleResolveDispute(selectedDispute.id, "rejected")} disabled={isResolvingDispute || !adminNotes.trim()} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
                     {isResolvingDispute ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />} Reject
                   </button>
-                  <button 
-                    onClick={() => handleResolveDispute(selectedDispute.id, "resolved")}
-                    disabled={isResolvingDispute || !adminNotes.trim()}
-                    className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                  >
+                  <button onClick={() => handleResolveDispute(selectedDispute.id, "resolved")} disabled={isResolvingDispute || !adminNotes.trim()} className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
                     {isResolvingDispute ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Resolve
                   </button>
                 </div>

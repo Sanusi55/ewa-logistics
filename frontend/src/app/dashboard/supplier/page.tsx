@@ -15,7 +15,6 @@ import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence } from "@/ap
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
 import { useToast } from "@/components/providers/toast-provider";
-import DashboardLayout from "@/components/dashboard-layout";
 import MagneticButton from "@/components/magnetic-button";
 import { SkeletonTable } from "@/components/ui/skeleton";
 
@@ -57,7 +56,7 @@ export default function SupplierDashboardPage() {
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [availableBalance, setAvailableBalance] = useState(0); // ✅ Tracks actual net payouts
+  const [availableBalance, setAvailableBalance] = useState(0);
 
   // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -79,7 +78,7 @@ export default function SupplierDashboardPage() {
     loadOrders();
     loadAccountDetails();
     loadWithdrawals();
-    loadEarnings(); // ✅ Load actual available balance
+    loadEarnings();
   }, []);
 
   const loadOrders = async () => {
@@ -144,7 +143,6 @@ export default function SupplierDashboardPage() {
     if (data) setWithdrawals(data);
   };
 
-  // ✅ NEW: Fetch actual available balance from supplier_earnings table
   const loadEarnings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -203,7 +201,6 @@ export default function SupplierDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please enter a valid amount." });
       return;
     }
-    // ✅ UPDATED: Check against actual available balance
     if (amount > availableBalance) {
       addToast({ type: "error", title: "Error", message: "Insufficient balance." });
       return;
@@ -234,7 +231,7 @@ export default function SupplierDashboardPage() {
       setShowWithdrawalModal(false);
       setWithdrawalAmount("");
       loadWithdrawals();
-      loadEarnings(); // ✅ Refresh balance after request
+      loadEarnings();
     }
     setIsRequestingWithdrawal(false);
   };
@@ -351,20 +348,21 @@ export default function SupplierDashboardPage() {
     }
   };
 
+  // ✅ UPDATED: Removed borders from status colors for a cleaner look
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
-      driver_searching: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-      no_driver_available: "bg-orange-500/10 text-orange-600 border-orange-500/30",
-      driver_assigned: "bg-green-500/10 text-green-600 border-green-500/30",
-      supplier_driver_assigned: "bg-purple-500/10 text-purple-600 border-purple-500/30",
-      loading: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
-      in_transit: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30",
-      delivered: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-      completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-      cancelled: "bg-red-500/10 text-red-600 border-red-500/30",
+      pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600",
+      driver_searching: "bg-blue-500/10 text-blue-600",
+      no_driver_available: "bg-orange-500/10 text-orange-600",
+      driver_assigned: "bg-green-500/10 text-green-600",
+      supplier_driver_assigned: "bg-purple-500/10 text-purple-600",
+      loading: "bg-indigo-500/10 text-indigo-600",
+      in_transit: "bg-cyan-500/10 text-cyan-600",
+      delivered: "bg-emerald-500/10 text-emerald-600",
+      completed: "bg-emerald-500/10 text-emerald-600",
+      cancelled: "bg-red-500/10 text-red-600",
     };
-    return colors[status] || "bg-gray-500/10 text-gray-600 border-gray-500/30";
+    return colors[status] || "bg-gray-500/10 text-gray-600";
   };
 
   const getStatusLabel = (status: string) => {
@@ -395,7 +393,6 @@ export default function SupplierDashboardPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // ✅ UPDATED: Revenue now reflects the actual available balance from earnings table
   const stats = {
     total: orders.length,
     pending: orders.filter(o => o.status === "pending_supplier_acceptance").length,
@@ -406,443 +403,438 @@ export default function SupplierDashboardPage() {
 
   if (isLoading) {
     return (
-      <DashboardLayout>
-        <div className="pt-24 px-4 md:px-6">
-          <div className="max-w-7xl mx-auto"><SkeletonTable rows={5} /></div>
-        </div>
-      </DashboardLayout>
+      <div className="pt-24 px-4 md:px-6">
+        <div className="max-w-7xl mx-auto"><SkeletonTable rows={5} /></div>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="pt-24 pb-12 px-4 md:px-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          
-          {/* Header */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">Supplier Dashboard</h1>
-              <p className="text-muted-foreground">Manage orders, track deliveries, and monitor performance.</p>
-            </div>
-            <div className="flex gap-2">
-              <MagneticButton className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                <Download className="w-4 h-4" /> Export
+    <div className="pt-24 pb-12 px-4 md:px-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-2">Supplier Dashboard</h1>
+            <p className="text-muted-foreground">Manage orders, track deliveries, and monitor performance.</p>
+          </div>
+          <div className="flex gap-2">
+            <MagneticButton className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" /> Export
+            </MagneticButton>
+            <Link href="/dashboard/supplier/materials">
+              <MagneticButton className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Add Material
               </MagneticButton>
-              <Link href="/dashboard/supplier/materials">
-                <MagneticButton className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Add Material
-                </MagneticButton>
-              </Link>
+            </Link>
+          </div>
+        </motion.div>
+
+        {/* Stats Cards (Plain, no borders) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground font-medium">Total Orders</p>
+              <div className="p-2 rounded-lg bg-blue-500/10"><Package className="w-5 h-5 text-blue-500" /></div>
             </div>
+            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-xs text-green-500 mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> All time</p>
           </motion.div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-5 rounded-xl border border-border">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground font-medium">Total Orders</p>
-                <div className="p-2 rounded-lg bg-blue-500/10"><Package className="w-5 h-5 text-blue-500" /></div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass p-5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground font-medium">Pending</p>
+              <div className="p-2 rounded-lg bg-yellow-500/10"><Clock className="w-5 h-5 text-yellow-500" /></div>
+            </div>
+            <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
+            <p className="text-xs text-muted-foreground mt-1">Awaiting acceptance</p>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass p-5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground font-medium">Active</p>
+              <div className="p-2 rounded-lg bg-purple-500/10"><Truck className="w-5 h-5 text-purple-500" /></div>
+            </div>
+            <p className="text-2xl font-bold text-purple-500">{stats.active}</p>
+            <p className="text-xs text-muted-foreground mt-1">In progress</p>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="glass p-5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted-foreground font-medium">Revenue</p>
+              <div className="p-2 rounded-lg bg-green-500/10"><DollarSign className="w-5 h-5 text-green-500" /></div>
+            </div>
+            <p className="text-2xl font-bold text-green-500">{formatNaira(stats.revenue)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Available for withdrawal</p>
+          </motion.div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {["overview", "orders", "tracking", "withdrawals", "account"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as any)}
+              className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 whitespace-nowrap ${
+                activeTab === tab 
+                  ? "border-orange-500 text-orange-500" 
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab === "account" ? "Account Details" : tab === "withdrawals" ? "Withdrawals" : tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="glass rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-5 h-5 text-orange-500" /> Recent Orders</h2>
+                <button onClick={() => setActiveTab("orders")} className="text-sm text-orange-500 hover:underline cursor-pointer bg-transparent p-0 font-medium">View All</button>
               </div>
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-xs text-green-500 mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> All time</p>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass p-5 rounded-xl border border-border">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground font-medium">Pending</p>
-                <div className="p-2 rounded-lg bg-yellow-500/10"><Clock className="w-5 h-5 text-yellow-500" /></div>
+              <div className="space-y-3">
+                {orders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 hover:bg-muted/40 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center"><Package className="w-5 h-5 text-orange-500" /></div>
+                      <div>
+                        <p className="font-semibold text-sm">{order.material_type}</p>
+                        <p className="text-xs text-muted-foreground">{order.tonnage} tons • {order.delivery_location}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
+                      <p className="font-bold text-sm">{formatNaira(order.total_amount)}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
-              <p className="text-xs text-muted-foreground mt-1">Awaiting acceptance</p>
-            </motion.div>
+            </div>
 
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass p-5 rounded-xl border border-border">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground font-medium">Active</p>
-                <div className="p-2 rounded-lg bg-purple-500/10"><Truck className="w-5 h-5 text-purple-500" /></div>
-              </div>
-              <p className="text-2xl font-bold text-purple-500">{stats.active}</p>
-              <p className="text-xs text-muted-foreground mt-1">In progress</p>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="glass p-5 rounded-xl border border-border">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground font-medium">Revenue</p>
-                <div className="p-2 rounded-lg bg-green-500/10"><DollarSign className="w-5 h-5 text-green-500" /></div>
-              </div>
-              <p className="text-2xl font-bold text-green-500">{formatNaira(stats.revenue)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Available for withdrawal</p>
-            </motion.div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex gap-2 border-b border-border overflow-x-auto">
-            {["overview", "orders", "tracking", "withdrawals", "account"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 whitespace-nowrap ${
-                  activeTab === tab 
-                    ? "border-orange-500 text-orange-500" 
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {tab === "account" ? "Account Details" : tab === "withdrawals" ? "Withdrawals" : tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Overview Tab */}
-          {activeTab === "overview" && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <div className="glass rounded-2xl border border-border p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold flex items-center gap-2"><Package className="w-5 h-5 text-orange-500" /> Recent Orders</h2>
-                  <button onClick={() => setActiveTab("orders")} className="text-sm text-orange-500 hover:underline cursor-pointer bg-transparent border-none p-0 font-medium">View All</button>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> Order Status Distribution</h3>
                 <div className="space-y-3">
-                  {orders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center"><Package className="w-5 h-5 text-orange-500" /></div>
-                        <div>
-                          <p className="font-semibold text-sm">{order.material_type}</p>
-                          <p className="text-xs text-muted-foreground">{order.tonnage} tons • {order.delivery_location}</p>
+                  {["pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => {
+                    const count = orders.filter(o => o.status === status).length;
+                    const percentage = orders.length > 0 ? (count / orders.length) * 100 : 0;
+                    return (
+                      <div key={status}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-muted-foreground">{getStatusLabel(status)}</span>
+                          <span className="text-sm font-semibold">{count}</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${percentage}%` }} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
-                        <p className="font-bold text-sm">{formatNaira(order.total_amount)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="glass rounded-2xl border border-border p-6">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> Order Status Distribution</h3>
-                  <div className="space-y-3">
-                    {["pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => {
-                      const count = orders.filter(o => o.status === status).length;
-                      const percentage = orders.length > 0 ? (count / orders.length) * 100 : 0;
-                      return (
-                        <div key={status}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-muted-foreground">{getStatusLabel(status)}</span>
-                            <span className="text-sm font-semibold">{count}</span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${percentage}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="glass rounded-2xl border border-border p-6">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-green-500" /> Quick Actions</h3>
-                  <div className="space-y-3">
-                    <Link href="/dashboard/supplier/materials">
-                      <MagneticButton className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                        <Package className="w-4 h-4" /> Manage Materials
-                      </MagneticButton>
-                    </Link>
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-green-500" /> Quick Actions</h3>
+                <div className="space-y-3">
+                  <Link href="/dashboard/supplier/materials">
                     <MagneticButton className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                      <Download className="w-4 h-4" /> Download Reports
+                      <Package className="w-4 h-4" /> Manage Materials
                     </MagneticButton>
-                    <button onClick={() => setActiveTab("account")} className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer border-none">
-                      <Building2 className="w-4 h-4" /> Update Account Details
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Orders Tab */}
-          {activeTab === "orders" && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-              <div className="glass p-4 rounded-xl border border-border flex flex-col md:flex-row gap-3">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-sm" />
-                </div>
-                <div className="flex gap-2 overflow-x-auto">
-                  {["all", "pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => (
-                    <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all ${statusFilter === status ? "bg-orange-500 text-white" : "bg-muted hover:bg-muted/80 text-muted-foreground"}`}>
-                      {getStatusLabel(status)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {filteredOrders.length === 0 ? (
-                  <div className="glass p-12 rounded-2xl border border-border text-center">
-                    <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-xl font-bold mb-2">No orders found</h3>
-                    <p className="text-muted-foreground">Try adjusting your filters</p>
-                  </div>
-                ) : (
-                  filteredOrders.map((order, index) => (
-                    <motion.div key={order.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`glass rounded-2xl border p-6 transition-all ${order.status === "pending_supplier_acceptance" ? "border-2 border-yellow-500/30 bg-yellow-500/5" : "border-border"}`}>
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3 flex-wrap">
-                            <h3 className="text-xl font-bold">{order.material_type}</h3>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
-                            
-                            {/* Report Dispute Button */}
-                            {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
-                              <button
-                                onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
-                                className="px-3 py-1.5 text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <AlertTriangle className="w-3.5 h-3.5" /> Report Dispute
-                              </button>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} Tons</span></div>
-                            <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /><span>{order.delivery_location}</span></div>
-                            <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" /><span>{new Date(order.created_at).toLocaleDateString()}</span></div>
-                            <div className="flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /><span className="font-semibold text-foreground">{formatNaira(order.total_amount)}</span></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {order.driver_name && (
-                        <div className="p-4 bg-green-500/5 rounded-xl border border-green-500/20 mb-4">
-                          <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-500" /><h4 className="font-bold">Driver Assigned</h4></div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span>{order.driver_name}</span></div>
-                            <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /><span>{order.driver_phone}</span></div>
-                            <div className="flex items-center gap-2"><Navigation className="w-4 h-4 text-muted-foreground" /><button onClick={() => handleViewTracking(order)} className="text-orange-500 hover:underline">Track Location</button></div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex justify-end gap-2 flex-wrap">
-                        {order.status === "pending_supplier_acceptance" && (
-                          <MagneticButton onClick={() => handleOpenAcceptModal(order)} className="px-6 py-2.5 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition-colors flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4" /> Accept Order
-                          </MagneticButton>
-                        )}
-                        {(order.status === "delivered" || order.status === "completed") && (
-                          <MagneticButton onClick={() => handleOpenEvidenceModal(order)} className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2">
-                            <Upload className="w-4 h-4" /> Upload Evidence
-                          </MagneticButton>
-                        )}
-                        <MagneticButton onClick={() => router.push(`/dashboard/tracking?id=${order.id}`)} className="px-6 py-2.5 bg-muted hover:bg-muted/80 text-foreground rounded-lg font-medium transition-colors flex items-center gap-2">
-                          <Eye className="w-4 h-4" /> View Details
-                        </MagneticButton>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tracking Tab */}
-          {activeTab === "tracking" && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-              <div className="glass rounded-2xl border border-border p-6">
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Navigation className="w-5 h-5 text-blue-500" /> Live Tracking</h2>
-                <div className="space-y-4">
-                  {orders.filter(o => o.driver_name && ["driver_assigned", "in_transit", "loading"].includes(o.status)).map((order) => (
-                    <div key={order.id} className="p-4 rounded-xl bg-muted/30 border border-border">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h3 className="font-bold">{order.material_type}</h3>
-                          <p className="text-sm text-muted-foreground">{order.delivery_location}</p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span>{order.driver_name}</span></div>
-                        <button onClick={() => handleViewTracking(order)} className="text-orange-500 hover:underline flex items-center gap-1">
-                          <Navigation className="w-4 h-4" /> Track Live
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {orders.filter(o => o.driver_name && ["driver_assigned", "in_transit", "loading"].includes(o.status)).length === 0 && (
-                    <div className="text-center py-12">
-                      <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No active deliveries to track</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Withdrawals Tab */}
-          {activeTab === "withdrawals" && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <div className="glass rounded-2xl border border-border p-6 md:p-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <Wallet className="w-6 h-6 text-green-500" /> Withdrawals
-                    </h2>
-                    <p className="text-sm text-muted-foreground">Request a payout of your earned revenue.</p>
-                  </div>
-                  <button
-                    onClick={() => setShowWithdrawalModal(true)}
-                    className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-green-500/20"
-                  >
-                    <Plus className="w-4 h-4" /> Request Withdrawal
+                  </Link>
+                  <MagneticButton className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                    <Download className="w-4 h-4" /> Download Reports
+                  </MagneticButton>
+                  <button onClick={() => setActiveTab("account")} className="w-full py-3 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                    <Building2 className="w-4 h-4" /> Update Account Details
                   </button>
                 </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
-                <div className="grid md:grid-cols-3 gap-4 mb-8">
-                  {/* ✅ UPDATED: Shows actual available balance from earnings table */}
-                  <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
-                    <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
-                    <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
-                  </div>
-                  <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                    <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
-                    <p className="text-3xl font-bold text-blue-500">
-                      {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                    </p>
-                  </div>
-                  <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
-                    <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
-                    <p className="text-3xl font-bold text-purple-500">
-                      {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                    </p>
-                  </div>
+        {/* Orders Tab */}
+        {activeTab === "orders" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <div className="glass p-4 rounded-xl bg-muted/20 flex flex-col md:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-background rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm" />
+              </div>
+              <div className="flex gap-2 overflow-x-auto">
+                {["all", "pending_supplier_acceptance", "driver_searching", "in_transit", "completed"].map((status) => (
+                  <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all ${statusFilter === status ? "bg-orange-500 text-white" : "bg-muted hover:bg-muted/80 text-muted-foreground"}`}>
+                    {getStatusLabel(status)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {filteredOrders.length === 0 ? (
+                <div className="glass p-12 rounded-2xl text-center bg-muted/20">
+                  <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-xl font-bold mb-2">No orders found</h3>
+                  <p className="text-muted-foreground">Try adjusting your filters</p>
                 </div>
+              ) : (
+                filteredOrders.map((order, index) => (
+                  <motion.div key={order.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`glass rounded-2xl p-6 transition-all ${order.status === "pending_supplier_acceptance" ? "bg-yellow-500/5 ring-1 ring-yellow-500/30" : ""}`}>
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
+                          <h3 className="text-xl font-bold">{order.material_type}</h3>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
+                          
+                          {/* Report Dispute Button */}
+                          {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
+                            <button
+                              onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
+                              className="px-3 py-1.5 text-xs font-semibold text-red-500 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" /> Report Dispute
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} Tons</span></div>
+                          <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /><span>{order.delivery_location}</span></div>
+                          <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" /><span>{new Date(order.created_at).toLocaleDateString()}</span></div>
+                          <div className="flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /><span className="font-semibold text-foreground">{formatNaira(order.total_amount)}</span></div>
+                        </div>
+                      </div>
+                    </div>
 
-                <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 text-muted-foreground">
+                    {order.driver_name && (
+                      <div className="p-4 bg-green-500/5 rounded-xl mb-4">
+                        <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-500" /><h4 className="font-bold">Driver Assigned</h4></div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span>{order.driver_name}</span></div>
+                          <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-muted-foreground" /><span>{order.driver_phone}</span></div>
+                          <div className="flex items-center gap-2"><Navigation className="w-4 h-4 text-muted-foreground" /><button onClick={() => handleViewTracking(order)} className="text-orange-500 hover:underline">Track Location</button></div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 flex-wrap">
+                      {order.status === "pending_supplier_acceptance" && (
+                        <MagneticButton onClick={() => handleOpenAcceptModal(order)} className="px-6 py-2.5 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition-colors flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> Accept Order
+                        </MagneticButton>
+                      )}
+                      {(order.status === "delivered" || order.status === "completed") && (
+                        <MagneticButton onClick={() => handleOpenEvidenceModal(order)} className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2">
+                          <Upload className="w-4 h-4" /> Upload Evidence
+                        </MagneticButton>
+                      )}
+                      <MagneticButton onClick={() => router.push(`/dashboard/tracking?id=${order.id}`)} className="px-6 py-2.5 bg-muted hover:bg-muted/80 text-foreground rounded-lg font-medium transition-colors flex items-center gap-2">
+                        <Eye className="w-4 h-4" /> View Details
+                      </MagneticButton>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Tracking Tab */}
+        {activeTab === "tracking" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <div className="glass rounded-2xl p-6">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Navigation className="w-5 h-5 text-blue-500" /> Live Tracking</h2>
+              <div className="space-y-4">
+                {orders.filter(o => o.driver_name && ["driver_assigned", "in_transit", "loading"].includes(o.status)).map((order) => (
+                  <div key={order.id} className="p-4 rounded-xl bg-muted/20">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h3 className="font-bold">{order.material_type}</h3>
+                        <p className="text-sm text-muted-foreground">{order.delivery_location}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span>{order.driver_name}</span></div>
+                      <button onClick={() => handleViewTracking(order)} className="text-orange-500 hover:underline flex items-center gap-1">
+                        <Navigation className="w-4 h-4" /> Track Live
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {orders.filter(o => o.driver_name && ["driver_assigned", "in_transit", "loading"].includes(o.status)).length === 0 && (
+                  <div className="text-center py-12 bg-muted/20 rounded-2xl">
+                    <Navigation className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No active deliveries to track</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Withdrawals Tab */}
+        {activeTab === "withdrawals" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="glass rounded-2xl p-6 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Wallet className="w-6 h-6 text-green-500" /> Withdrawals
+                  </h2>
+                  <p className="text-sm text-muted-foreground">Request a payout of your earned revenue.</p>
+                </div>
+                <button
+                  onClick={() => setShowWithdrawalModal(true)}
+                  className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-green-500/20"
+                >
+                  <Plus className="w-4 h-4" /> Request Withdrawal
+                </button>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4 mb-8">
+                <div className="p-5 bg-green-500/10 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
+                  <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
+                </div>
+                <div className="p-5 bg-blue-500/10 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
+                  <p className="text-3xl font-bold text-blue-500">
+                    {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
+                  </p>
+                </div>
+                <div className="p-5 bg-purple-500/10 rounded-xl">
+                  <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
+                  <p className="text-3xl font-bold text-purple-500">
+                    {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
+                  </p>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-muted-foreground">
+                    <tr>
+                      <th className="text-left p-4 font-medium">Date</th>
+                      <th className="text-left p-4 font-medium">Amount</th>
+                      <th className="text-left p-4 font-medium">Bank Account</th>
+                      <th className="text-left p-4 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withdrawals.length === 0 ? (
                       <tr>
-                        <th className="text-left p-4 font-medium">Date</th>
-                        <th className="text-left p-4 font-medium">Amount</th>
-                        <th className="text-left p-4 font-medium">Bank Account</th>
-                        <th className="text-left p-4 font-medium">Status</th>
+                        <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {withdrawals.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
+                    ) : (
+                      withdrawals.map((w: any) => (
+                        <tr key={w.id} className="border-t border-muted/30 hover:bg-muted/20 transition-colors">
+                          <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
+                          <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
+                          <td className="p-4 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              w.status === "approved" ? "bg-green-500/10 text-green-600" :
+                              w.status === "rejected" ? "bg-red-500/10 text-red-600" :
+                              "bg-yellow-500/10 text-yellow-600"
+                            }`}>
+                              {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
+                            </span>
+                          </td>
                         </tr>
-                      ) : (
-                        withdrawals.map((w: any) => (
-                          <tr key={w.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                            <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
-                            <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
-                            <td className="p-4 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
-                            <td className="p-4">
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                                w.status === "approved" ? "bg-green-500/10 text-green-600 border-green-500/30" :
-                                w.status === "rejected" ? "bg-red-500/10 text-red-600 border-red-500/30" :
-                                "bg-yellow-500/10 text-yellow-600 border-yellow-500/30"
-                              }`}>
-                                {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Account Details Tab */}
+        {activeTab === "account" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
+            <div className="glass rounded-2xl p-6 md:p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-orange-500/10 rounded-xl">
+                  <Building2 className="w-6 h-6 text-orange-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Account Details</h2>
+                  <p className="text-sm text-muted-foreground">Add your bank account information to receive payouts for completed orders.</p>
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {/* ✅ UPDATED: Account Details Tab with Sign Out Button */}
-          {activeTab === "account" && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
-              <div className="glass rounded-2xl border border-border p-6 md:p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 bg-orange-500/10 rounded-xl">
-                    <Building2 className="w-6 h-6 text-orange-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">Account Details</h2>
-                    <p className="text-sm text-muted-foreground">Add your bank account information to receive payouts for completed orders.</p>
-                  </div>
+              <form onSubmit={handleSaveAccountDetails} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Bank Name <span className="text-red-500">*</span></label>
+                  <select
+                    value={accountDetails.bankName}
+                    onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
+                    className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="" disabled>Select your bank</option>
+                    {nigerianBanks.map((bank) => (
+                      <option key={bank} value={bank}>{bank}</option>
+                    ))}
+                  </select>
                 </div>
 
-                <form onSubmit={handleSaveAccountDetails} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Bank Name <span className="text-red-500">*</span></label>
-                    <select
-                      value={accountDetails.bankName}
-                      onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none cursor-pointer"
-                      required
-                    >
-                      <option value="" disabled>Select your bank</option>
-                      {nigerianBanks.map((bank) => (
-                        <option key={bank} value={bank}>{bank}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Account Number <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={accountDetails.accountNumber}
+                    onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
+                    className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20"
+                    placeholder="e.g. 0123456789"
+                    maxLength={10}
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Account Number <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={accountDetails.accountNumber}
-                      onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                      placeholder="e.g. 0123456789"
-                      maxLength={10}
-                      required
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Account Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={accountDetails.accountName}
+                    onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
+                    className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20"
+                    placeholder="e.g. John Doe Enterprises"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Account Name <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={accountDetails.accountName}
-                      onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                      placeholder="e.g. John Doe Enterprises"
-                      required
-                    />
-                  </div>
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={isSavingAccount}
+                    className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isSavingAccount ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                    ) : (
+                      <><CheckCircle className="w-4 h-4" /> Save Account Details</>
+                    )}
+                  </button>
+                </div>
+              </form>
 
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      disabled={isSavingAccount}
-                      className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isSavingAccount ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                      ) : (
-                        <><CheckCircle className="w-4 h-4" /> Save Account Details</>
-                      )}
-                    </button>
-                  </div>
+              {/* Sign Out Button */}
+              <div className="mt-8 pt-6">
+                <form action={logout}>
+                  <button className="w-full py-3 bg-red-500/10 text-red-600 rounded-xl font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                    <LogOut className="w-4 h-4" /> Sign Out
+                  </button>
                 </form>
-
-                {/* ✅ NEW: Prominent Sign Out Button */}
-                <div className="mt-8 pt-6 border-t border-border">
-                  <form action={logout}>
-                    <button className="w-full py-3 bg-red-500/10 text-red-600 border border-red-500/20 rounded-xl font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                      <LogOut className="w-4 h-4" /> Sign Out
-                    </button>
-                  </form>
-                </div>
               </div>
-            </motion.div>
-          )}
-        </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Accept Order Modal */}
@@ -851,7 +843,7 @@ export default function SupplierDashboardPage() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !acceptingOrderId && setShowAcceptModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-500/10 flex items-center justify-center"><CheckCircle className="w-8 h-8 text-yellow-500" /></div>
                   <h3 className="text-xl font-bold mb-2">Accept Order?</h3>
@@ -860,15 +852,15 @@ export default function SupplierDashboardPage() {
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium mb-2">Material Price (₦)</label>
-                    <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500" placeholder="Enter price" disabled={acceptingOrderId !== null} />
+                    <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500/20" placeholder="Enter price" disabled={acceptingOrderId !== null} />
                     <p className="text-xs text-muted-foreground mt-1">This is the price for the material. Delivery fee will be added separately.</p>
                   </div>
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <div className="p-4 bg-blue-500/10 rounded-xl">
                     <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 30 minutes.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowAcceptModal(false)} disabled={acceptingOrderId !== null} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50">Cancel</button>
+                  <button onClick={() => setShowAcceptModal(false)} disabled={acceptingOrderId !== null} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50">Cancel</button>
                   <button onClick={handleAcceptOrder} disabled={acceptingOrderId !== null || !materialPrice} className="flex-1 py-3 bg-yellow-500 text-white rounded-xl font-bold hover:bg-yellow-600 transition-colors cursor-pointer shadow-lg shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                     {acceptingOrderId === selectedOrder.id ? (<><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>) : (<><CheckCircle className="w-4 h-4" /> Accept Order</>)}
                   </button>
@@ -885,12 +877,12 @@ export default function SupplierDashboardPage() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isUploading && setShowEvidenceModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2"><Upload className="w-5 h-5 text-blue-500" /> Upload Delivery Evidence</h3>
                   <button onClick={() => setShowEvidenceModal(false)} disabled={isUploading} className="p-2 hover:bg-muted rounded-lg transition-colors"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="mb-6 p-4 bg-muted/50 rounded-xl border border-border">
+                <div className="mb-6 p-4 bg-muted/50 rounded-xl">
                   <p className="text-sm font-semibold">{evidenceOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{evidenceOrder.tonnage} Tons • {evidenceOrder.delivery_location}</p>
                   <p className="text-xs text-muted-foreground mt-1">Delivered: {new Date(evidenceOrder.delivered_at || evidenceOrder.updated_at).toLocaleDateString()}</p>
@@ -898,7 +890,7 @@ export default function SupplierDashboardPage() {
                 <form onSubmit={handleUploadEvidence} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Proof of Delivery <span className="text-red-500">*</span></label>
-                    <div onClick={() => !isUploading && fileInputRef.current?.click()} className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:bg-muted/30 transition-colors">
+                    <div onClick={() => !isUploading && fileInputRef.current?.click()} className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 text-center cursor-pointer hover:bg-muted/30 transition-colors">
                       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,.pdf" className="hidden" disabled={isUploading} />
                       {evidenceFile ? (
                         <div className="flex items-center justify-center gap-2 text-green-600"><FileText className="w-5 h-5" /><span className="text-sm font-medium truncate">{evidenceFile.name}</span></div>
@@ -909,10 +901,10 @@ export default function SupplierDashboardPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Notes (Optional)</label>
-                    <textarea value={evidenceNotes} onChange={(e) => setEvidenceNotes(e.target.value)} rows={3} className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none" placeholder="e.g. Materials delivered in good condition..." disabled={isUploading} />
+                    <textarea value={evidenceNotes} onChange={(e) => setEvidenceNotes(e.target.value)} rows={3} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" placeholder="e.g. Materials delivered in good condition..." disabled={isUploading} />
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => setShowEvidenceModal(false)} disabled={isUploading} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50">Cancel</button>
+                    <button type="button" onClick={() => setShowEvidenceModal(false)} disabled={isUploading} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50">Cancel</button>
                     <button type="submit" disabled={isUploading || !evidenceFile} className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                       {isUploading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>) : (<><Upload className="w-4 h-4" /> Upload Evidence</>)}
                     </button>
@@ -930,7 +922,7 @@ export default function SupplierDashboardPage() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTrackingModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="glass rounded-2xl max-w-2xl w-full p-6 pointer-events-auto border border-border shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="glass rounded-2xl max-w-2xl w-full p-6 pointer-events-auto shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2"><Navigation className="w-6 h-6 text-blue-500" /> Track Order</h3>
                   <button onClick={() => setShowTrackingModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors">
@@ -939,7 +931,7 @@ export default function SupplierDashboardPage() {
                   </button>
                 </div>
                 <div className="space-y-6">
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border">
+                  <div className="p-4 rounded-xl bg-muted/30">
                     <h4 className="font-bold mb-3">{trackingOrder.material_type}</h4>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div><p className="text-muted-foreground">Tonnage</p><p className="font-semibold">{trackingOrder.tonnage} tons</p></div>
@@ -947,7 +939,7 @@ export default function SupplierDashboardPage() {
                     </div>
                   </div>
                   {trackingOrder.driver_name && (
-                    <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
+                    <div className="p-4 rounded-xl bg-green-500/5">
                       <h4 className="font-bold mb-3 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-green-500" /> Driver Information</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span>{trackingOrder.driver_name}</span></div>
@@ -955,7 +947,7 @@ export default function SupplierDashboardPage() {
                       </div>
                     </div>
                   )}
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border">
+                  <div className="p-4 rounded-xl bg-muted/30">
                     <h4 className="font-bold mb-4">Order Status</h4>
                     <div className="space-y-3">
                       {[
@@ -1004,7 +996,7 @@ export default function SupplierDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <Wallet className="w-6 h-6 text-green-500" /> Request Withdrawal
@@ -1018,8 +1010,7 @@ export default function SupplierDashboardPage() {
                   </button>
                 </div>
 
-                {/* ✅ UPDATED: Shows actual available balance */}
-                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+                <div className="p-4 bg-green-500/10 rounded-xl mb-6">
                   <p className="text-sm text-muted-foreground">Available Balance</p>
                   <p className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
@@ -1031,14 +1022,14 @@ export default function SupplierDashboardPage() {
                       type="number"
                       value={withdrawalAmount}
                       onChange={(e) => setWithdrawalAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-lg font-bold"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 text-lg font-bold"
                       placeholder="0.00"
                       required
                       disabled={isRequestingWithdrawal}
                     />
                   </div>
 
-                  <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground">
+                  <div className="p-4 bg-muted/30 rounded-xl text-sm text-muted-foreground">
                     <p className="font-semibold text-foreground mb-2">Funds will be sent to:</p>
                     <p>{accountDetails.bankName || "No bank account set"}</p>
                     <p>{accountDetails.accountNumber || "****"}</p>
@@ -1059,7 +1050,7 @@ export default function SupplierDashboardPage() {
                       type="button"
                       onClick={() => setShowWithdrawalModal(false)}
                       disabled={isRequestingWithdrawal}
-                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1099,7 +1090,7 @@ export default function SupplierDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
                     <AlertTriangle className="w-6 h-6" /> Report Dispute
@@ -1113,7 +1104,7 @@ export default function SupplierDashboardPage() {
                   </button>
                 </div>
 
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+                <div className="p-4 bg-red-500/10 rounded-xl mb-6">
                   <p className="text-sm text-red-700 dark:text-red-300 font-medium">
                     ⚠️ Are you experiencing an issue with this order?
                   </p>
@@ -1129,7 +1120,7 @@ export default function SupplierDashboardPage() {
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
                       rows={4}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
                       placeholder="e.g. Driver arrived late, material was damaged, incorrect quantity delivered..."
                       required
                       disabled={isSubmittingDispute}
@@ -1141,7 +1132,7 @@ export default function SupplierDashboardPage() {
                       type="button"
                       onClick={() => setShowDisputeModal(false)}
                       disabled={isSubmittingDispute}
-                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1163,6 +1154,6 @@ export default function SupplierDashboardPage() {
           </>
         )}
       </AnimatePresence>
-    </DashboardLayout>
+    </div>
   );
 }

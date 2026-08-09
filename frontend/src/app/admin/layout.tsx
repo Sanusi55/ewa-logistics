@@ -5,22 +5,26 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Shield, BarChart3, Users, Package, Truck, 
-  Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2
+  Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2,
+  Layers, CreditCard, AlertTriangle // ✅ Added missing icons for full navigation
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+// ✅ Updated to include ALL admin sections
 const navItems = [
   { name: "Overview", tab: "overview", icon: BarChart3 },
   { name: "Users", tab: "users", icon: Users },
+  { name: "Listings", tab: "listings", icon: Layers },
   { name: "Orders", tab: "orders", icon: Package },
   { name: "Deliveries", tab: "deliveries", icon: Truck },
+  { name: "Payments", tab: "payments", icon: CreditCard },
+  { name: "Disputes", tab: "disputes", icon: AlertTriangle },
   { name: "Messages", tab: "messages", icon: MessageSquare },
   { name: "Broadcast", tab: "broadcast", icon: Megaphone },
   { name: "Audit Logs", tab: "audit", icon: History },
   { name: "Settings", tab: "settings", icon: Settings },
 ];
 
-// ✅ 1. Main Layout wraps everything in a Suspense boundary
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={
@@ -33,14 +37,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 }
 
-// ✅ 2. Inner component safely uses useSearchParams()
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClient();
 
-  // Determine current active tab from URL, default to "overview"
   const currentTab = searchParams.get("tab") || "overview";
 
   const handleLogout = async () => {

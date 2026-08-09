@@ -9,7 +9,6 @@ import {
   Camera, FileUp, Building2, Plus, AlertTriangle, LogOut
 } from "lucide-react";
 import Link from "next/link";
-import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/actions/orders";
@@ -26,6 +25,7 @@ interface Order {
   delivery_address: string;
   status: string;
   delivery_fee: number;
+  delivery_fee_offer?: number | null;
   driver_id: string | null;
   driver_name: string | null;
   driver_phone: string | null;
@@ -51,13 +51,13 @@ function DriverSkeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="glass p-5 rounded-xl border border-border animate-pulse">
+          <div key={i} className="glass p-5 rounded-xl animate-pulse">
             <div className="h-4 w-20 bg-muted rounded mb-3" />
             <div className="h-8 w-24 bg-muted rounded" />
           </div>
         ))}
       </div>
-      <div className="glass p-6 rounded-2xl border border-border animate-pulse h-64" />
+      <div className="glass p-6 rounded-2xl animate-pulse h-64" />
     </div>
   );
 }
@@ -103,7 +103,7 @@ export default function DriverDashboardPage() {
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [availableBalance, setAvailableBalance] = useState(0); // ✅ Tracks actual net payouts
+  const [availableBalance, setAvailableBalance] = useState(0);
 
   // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -127,7 +127,7 @@ export default function DriverDashboardPage() {
     fetchDriverData();
     loadAccountDetails();
     loadWithdrawals();
-    loadEarnings(); // ✅ Load actual available balance
+    loadEarnings();
   }, []);
 
   async function fetchDriverData() {
@@ -205,7 +205,6 @@ export default function DriverDashboardPage() {
     if (data) setWithdrawals(data);
   };
 
-  // ✅ NEW: Fetch actual available balance from driver_earnings table
   const loadEarnings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -264,7 +263,6 @@ export default function DriverDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please enter a valid amount." });
       return;
     }
-    // ✅ UPDATED: Check against actual available balance
     if (amount > availableBalance) {
       addToast({ type: "error", title: "Error", message: "Insufficient balance." });
       return;
@@ -295,7 +293,7 @@ export default function DriverDashboardPage() {
       setShowWithdrawalModal(false);
       setWithdrawalAmount("");
       loadWithdrawals();
-      loadEarnings(); // ✅ Refresh balance after request
+      loadEarnings();
     }
     setIsRequestingWithdrawal(false);
   };
@@ -327,9 +325,10 @@ export default function DriverDashboardPage() {
     }
   };
 
-  const handleOpenBidModal = (order: Order) => {
+  // ✅ UPDATED: Accept optional preFillAmount for customer offers
+  const handleOpenBidModal = (order: Order, preFillAmount?: number | null) => {
     setSelectedOrder(order);
-    setBidAmount("");
+    setBidAmount(preFillAmount ? preFillAmount.toString() : "");
     setEstimatedTime("");
     setDriverMessage("");
     setShowBidModal(true);
@@ -464,21 +463,18 @@ export default function DriverDashboardPage() {
   const activeDelivery = activeOrders.find(o => o.status === "in_transit" || o.status === "loading");
   const completedDeliveries = activeOrders.filter(o => o.status === "delivered" || o.status === "completed");
   
-  // ✅ UPDATED: Today's earnings now reflects the actual available balance from earnings table
   const todayEarnings = availableBalance;
 
   if (isLoading) {
     return (
-      <DashboardLayout>
-        <div className="pt-24 px-4 md:px-6">
-          <div className="max-w-5xl mx-auto"><DriverSkeleton /></div>
-        </div>
-      </DashboardLayout>
+      <div className="pt-24 px-4 md:px-6">
+        <div className="max-w-5xl mx-auto"><DriverSkeleton /></div>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
+    <div className="pt-24 px-4 md:px-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -494,7 +490,7 @@ export default function DriverDashboardPage() {
             className={`flex items-center gap-3 px-5 py-3 rounded-xl font-semibold transition-all cursor-pointer shadow-lg ${
               isOnline 
                 ? "bg-green-500 text-white shadow-green-500/20 hover:bg-green-600" 
-                : "bg-muted text-muted-foreground border border-border hover:bg-muted/80"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             <Power className={`w-5 h-5 ${isOnline ? "animate-pulse" : ""}`} />
@@ -517,7 +513,7 @@ export default function DriverDashboardPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="glass p-5 rounded-xl border border-border flex flex-col justify-between"
+                  className="glass p-5 rounded-xl flex flex-col justify-between"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
@@ -542,7 +538,7 @@ export default function DriverDashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="glass rounded-xl p-6 border-2 border-orange-500/30 bg-orange-500/5 hover:border-orange-500/50 transition-all"
+                    className="glass rounded-xl p-6 bg-orange-500/5 hover:bg-orange-500/10 transition-all"
                   >
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                       <div className="flex-1">
@@ -575,25 +571,48 @@ export default function DriverDashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-border">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(job.created_at)}
-                      </div>
-                      {job.hasBid ? (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg border border-green-500/20">
-                          <CheckCircle className="w-4 h-4" />
-                          <span className="font-semibold text-sm">Bid Submitted</span>
+                    {/* ✅ NEW: Conditional rendering for Customer Offers vs Standard Bids */}
+                    {job.delivery_fee_offer && job.delivery_fee_offer > 0 ? (
+                      <div className="flex items-center justify-between pt-4 mt-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">Customer Delivery Offer</span>
+                          <span className="text-lg font-bold text-green-500">{formatNaira(job.delivery_fee_offer)}</span>
                         </div>
-                      ) : (
-                        <MagneticButton
-                          onClick={() => handleOpenBidModal(job)}
-                          className="px-6 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2"
-                        >
-                          <DollarSign className="w-4 h-4" /> Place Bid
-                        </MagneticButton>
-                      )}
-                    </div>
+                        {job.hasBid ? (
+                          <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="font-semibold text-sm">Bid Submitted</span>
+                          </div>
+                        ) : (
+                          <MagneticButton
+                            onClick={() => handleOpenBidModal(job, job.delivery_fee_offer)}
+                            className="px-6 py-2.5 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20 flex items-center gap-2"
+                          >
+                            <CheckCircle className="w-4 h-4" /> Accept Offer
+                          </MagneticButton>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between pt-4 mt-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(job.created_at)}
+                        </div>
+                        {job.hasBid ? (
+                          <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="font-semibold text-sm">Bid Submitted</span>
+                          </div>
+                        ) : (
+                          <MagneticButton
+                            onClick={() => handleOpenBidModal(job, null)}
+                            className="px-6 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2"
+                          >
+                            <DollarSign className="w-4 h-4" /> Place Bid
+                          </MagneticButton>
+                        )}
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>
@@ -602,7 +621,7 @@ export default function DriverDashboardPage() {
             <div className="grid lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 {activeDelivery ? (
-                  <div className="glass p-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 relative overflow-hidden">
+                  <div className="glass p-6 rounded-2xl bg-orange-500/5 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10">
                       <Navigation className="w-32 h-32 text-orange-500" />
                     </div>
@@ -623,10 +642,10 @@ export default function DriverDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-4 mb-6 p-4 bg-background/50 rounded-xl border border-border/50">
+                      <div className="flex items-start gap-4 mb-6 p-4 bg-background/50 rounded-xl">
                         <div className="flex flex-col items-center pt-1">
                           <div className="w-3 h-3 rounded-full bg-orange-500 ring-4 ring-orange-500/20" />
-                          <div className="w-0.5 h-12 bg-border my-1" />
+                          <div className="w-0.5 h-12 bg-muted my-1" />
                           <div className="w-3 h-3 rounded-full bg-green-500 ring-4 ring-green-500/20" />
                         </div>
                         <div className="flex-1 space-y-6">
@@ -642,7 +661,7 @@ export default function DriverDashboardPage() {
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-3">
-                        <button className="flex-1 flex items-center justify-center gap-2 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer">
+                        <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
                           <Phone className="w-4 h-4" /> Contact Customer
                         </button>
                         
@@ -661,10 +680,10 @@ export default function DriverDashboardPage() {
                         </MagneticButton>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-border">
+                      <div className="mt-4">
                         <button
                           onClick={() => { setDisputeOrderId(activeDelivery.id); setShowDisputeModal(true); }}
-                          className="w-full sm:w-auto px-4 py-3 text-sm font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full sm:w-auto px-4 py-3 text-sm font-semibold text-red-500 bg-red-500/10 rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <AlertTriangle className="w-4 h-4" /> Report Dispute
                         </button>
@@ -672,7 +691,7 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="glass p-12 rounded-2xl border border-border text-center">
+                  <div className="glass p-12 rounded-2xl text-center bg-muted/20">
                     <Truck className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-xl font-bold mb-2">No Active Deliveries</h3>
                     <p className="text-muted-foreground">
@@ -685,7 +704,7 @@ export default function DriverDashboardPage() {
               </div>
 
               <div className="space-y-6">
-                <div className="glass p-6 rounded-2xl border border-border text-center">
+                <div className="glass p-6 rounded-2xl text-center">
                   <div className="relative inline-block mb-4">
                     <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-3xl font-bold mx-auto ring-4 ring-orange-500/20">
                       {driverName.split(' ').map(n => n[0]).join('').toUpperCase()}
@@ -695,12 +714,12 @@ export default function DriverDashboardPage() {
                   <p className="text-sm text-muted-foreground mb-4">Verified Driver • {completedDeliveries.length} Trips</p>
                 </div>
 
-                <div className="glass p-6 rounded-2xl border border-border">
+                <div className="glass p-6 rounded-2xl">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                     <Truck className="w-5 h-5 text-orange-500" /> Vehicle Details
                   </h3>
                   <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
                       <Package className="w-5 h-5 text-muted-foreground mt-0.5" />
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider">Vehicle & Plate</p>
@@ -710,8 +729,7 @@ export default function DriverDashboardPage() {
                   </div>
                 </div>
 
-                {/* ✅ UPDATED: Account Details with Sign Out Button */}
-                <div className="glass p-6 rounded-2xl border border-border mb-10">
+                <div className="glass p-6 rounded-2xl mb-10">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-orange-500" /> Account Details
                   </h3>
@@ -721,7 +739,7 @@ export default function DriverDashboardPage() {
                       <select
                         value={accountDetails.bankName}
                         onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none cursor-pointer text-sm"
+                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none cursor-pointer text-sm"
                         required
                       >
                         <option value="" disabled>Select your bank</option>
@@ -736,7 +754,7 @@ export default function DriverDashboardPage() {
                         type="text"
                         value={accountDetails.accountNumber}
                         onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
+                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm"
                         placeholder="0123456789"
                         maxLength={10}
                         required
@@ -748,7 +766,7 @@ export default function DriverDashboardPage() {
                         type="text"
                         value={accountDetails.accountName}
                         onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
+                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm"
                         placeholder="Account Name"
                         required
                       />
@@ -769,10 +787,9 @@ export default function DriverDashboardPage() {
                     </div>
                   </form>
 
-                  {/* ✅ NEW: Prominent Sign Out Button */}
-                  <div className="mt-8 pt-6 border-t border-border">
+                  <div className="mt-8 pt-6">
                     <form action={logout}>
-                      <button className="w-full py-3 bg-red-500/10 text-red-600 border border-red-500/20 rounded-lg font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                      <button className="w-full py-3 bg-red-500/10 text-red-600 rounded-lg font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
                         <LogOut className="w-4 h-4" /> Sign Out
                       </button>
                     </form>
@@ -781,8 +798,7 @@ export default function DriverDashboardPage() {
               </div>
             </div>
 
-            {/* Withdrawals Section */}
-            <div className="glass rounded-2xl border border-border p-6 md:p-8">
+            <div className="glass rounded-2xl p-6 md:p-8">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                   <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -799,18 +815,17 @@ export default function DriverDashboardPage() {
               </div>
 
               <div className="grid md:grid-cols-3 gap-4 mb-8">
-                {/* ✅ UPDATED: Shows actual available balance from earnings table */}
-                <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
+                <div className="p-5 bg-green-500/10 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
                   <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
-                <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <div className="p-5 bg-blue-500/10 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
                   <p className="text-3xl font-bold text-blue-500">
                     {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
                   </p>
                 </div>
-                <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                <div className="p-5 bg-purple-500/10 rounded-xl">
                   <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
                   <p className="text-3xl font-bold text-purple-500">
                     {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
@@ -821,7 +836,7 @@ export default function DriverDashboardPage() {
               <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-muted-foreground">
+                  <thead className="text-muted-foreground">
                     <tr>
                       <th className="text-left p-4 font-medium">Date</th>
                       <th className="text-left p-4 font-medium">Amount</th>
@@ -836,15 +851,15 @@ export default function DriverDashboardPage() {
                       </tr>
                     ) : (
                       withdrawals.map((w: any) => (
-                        <tr key={w.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                        <tr key={w.id} className="border-t border-muted/30 hover:bg-muted/20 transition-colors">
                           <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
                           <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
                           <td className="p-4 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
                           <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                              w.status === "approved" ? "bg-green-500/10 text-green-600 border-green-500/30" :
-                              w.status === "rejected" ? "bg-red-500/10 text-red-600 border-red-500/30" :
-                              "bg-yellow-500/10 text-yellow-600 border-yellow-500/30"
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              w.status === "approved" ? "bg-green-500/10 text-green-600" :
+                              w.status === "rejected" ? "bg-red-500/10 text-red-600" :
+                              "bg-yellow-500/10 text-yellow-600"
                             }`}>
                               {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
                             </span>
@@ -878,10 +893,10 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
-                    <DollarSign className="w-6 h-6 text-orange-500" /> Place Your Bid
+                    <DollarSign className="w-6 h-6 text-orange-500" /> {selectedOrder.delivery_fee_offer ? "Review & Accept Offer" : "Place Your Bid"}
                   </h3>
                   <button onClick={() => setShowBidModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
                     <X className="w-5 h-5" />
@@ -889,7 +904,7 @@ export default function DriverDashboardPage() {
                 </div>
 
                 <div className="space-y-4 mb-6">
-                  <div className="p-4 bg-muted/50 rounded-xl border border-border">
+                  <div className="p-4 bg-muted/50 rounded-xl">
                     <p className="text-xs text-muted-foreground mb-1">Delivery Details</p>
                     <p className="font-bold">{selectedOrder.material_type}</p>
                     <p className="text-sm text-muted-foreground">{selectedOrder.tonnage} Tons</p>
@@ -904,7 +919,7 @@ export default function DriverDashboardPage() {
                       type="number"
                       value={bidAmount}
                       onChange={(e) => setBidAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-lg font-bold"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-lg font-bold"
                       placeholder="e.g. 25000"
                       disabled={isSubmitting}
                     />
@@ -916,7 +931,7 @@ export default function DriverDashboardPage() {
                       type="number"
                       value={estimatedTime}
                       onChange={(e) => setEstimatedTime(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all"
                       placeholder="e.g. 45"
                       disabled={isSubmitting}
                     />
@@ -928,7 +943,7 @@ export default function DriverDashboardPage() {
                       value={driverMessage}
                       onChange={(e) => setDriverMessage(e.target.value)}
                       rows={2}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all resize-none"
                       placeholder="e.g. I can arrive within 30 mins..."
                       disabled={isSubmitting}
                     />
@@ -939,7 +954,7 @@ export default function DriverDashboardPage() {
                   <button 
                     onClick={() => setShowBidModal(false)}
                     disabled={isSubmitting}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -951,7 +966,7 @@ export default function DriverDashboardPage() {
                     {isSubmitting ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
                     ) : (
-                      <><CheckCircle className="w-4 h-4" /> Submit Bid</>
+                      <><CheckCircle className="w-4 h-4" /> {selectedOrder.delivery_fee_offer ? "Accept Offer" : "Submit Bid"}</>
                     )}
                   </MagneticButton>
                 </div>
@@ -978,7 +993,7 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <Key className="w-6 h-6 text-orange-500" /> Complete Delivery
@@ -989,7 +1004,7 @@ export default function DriverDashboardPage() {
                 </div>
 
                 <div className="space-y-4 mb-6">
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <div className="p-4 bg-blue-500/10 rounded-xl">
                     <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">
                       📞 Ask the customer for the delivery code
                     </p>
@@ -1004,7 +1019,7 @@ export default function DriverDashboardPage() {
                       type="text"
                       value={deliveryCode}
                       onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className="w-full px-4 py-4 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-2xl font-bold text-center tracking-widest uppercase"
+                      className="w-full px-4 py-4 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-2xl font-bold text-center tracking-widest uppercase"
                       placeholder="0000"
                       disabled={isVerifying}
                     />
@@ -1015,7 +1030,7 @@ export default function DriverDashboardPage() {
                   <button 
                     onClick={() => setShowCodeModal(false)}
                     disabled={isVerifying}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -1054,7 +1069,7 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <Camera className="w-6 h-6 text-green-500" /> Upload Delivery Proof
@@ -1065,7 +1080,7 @@ export default function DriverDashboardPage() {
                 </div>
 
                 <div className="space-y-4 mb-6">
-                  <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                  <div className="p-4 bg-green-500/10 rounded-xl">
                     <p className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">
                       📸 Upload Proof of Delivery
                     </p>
@@ -1076,7 +1091,7 @@ export default function DriverDashboardPage() {
 
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Select File <span className="text-red-500">*</span></label>
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-green-500 transition-colors bg-muted/30">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/20 rounded-xl cursor-pointer hover:bg-muted/30 transition-colors bg-muted/10">
                       <input
                         type="file"
                         accept="image/*,application/pdf,video/mp4"
@@ -1106,7 +1121,7 @@ export default function DriverDashboardPage() {
                       rows={2}
                       value={deliveryNotes}
                       onChange={(e) => setDeliveryNotes(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 transition-all resize-none"
                       placeholder="e.g. Delivered to back entrance, signed by John..."
                       disabled={isUploading}
                     />
@@ -1117,7 +1132,7 @@ export default function DriverDashboardPage() {
                   <button 
                     onClick={() => setShowProofModal(false)}
                     disabled={isUploading}
-                    className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -1156,7 +1171,7 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <Wallet className="w-6 h-6 text-green-500" /> Request Withdrawal
@@ -1170,8 +1185,7 @@ export default function DriverDashboardPage() {
                   </button>
                 </div>
 
-                {/* ✅ UPDATED: Shows actual available balance */}
-                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+                <div className="p-4 bg-green-500/10 rounded-xl mb-6">
                   <p className="text-sm text-muted-foreground">Available Balance</p>
                   <p className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
@@ -1183,14 +1197,14 @@ export default function DriverDashboardPage() {
                       type="number"
                       value={withdrawalAmount}
                       onChange={(e) => setWithdrawalAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-lg font-bold"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 transition-all text-lg font-bold"
                       placeholder="0.00"
                       required
                       disabled={isRequestingWithdrawal}
                     />
                   </div>
 
-                  <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground">
+                  <div className="p-4 bg-muted/30 rounded-xl text-sm text-muted-foreground">
                     <p className="font-semibold text-foreground mb-2">Funds will be sent to:</p>
                     <p>{accountDetails.bankName || "No bank account set"}</p>
                     <p>{accountDetails.accountNumber || "****"}</p>
@@ -1211,7 +1225,7 @@ export default function DriverDashboardPage() {
                       type="button"
                       onClick={() => setShowWithdrawalModal(false)}
                       disabled={isRequestingWithdrawal}
-                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1251,7 +1265,7 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
             >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
                     <AlertTriangle className="w-6 h-6" /> Report Dispute
@@ -1265,7 +1279,7 @@ export default function DriverDashboardPage() {
                   </button>
                 </div>
 
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+                <div className="p-4 bg-red-500/10 rounded-xl mb-6">
                   <p className="text-sm text-red-700 dark:text-red-300 font-medium">
                     ⚠️ Are you experiencing an issue with this delivery?
                   </p>
@@ -1281,7 +1295,7 @@ export default function DriverDashboardPage() {
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
                       rows={4}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 transition-all resize-none"
                       placeholder="e.g. Customer unreachable, incorrect delivery location, payment issue..."
                       required
                       disabled={isSubmittingDispute}
@@ -1293,7 +1307,7 @@ export default function DriverDashboardPage() {
                       type="button"
                       onClick={() => setShowDisputeModal(false)}
                       disabled={isSubmittingDispute}
-                      className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1315,6 +1329,6 @@ export default function DriverDashboardPage() {
           </>
         )}
       </AnimatePresence>
-    </DashboardLayout>
+    </div>
   );
 }
