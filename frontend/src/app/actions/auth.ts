@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { TOTP, Secret } from "otpauth"; // ✅ Fixed: Import Secret directly
 
 // ============================================
 // 🔐 REGULAR LOGIN (Customer/Supplier/Driver)
@@ -61,7 +62,6 @@ export async function signup(formData: FormData) {
     return { error: error.message };
   }
 
-  // ✅ REMOVED: Admin approval requirement. Users can now log in immediately.
   redirect("/dashboard");
 }
 
@@ -108,54 +108,110 @@ export async function updateProfile(formData: FormData) {
 }
 
 // ============================================
-// 👑 ADMIN LOGIN (Special Admin Access)
+// 👑 ADMIN 2FA: INITIATE LOGIN (Step 1: Password Check & TOTP Setup/Verify)
 // ============================================
-export async function adminLogin(formData: FormData) {
+export async function initiateAdminLogin(formData: FormData) {
   const supabase = await createClient();
-
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
+  // 1. Attempt to sign in with password
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (authError) {
-    return { error: authError.message };
+  if (authError || !authData.user) {
+    return { error: "Invalid email or password" };
   }
 
-  if (!authData.user) {
-    return { error: "Authentication failed." };
-  }
+  // 2. Check if the user is actually an admin AND get their totp_secret
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role, totp_secret") 
+    .eq("id", authData.user.id)
+    .maybeSingle();
 
-  try {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, email, full_name")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      await supabase.auth.signOut();
-      return { error: `Database error: ${profileError.message}` };
-    }
-
-    if (!profile) {
-      await supabase.auth.signOut();
-      return { error: "Profile not found. Please contact support." };
-    }
-
-    if (profile.role !== "admin") {
-      await supabase.auth.signOut();
-      return { error: "Access denied. Admin privileges required." };
-    }
-
-    return { success: true };
-  } catch (error: any) {
+  if (profileError || !profile || profile.role !== "admin") {
     await supabase.auth.signOut();
-    return { error: error.message || "An unexpected error occurred" };
+    return { error: "Access denied. Admin privileges required." };
   }
+
+  // 3. Check if TOTP is set up
+  if (!profile.totp_secret) {
+    // Generate new TOTP secret
+    const totp = new TOTP({
+      issuer: "EWA Logistics",
+      label: `EWA Admin (${email})`,
+      algorithm: "SHA1",
+      digits: 6,
+      period: 30,
+    });
+
+    const secret = totp.secret.base32;
+
+    // Save secret to database
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ totp_secret: secret })
+      .eq("id", authData.user.id);
+
+    if (updateError) {
+      console.error("Failed to save TOTP secret:", updateError);
+      return { error: "Failed to setup 2FA. Please try again." };
+    }
+
+    return { 
+      success: true, 
+      requiresSetup: true, 
+      secret: secret,
+      qrCodeUrl: totp.toString(),
+      message: "Please set up Google Authenticator"
+    };
+  }
+
+  return { success: true, requires2FA: true, message: "Enter your 2FA code" };
+}
+
+// ============================================
+// 🔐 ADMIN 2FA: VERIFY TOTP CODE (Step 2: Check Google Authenticator Code)
+// ============================================
+export async function verifyAdmin2FA(otpCode: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Session expired. Please log in again." };
+  }
+
+  // Get TOTP secret from database
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("totp_secret")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile || !profile.totp_secret) {
+    return { error: "2FA not configured. Please contact support." };
+  }
+
+  // ✅ Fixed: Use Secret.fromBase32 instead of TOTP.Secret.fromBase32
+  const totp = new TOTP({
+    issuer: "EWA Logistics",
+    label: `EWA Admin (${user.email})`,
+    algorithm: "SHA1",
+    digits: 6,
+    period: 30,
+    secret: Secret.fromBase32(profile.totp_secret),
+  });
+
+  const delta = totp.validate({ token: otpCode, window: 1 });
+
+  if (delta === null) {
+    return { error: "Invalid or expired 2FA code." };
+  }
+
+  return { success: true, message: "Verification successful." };
 }
 
 // ============================================
@@ -169,14 +225,12 @@ export async function forgotPassword(formData: FormData) {
     return { error: "Please enter your email address." };
   }
 
-  // Sends the reset email with a link to /update-password
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/update-password`,
   });
 
   if (error) {
     console.error("Forgot password error:", error);
-    // We return success even if the email doesn't exist to prevent email enumeration
     return { success: true, message: "If an account with that email exists, we have sent a password reset link." };
   }
 
@@ -204,7 +258,6 @@ export async function resetPassword(formData: FormData) {
     return { error: "Password must be at least 6 characters long." };
   }
 
-  // Updates the user's password in Supabase Auth
   const { error } = await supabase.auth.updateUser({
     password: password,
   });

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, ArrowRight, Truck, AlertCircle } from "lucide-react";
+import { Mail, Lock, ArrowRight, Truck, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
 
@@ -20,7 +20,6 @@ export default function LoginPage() {
       setError(result.error);
       setIsLoading(false);
     }
-    // If successful, the server action will redirect to /dashboard
   }
 
   return (
@@ -28,7 +27,7 @@ export default function LoginPage() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md glass rounded-2xl border border-border p-8 shadow-2xl"
+        className="w-full max-w-md glass rounded-2xl border border-border p-8 shadow-2xl relative z-10"
       >
         {/* Header */}
         <div className="text-center mb-8">
@@ -56,11 +55,12 @@ export default function LoginPage() {
           <div>
             <label className="block text-sm font-medium mb-2">Email Address</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <input 
                 name="email"
                 type="email" 
                 required
+                autoComplete="email"
                 className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                 placeholder="you@example.com"
               />
@@ -70,22 +70,24 @@ export default function LoginPage() {
           <div>
             <label className="block text-sm font-medium mb-2">Password</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <input 
                 name="password"
                 type="password" 
                 required
+                autoComplete="current-password"
                 className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                 placeholder="••••••••"
               />
             </div>
-            {/* ✅ NEW: Forgot Password Link */}
+            
+            {/* ✅ WORKING ALTERNATIVE: Links directly to the working /signup page */}
             <div className="mt-2 text-right">
               <Link 
-                href="/forgot-password" 
-                className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors"
+                href="/signup" 
+                className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors hover:underline"
               >
-                Forgot Password?
+                Need an account? Sign up
               </Link>
             </div>
           </div>
@@ -93,10 +95,10 @@ export default function LoginPage() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-orange-500/20"
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-orange-500/20 active:scale-[0.98]"
           >
             {isLoading ? (
-              <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <><Loader2 className="w-5 h-5 animate-spin" /> Signing In...</>
             ) : (
               <>Sign In <ArrowRight className="w-4 h-4" /></>
             )}
@@ -104,10 +106,10 @@ export default function LoginPage() {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground mt-8">
-          Don't have an account?{" "}
-          <Link href="/signup" className="text-orange-500 hover:text-orange-600 font-medium transition-colors">
-            Create one here
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          Already have an account?{" "}
+          <Link href="/login" className="text-orange-500 hover:text-orange-600 font-medium transition-colors">
+            Sign in here
           </Link>
         </p>
       </motion.div>

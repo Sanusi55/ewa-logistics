@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Shield, BarChart3, Users, Package, Truck, 
   Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2,
-  Layers, CreditCard, AlertTriangle // ✅ Added missing icons for full navigation
+  Layers, CreditCard, AlertTriangle
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-// ✅ Updated to include ALL admin sections
 const navItems = [
   { name: "Overview", tab: "overview", icon: BarChart3 },
   { name: "Users", tab: "users", icon: Users },
@@ -44,6 +43,35 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
   const currentTab = searchParams.get("tab") || "overview";
+
+  // ✅ UPDATED: Automatic Session Timeout (5 Minutes of Inactivity)
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      // Set timeout for 5 minutes (5 * 60 * 1000 milliseconds = 300,000ms)
+      timeout = setTimeout(async () => {
+        await supabase.auth.signOut();
+        router.push("/login");
+      }, 5 * 60 * 1000); 
+    };
+
+    // List of events that count as "activity"
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    
+    // Add event listeners to the window
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    
+    // Start the timer initially
+    resetTimer();
+
+    // Cleanup function to remove listeners and clear timeout when component unmounts
+    return () => {
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+      clearTimeout(timeout);
+    };
+  }, [supabase, router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

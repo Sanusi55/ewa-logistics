@@ -11,12 +11,12 @@ import {
   Megaphone, History, Send, RefreshCw, X, Loader2,
   Edit2, UserX, UserCheck, Target, Mail, Lock, ArrowRight, 
   AlertCircle as AlertIcon, Eye, MessageSquare, Key, Layers, CreditCard,
-  LogOut, MapPin, Award
+  LogOut, MapPin, Award, ShieldCheck, Smartphone, Copy, Check
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
-import { adminLogin } from "@/app/actions/auth";
+import { initiateAdminLogin, verifyAdmin2FA } from "@/app/actions/auth";
 import { 
   getAdminStats,
   getAdminUsers,
@@ -163,12 +163,19 @@ export default function AdminPage() {
   const { addToast } = useToast();
   const supabase = createClient();
   
-  const [authState, setAuthState] = useState<"loading" | "login" | "dashboard">("loading");
+  const [authState, setAuthState] = useState<"loading" | "login" | "setup" | "2fa" | "dashboard">("loading");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   
+  // ✅ NEW: 2FA & Setup States
+  const [otpInput, setOtpInput] = useState("");
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
+  const [totpSecret, setTotpSecret] = useState("");
+  const [totpUri, setTotpUri] = useState("");
+  const [copied, setCopied] = useState(false);
+
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -210,21 +217,60 @@ export default function AdminPage() {
     if (tab) setActiveTab(tab);
   }, [searchParams]);
 
+  // 🔒 UPDATED: ENFORCE 2FA ON EVERY VISIT
   async function checkAuth() {
     setAuthState("loading");
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setAuthState("login"); return; }
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (profile?.role === "admin") { setAuthState("dashboard"); fetchAllData(); } 
-    else { setAuthState("login"); }
+    
+    // We intentionally bypass the automatic dashboard redirect.
+    // Even if the user has an active session, we require them to 
+    // enter their password and 2FA code every time they visit /admin.
+    setAuthState("login");
   }
 
   async function handleAdminLogin(formData: FormData) {
-    setIsLoggingIn(true); setLoginError("");
-    const result = await adminLogin(formData);
-    if (result?.error) { setLoginError(result.error); setIsLoggingIn(false); } 
-    else { await checkAuth(); setIsLoggingIn(false); }
+    setIsLoggingIn(true); 
+    setLoginError("");
+    const result = await initiateAdminLogin(formData);
+    
+    if (result?.error) { 
+      setLoginError(result.error); 
+      setIsLoggingIn(false); 
+    } else if (result?.requiresSetup) { 
+      setAuthState("setup"); 
+      setTotpSecret(result.secret || "");
+      setTotpUri(result.qrCodeUrl || "");
+      setIsLoggingIn(false); 
+    } else if (result?.requires2FA) { 
+      setAuthState("2fa"); 
+      setIsLoggingIn(false); 
+    }
   }
+
+  async function handleVerify2FA(e: React.FormEvent) {
+    e.preventDefault();
+    if (otpInput.length !== 6) {
+      addToast({ type: "error", title: "Invalid Code", message: "Please enter a 6-digit code." });
+      return;
+    }
+
+    setIsVerifyingOTP(true);
+    const result = await verifyAdmin2FA(otpInput);
+
+    if (result?.error) {
+      setLoginError(result.error);
+      setIsVerifyingOTP(false);
+    } else {
+      addToast({ type: "success", title: "Verified", message: "Access granted." });
+      setAuthState("dashboard");
+      fetchAllData();
+    }
+  }
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(totpSecret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (authState !== "dashboard") return;
@@ -423,47 +469,110 @@ export default function AdminPage() {
     );
   }
 
-  if (authState === "login") {
+  // ✅ UPDATED: Login, Setup, and 2FA States
+  if (authState === "login" || authState === "setup" || authState === "2fa") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl">
           <div className="text-center mb-8">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/20">
-              <Shield className="w-8 h-8 text-white" />
+              {authState === "2fa" || authState === "setup" ? <Smartphone className="w-8 h-8 text-white" /> : <Shield className="w-8 h-8 text-white" />}
             </div>
-            <h1 className="text-2xl font-bold mb-2 text-white">Admin Access</h1>
-            <p className="text-slate-400 text-sm">Restricted area - Authorized personnel only</p>
+            <h1 className="text-2xl font-bold mb-2 text-white">
+              {authState === "login" ? "Admin Access" : authState === "setup" ? "Setup 2FA" : "Two-Factor Authentication"}
+            </h1>
+            <p className="text-slate-400 text-sm">
+              {authState === "login" ? "Restricted area - Authorized personnel only" : 
+               authState === "setup" ? "Scan the QR code with Google Authenticator" : "Enter the 6-digit code from your app"}
+            </p>
           </div>
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <div className="flex items-start gap-3">
-              <AlertIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <div><p className="text-sm text-red-300 font-medium">Security Notice</p><p className="text-xs text-red-400/80 mt-1">All access attempts are logged and monitored.</p></div>
-            </div>
-          </div>
+
           {loginError && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400 text-sm">
               <AlertIcon className="w-5 h-5 flex-shrink-0" /><span>{loginError}</span>
             </motion.div>
           )}
-          <form action={handleAdminLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Admin Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input name="email" type="email" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="admin@ewalogistics.com" />
+
+          {authState === "login" ? (
+            <form action={handleAdminLogin} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">Admin Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input name="email" type="email" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="admin@ewalogistics.com" />
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-slate-300">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input name="password" type="password" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="••••••••" />
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input name="password" type="password" required className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white placeholder-slate-500" placeholder="••••••••" />
+                </div>
               </div>
+              <button type="submit" disabled={isLoggingIn} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20">
+                {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <><>Access Admin Panel</> <ArrowRight className="w-4 h-4" /></>}
+              </button>
+            </form>
+          ) : authState === "setup" ? (
+            <div className="space-y-6">
+              <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 flex flex-col items-center">
+                <p className="text-sm text-slate-300 mb-4 text-center">1. Open Google Authenticator and scan this QR code:</p>
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpUri)}`} 
+                  alt="QR Code" 
+                  className="w-48 h-48 bg-white p-2 rounded-lg mb-4"
+                />
+                <p className="text-sm text-slate-300 mb-2 text-center">2. Or enter this key manually:</p>
+                <div className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg border border-slate-600">
+                  <code className="text-orange-400 font-mono text-sm tracking-wider">{totpSecret}</code>
+                  <button onClick={copyToClipboard} className="text-slate-400 hover:text-white transition-colors">
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <form onSubmit={handleVerify2FA} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-slate-300">Enter the 6-digit code from your app</label>
+                  <input 
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    type="text" 
+                    required 
+                    maxLength={6}
+                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white text-center tracking-[0.5em] font-mono text-xl" 
+                    placeholder="000000" 
+                    autoFocus
+                  />
+                </div>
+                <button type="submit" disabled={isVerifyingOTP} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20">
+                  {isVerifyingOTP ? <Loader2 className="w-5 h-5 animate-spin" /> : <><>Verify & Access</> <ArrowRight className="w-4 h-4" /></>}
+                </button>
+              </form>
             </div>
-            <button type="submit" disabled={isLoggingIn} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20">
-              {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <><>Access Admin Panel</> <ArrowRight className="w-4 h-4" /></>}
-            </button>
-          </form>
+          ) : (
+            <form onSubmit={handleVerify2FA} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">Verification Code</label>
+                <input 
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  type="text" 
+                  required 
+                  maxLength={6}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white text-center tracking-[0.5em] font-mono text-xl" 
+                  placeholder="000000" 
+                  autoFocus
+                />
+              </div>
+              <button type="submit" disabled={isVerifyingOTP} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-500 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-red-500/20">
+                {isVerifyingOTP ? <Loader2 className="w-5 h-5 animate-spin" /> : <><>Verify & Access</> <ArrowRight className="w-4 h-4" /></>}
+              </button>
+              <button type="button" onClick={() => { setAuthState("login"); setLoginError(""); }} className="w-full text-sm text-slate-400 hover:text-white transition-colors">
+                ← Back to Password Login
+              </button>
+            </form>
+          )}
+
           <div className="mt-6 text-center">
             <Link href="/" className="text-sm text-slate-400 hover:text-white transition-colors">← Back to Home</Link>
           </div>
@@ -489,7 +598,6 @@ export default function AdminPage() {
     "cancelled": { color: "bg-red-500/10 text-red-400 border-red-500/30", label: "Cancelled" },
   };
 
-  // ✅ CLEAN RETURN: Only the inner content, NO Sidebar, NO Header
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
       {isLoading ? (

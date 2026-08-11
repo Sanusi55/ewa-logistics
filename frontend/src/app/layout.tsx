@@ -9,7 +9,18 @@ import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 
+export const viewport: Viewport = {
+  themeColor: "#f97316",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
+  // ✅ CRITICAL FIX: This resolves the "metadataBase property is not set" terminal warning
+  metadataBase: new URL("https://ewalogistics.com"),
+  
   title: {
     default: "EWA Logistics | Premium Construction Materials & Delivery",
     template: "%s | EWA Logistics"
@@ -28,7 +39,7 @@ export const metadata: Metadata = {
   publisher: "EWA Logistics Limited",
   manifest: "/manifest.json",
   
-  // ✅ NEW: Google Search Console Verification
+  // ✅ Google Search Console Verification
   verification: {
     google: "cjuYcuTzi9SOUy-bZkwQff5_DTlc0TQJcNdUrFMxR4E",
   },
@@ -96,14 +107,6 @@ export const metadata: Metadata = {
   }
 };
 
-export const viewport: Viewport = {
-  themeColor: "#f97316",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -141,8 +144,7 @@ export default function RootLayout({
           </ToastProvider>
         </ThemeProvider>
 
-        {/* ⚠️ TEMPORARILY DISABLED TO TEST NAVIGATION ERR_FAILED ISSUE */}
-        {/* 
+        {/* ✅ PWA Service Worker Registration (Re-enabled) */}
         <Script id="register-sw" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
@@ -159,7 +161,6 @@ export default function RootLayout({
             }
           `}
         </Script>
-        */}
       </body>
     </html>
   );

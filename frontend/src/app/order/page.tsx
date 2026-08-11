@@ -15,14 +15,6 @@ import { getMaterialById } from "@/app/actions/materials";
 import { initializeSecurePayment } from "@/app/actions/paystack";
 import { createClient } from "@/lib/supabase/client";
 
-const nigerianStates = [
-  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
-  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo", "Jigawa", 
-  "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", 
-  "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara", 
-  "Federal Capital Territory"
-];
-
 function OrderPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -260,18 +252,16 @@ function OrderPageContent() {
                       </div>
                     </div>
 
+                    {/* ✅ UPDATED: Replaced dropdown with a standard text input for 100% mobile compatibility */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5">State <span className="text-red-500">*</span></label>
-                      <select
+                      <input 
+                        type="text" 
                         value={formData.state}
                         onChange={(e) => setFormData({...formData, state: e.target.value})}
                         className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all ${errors.state ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
-                      >
-                        <option value="">Select State</option>
-                        {nigerianStates.map(state => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </select>
+                        placeholder="e.g. Lagos"
+                      />
                       {errors.state && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.state}</p>}
                     </div>
 
@@ -400,7 +390,6 @@ function OrderPageContent() {
                 )}
 
                 <div className="mb-6">
-                  {/* ✅ NEW: Custom Delivery Offer Toggle */}
                   <label className="flex items-center gap-2 cursor-pointer mb-3">
                     <input 
                       type="checkbox" 

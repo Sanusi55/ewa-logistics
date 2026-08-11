@@ -82,9 +82,9 @@ export async function getAdminStats() {
   const delivered = orders?.filter(o => o.status === "delivered").length || 0;
   const cancelled = orders?.filter(o => o.status === "cancelled").length || 0;
 
-  const totalRevenue = orders?.filter(o => o.status === "delivered").reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
-  const pendingRevenue = orders?.filter(o => o.status !== "delivered" && o.status !== "cancelled").reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
-  const totalDriverEarnings = orders?.filter(o => o.status === "delivered" && o.driver_id).reduce((sum, o) => sum + (o.delivery_fee || 0), 0) || 0;
+  const totalRevenue = orders?.filter(o => o.status === "delivered").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
+  const pendingRevenue = orders?.filter(o => o.status !== "delivered" && o.status !== "cancelled").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
+  const totalDriverEarnings = orders?.filter(o => o.status === "delivered" && o.driver_id).reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0) || 0;
 
   const revenueByDay = [];
   for (let i = 6; i >= 0; i--) {
@@ -93,12 +93,12 @@ export async function getAdminStats() {
     const dayStart = new Date(date.setHours(0, 0, 0, 0)).toISOString();
     const dayEnd = new Date(date.setHours(23, 59, 59, 999)).toISOString();
     
-    const dayRevenue = orders?.filter(o => {
+    const dayRevenue = orders?.filter((o: any) => {
       const orderDate = new Date(o.created_at).toISOString();
       return orderDate >= dayStart && orderDate <= dayEnd && o.status === "delivered";
-    }).reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
+    }).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
 
-    const dayOrdersCount = orders?.filter(o => {
+    const dayOrdersCount = orders?.filter((o: any) => {
       const orderDate = new Date(o.created_at).toISOString();
       return orderDate >= dayStart && orderDate <= dayEnd;
     }).length || 0;
@@ -113,9 +113,9 @@ export async function getAdminStats() {
   const totalCompleted = delivered + cancelled;
   const successRate = totalCompleted > 0 ? Math.round((delivered / totalCompleted) * 100) : 0;
 
-  const validBids = bids?.filter(b => b.bid_amount > 0) || [];
+  const validBids = bids?.filter((b: any) => b.bid_amount > 0) || [];
   const avgBidAmount = validBids.length > 0 
-    ? Math.round(validBids.reduce((sum, b) => sum + (b.bid_amount || 0), 0) / validBids.length)
+    ? Math.round(validBids.reduce((sum: number, b: any) => sum + (b.bid_amount || 0), 0) / validBids.length)
     : 0;
 
   return {
@@ -327,7 +327,7 @@ export async function broadcastNotification(title: string, message: string, targ
     return { success: false, error: "No users found for selected roles" };
   }
 
-  const notifications = users.map(u => ({
+  const notifications = users.map((u: any) => ({
     user_id: u.id,
     title,
     message,
