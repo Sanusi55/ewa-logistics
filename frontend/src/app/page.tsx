@@ -249,7 +249,6 @@ export default function Home() {
                 Order Materials <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </MagneticButton>
               
-              {/* ✅ REPLACED MagneticButton with standard Next.js Link to fix ERR_FAILED */}
               <Link 
                 href="/signup"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 border border-white/30 text-white font-semibold rounded-full hover:bg-white/10 backdrop-blur-sm transition-all"
@@ -576,63 +575,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 🦶 FOOTER WITH LOGO */}
-      <footer className="py-12 px-4 md:px-6 border-t border-border bg-background">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
-          <div>
-            <Link href="/" className="flex items-center gap-3 mb-4">
-              <img 
-                src="/logo.png" 
-                alt="EWA Logistics" 
-                className="h-10 w-auto object-contain"
-              />
-              <span className="font-bold text-lg">EWA Logistics</span>
-            </Link>
-            <p className="text-sm text-muted-foreground mb-4">Premium logistics and construction materials marketplace. Secure. Transparent. Reliable.</p>
-            <p className="text-xs text-muted-foreground">RC: 9608218</p>
-          </div>
-          <div>
-            <h4 className="font-semibold mb-4">Platform</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link href="/materials" className="hover:text-orange-500 transition-colors">Order Materials</Link></li>
-              <li><Link href="/signup" className="hover:text-orange-500 transition-colors">Driver Portal</Link></li>
-              <li><Link href="/signup" className="hover:text-orange-500 transition-colors">Supplier Portal</Link></li>
-              <li><Link href="/dashboard/tracking" className="hover:text-orange-500 transition-colors">Live Tracking</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold mb-4">Company</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link href="/about" className="hover:text-orange-500 transition-colors">About Us</Link></li>
-              <li><Link href="/delivery-code" className="hover:text-orange-500 transition-colors">How Delivery Works</Link></li>
-              <li><Link href="/careers" className="hover:text-orange-500 transition-colors">Careers</Link></li>
-              <li><Link href="/press" className="hover:text-orange-500 transition-colors">Press & Media</Link></li>
-              <li><Link href="/blog" className="hover:text-orange-500 transition-colors">Blog</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link href="/privacy" className="hover:text-orange-500 transition-colors flex items-center gap-2">
-                <FileText className="w-3 h-3" /> Privacy Policy
-              </Link></li>
-              <li><Link href="/terms" className="hover:text-orange-500 transition-colors flex items-center gap-2">
-                <FileText className="w-3 h-3" /> Terms of Service
-              </Link></li>
-              <li><Link href="/escrow-policy" className="hover:text-orange-500 transition-colors flex items-center gap-2">
-                <Shield className="w-3 h-3" /> Escrow Policy
-              </Link></li>
-              <li><Link href="/refund-policy" className="hover:text-orange-500 transition-colors flex items-center gap-2">
-                <FileText className="w-3 h-3" /> Refund Policy
-              </Link></li>
-            </ul>
-          </div>
-        </div>
-        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground">
-          <p className="mb-2">© {new Date().getFullYear()} EWA Logistics Limited. All rights reserved.</p>
-          <p className="text-xs">Abuja, Nigeria | RC: 9608218</p>
-        </div>
-      </footer>
+      {/* ✅ FOOTER REMOVED FROM HERE. The global <Footer /> component in layout.tsx handles this now. */}
+      
     </div>
   );
 }

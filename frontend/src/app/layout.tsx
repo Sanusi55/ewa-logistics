@@ -8,6 +8,7 @@ import CommandPalette from "@/components/command-palette";
 import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
+import Footer from "@/components/footer"; // ✅ NEW: Footer import
 
 export const viewport: Viewport = {
   themeColor: "#f97316",
@@ -126,7 +127,8 @@ export default function RootLayout({
           }
         `}</style>
       </head>
-      <body className="antialiased">
+      {/* ✅ UPDATED: Added flex classes to push footer to the bottom */}
+      <body className="antialiased flex flex-col min-h-screen">
         <CursorSpotlight />
         
         <ThemeProvider
@@ -136,7 +138,14 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ToastProvider>
-            {children}
+            {/* ✅ UPDATED: Wrapped children in main tag to take up remaining space */}
+            <main className="flex-1">
+              {children}
+            </main>
+            
+            {/* ✅ NEW: Footer component added globally */}
+            <Footer />
+            
             <ChatWidget />
             <CommandPalette />
             <MaterialCalculator />
