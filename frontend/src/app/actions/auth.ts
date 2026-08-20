@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { TOTP, Secret } from "otpauth"; // ✅ Fixed: Import Secret directly
 
 // ============================================
-// 🔐 REGULAR LOGIN (Customer/Supplier/Driver)
+// 🔐 REGULAR LOGIN (Customer/Supplier/Driver/Fleet)
 // ============================================
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -28,8 +28,11 @@ export async function login(formData: FormData) {
       .eq("id", authData.user.id)
       .maybeSingle();
 
+    // ✅ UPDATED: Route users to their specific dashboards based on their role
     if (profile?.role === "admin") {
       redirect("/admin");
+    } else if (profile?.role === "fleet_company") {
+      redirect("/dashboard/fleet"); // ✅ Fleet Companies now go to their specific dashboard
     }
   }
 

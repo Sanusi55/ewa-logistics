@@ -26,20 +26,30 @@ import { createClient } from "@/lib/supabase/client";
 
 const roleMenus: Record<string, { name: string; icon: any; href: string }[]> = {
   customer: [
+    { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard/customer" },
     { name: "My Orders & Bids", icon: Package, href: "/dashboard/customer" },
     { name: "Live Tracking", icon: MapPin, href: "/dashboard/tracking" },
     { name: "Settings", icon: Settings, href: "/dashboard/settings" },
   ],
   supplier: [
+    { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard/supplier" },
     { name: "My Orders", icon: Package, href: "/dashboard/supplier" },
-    { name: "My Materials", icon: LayoutDashboard, href: "/dashboard/supplier/materials" },
+    { name: "My Materials", icon: Truck, href: "/dashboard/supplier" },
     { name: "Settings", icon: Settings, href: "/dashboard/settings" },
   ],
   driver: [
     { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard/driver" },
-    { name: "My Deliveries", icon: MapPin, href: "/dashboard/driver/deliveries" },
-    { name: "Earnings", icon: CreditCard, href: "/dashboard/driver/earnings" },
+    { name: "My Deliveries", icon: MapPin, href: "/dashboard/driver" },
+    { name: "Earnings", icon: CreditCard, href: "/dashboard/driver" },
     { name: "Settings", icon: Settings, href: "/dashboard/settings" },
+  ],
+  // ✅ FIXED: Use ?tab= query parameters instead of # hashes for reliable tab switching
+  fleet_company: [
+    { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard/fleet" },
+    { name: "My Fleet", icon: Truck, href: "/dashboard/fleet?tab=fleet" },
+    { name: "Deliveries", icon: Package, href: "/dashboard/fleet?tab=deliveries" },
+    { name: "Earnings", icon: CreditCard, href: "/dashboard/fleet?tab=earnings" },
+    { name: "Settings", icon: Settings, href: "/dashboard/fleet?tab=settings" },
   ],
   admin: [
     { name: "Overview", icon: LayoutDashboard, href: "/admin" },
@@ -123,7 +133,6 @@ export default function DashboardLayout({
       </div>
 
       {/* 🧭 Sidebar */}
-      {/* ✅ BULLETPROOF FIX: "fixed inset-y-0 left-0" guarantees full screen height on mobile */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-background border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0
         ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
@@ -145,10 +154,11 @@ export default function DashboardLayout({
         </div>
 
         {/* Dynamic Menu Items */}
-        {/* ✅ min-h-0 is the magic flexbox fix that allows this to shrink and push the footer down */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar min-h-0">
           {menuItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard/customer" && pathname.startsWith(item.href));
+            // ✅ FIXED: Split the href to ignore query params when checking if the path is active
+            const itemPath = item.href.split('?')[0];
+            const isActive = pathname === itemPath || (itemPath !== "/dashboard/customer" && pathname.startsWith(itemPath));
             
             return (
               <Link
@@ -208,7 +218,7 @@ export default function DashboardLayout({
         {/* Top Bar */}
         <header className="h-16 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 md:px-6 z-30 mt-16 md:mt-0">
           <h1 className="text-lg font-semibold hidden md:block capitalize">
-            {userRole} Dashboard
+            {userRole.replace('_', ' ')} Dashboard
           </h1>
           <div className="md:hidden" /> 
           
@@ -228,7 +238,7 @@ export default function DashboardLayout({
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-semibold">{currentUser?.full_name || "User"}</p>
-                <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
+                <p className="text-xs text-muted-foreground capitalize">{userRole.replace('_', ' ')}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:ring-2 ring-orange-500/50 transition-all">
                 {initials}

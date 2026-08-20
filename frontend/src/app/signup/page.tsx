@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, Truck, Building2, Shield, Mail, Lock, Phone, 
-  MapPin, ArrowRight, CheckCircle, Loader2, Eye, EyeOff, AlertCircle
+  MapPin, ArrowRight, CheckCircle, Loader2, Eye, EyeOff, AlertCircle, Layers
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -40,12 +40,21 @@ const roles = [
   },
   { 
     id: "driver", 
-    label: "Driver", 
-    desc: "I want to deliver materials",
+    label: "Individual Driver", 
+    desc: "I want to deliver materials with my own truck",
     icon: Truck,
     color: "from-purple-500 to-pink-500",
     bg: "bg-purple-500/10",
     border: "border-purple-500"
+  },
+  {
+    id: "fleet_company",
+    label: "Truck/Fleet Company",
+    desc: "I manage a fleet of trucks and drivers",
+    icon: Layers,
+    color: "from-emerald-500 to-teal-500",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500"
   },
 ];
 
@@ -66,6 +75,8 @@ export default function SignupPage() {
     password: "",
     state: "",
     companyName: "",
+    rcNumber: "",
+    fleetSize: "",
     truckDetails: "",
   });
 
@@ -109,7 +120,12 @@ export default function SignupPage() {
       newErrors.companyName = "Company name is required for suppliers";
     }
     if (selectedRole === "driver" && !formData.truckDetails.trim()) {
-      newErrors.truckDetails = "Truck details are required for drivers";
+      newErrors.truckDetails = "Truck details are required for individual drivers";
+    }
+    if (selectedRole === "fleet_company") {
+      if (!formData.companyName.trim()) newErrors.companyName = "Company name is required";
+      if (!formData.rcNumber.trim()) newErrors.rcNumber = "RC Number is required for KYC";
+      if (!formData.fleetSize.trim()) newErrors.fleetSize = "Estimated fleet size is required";
     }
 
     setErrors(newErrors);
@@ -141,9 +157,6 @@ export default function SignupPage() {
     setIsSubmitting(true);
 
     try {
-      console.log("📝 Starting signup with role:", selectedRole);
-      console.log("📝 Form data:", formData);
-
       // ✅ Step 1: Create auth user with role in metadata
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
@@ -155,13 +168,14 @@ export default function SignupPage() {
             role: selectedRole,
             state: formData.state,
             company_name: formData.companyName,
+            rc_number: formData.rcNumber,
+            fleet_size: formData.fleetSize,
             truck_details: formData.truckDetails,
           },
         },
       });
 
       if (error) {
-        console.error("❌ Signup error:", error);
         addToast({ 
           type: "error", 
           title: "Signup Failed", 
@@ -171,8 +185,6 @@ export default function SignupPage() {
         return;
       }
 
-      console.log("✅ Auth user created:", data.user?.id);
-
       // ✅ Step 2: Update profile with role and additional info
       if (data.user) {
         const profileData: any = {
@@ -181,14 +193,14 @@ export default function SignupPage() {
           role: selectedRole,
           state: formData.state,
           phone: formData.phone,
-          full_name: selectedRole === "supplier" ? formData.companyName : formData.fullName,
-          company_name: selectedRole === "supplier" ? formData.companyName : null,
+          full_name: (selectedRole === "supplier" || selectedRole === "fleet_company") ? formData.companyName : formData.fullName,
+          company_name: (selectedRole === "supplier" || selectedRole === "fleet_company") ? formData.companyName : null,
+          rc_number: selectedRole === "fleet_company" ? formData.rcNumber : null,
+          fleet_size: selectedRole === "fleet_company" ? formData.fleetSize : null,
           truck_details: selectedRole === "driver" ? formData.truckDetails : null,
           updated_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
         };
-
-        console.log("📝 Upserting profile with role:", selectedRole);
 
         const { error: upsertError } = await supabase
           .from("profiles")
@@ -197,8 +209,6 @@ export default function SignupPage() {
 
         if (upsertError) {
           console.error("❌ Profile upsert error:", upsertError);
-        } else {
-          console.log("✅ Profile upserted successfully");
         }
 
         // ✅ Step 3: Verify the role was set correctly
@@ -208,10 +218,7 @@ export default function SignupPage() {
           .eq("id", data.user.id)
           .single();
 
-        console.log("🔍 Verification - Profile role:", verifyData?.role);
-
         if (verifyData?.role !== selectedRole) {
-          console.warn("⚠️ Role mismatch! Fixing...");
           await supabase
             .from("profiles")
             .update({ role: selectedRole })
@@ -220,13 +227,12 @@ export default function SignupPage() {
 
         // ✅ Step 4: LOGOUT the user after signup (prevents auto-login)
         await supabase.auth.signOut();
-        console.log("✅ User logged out after signup");
       }
 
       addToast({ 
         type: "success", 
         title: "Account Created! 🎉", 
-        message: `Welcome to EWA Logistics! Your ${selectedRole} account has been created. Please login to continue.` 
+        message: `Welcome to EWA Logistics! Your ${selectedRole.replace('_', ' ')} account has been created. Please login to continue.` 
       });
 
       setTimeout(() => {
@@ -234,7 +240,6 @@ export default function SignupPage() {
       }, 2000);
 
     } catch (error: any) {
-      console.error("❌ Signup exception:", error);
       addToast({ 
         type: "error", 
         title: "Error", 
@@ -302,7 +307,7 @@ export default function SignupPage() {
                           setSelectedRole(role.id);
                           setErrors({});
                         }}
-                        className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                        className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer text-left ${
                           isSelected 
                             ? `${role.border} ${role.bg} shadow-lg` 
                             : "border-border hover:border-orange-500/30 hover:bg-muted/30"
@@ -311,7 +316,7 @@ export default function SignupPage() {
                         <div className={`p-3 rounded-lg bg-gradient-to-br ${role.color} text-white flex-shrink-0`}>
                           <Icon className="w-6 h-6" />
                         </div>
-                        <div className="flex-1 text-left">
+                        <div className="flex-1">
                           <p className="font-bold text-foreground">{role.label}</p>
                           <p className="text-sm text-muted-foreground">{role.desc}</p>
                         </div>
@@ -366,13 +371,13 @@ export default function SignupPage() {
                   <div>
                     <h2 className="text-xl font-bold">Your Details</h2>
                     <p className="text-sm text-muted-foreground">
-                      Signing up as a <span className="font-semibold text-orange-500 capitalize">{selectedRole}</span>
+                      Signing up as a <span className="font-semibold text-orange-500 capitalize">{selectedRole.replace('_', ' ')}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  {selectedRole === "supplier" && (
+                  {(selectedRole === "supplier" || selectedRole === "fleet_company") && (
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Company Name <span className="text-red-500">*</span></label>
                       <input
@@ -380,9 +385,36 @@ export default function SignupPage() {
                         value={formData.companyName}
                         onChange={(e) => setFormData({...formData, companyName: e.target.value})}
                         className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all ${errors.companyName ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
-                        placeholder="e.g. Sagamu Quarry Ltd"
+                        placeholder="e.g. ABC Logistics Ltd"
                       />
                       {errors.companyName && <p className="text-xs text-red-500 mt-1">{errors.companyName}</p>}
+                    </div>
+                  )}
+
+                  {selectedRole === "fleet_company" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">RC Number <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={formData.rcNumber}
+                          onChange={(e) => setFormData({...formData, rcNumber: e.target.value})}
+                          className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all ${errors.rcNumber ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
+                          placeholder="e.g. RC 123456"
+                        />
+                        {errors.rcNumber && <p className="text-xs text-red-500 mt-1">{errors.rcNumber}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Fleet Size <span className="text-red-500">*</span></label>
+                        <input
+                          type="number"
+                          value={formData.fleetSize}
+                          onChange={(e) => setFormData({...formData, fleetSize: e.target.value})}
+                          className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all ${errors.fleetSize ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
+                          placeholder="e.g. 15"
+                        />
+                        {errors.fleetSize && <p className="text-xs text-red-500 mt-1">{errors.fleetSize}</p>}
+                      </div>
                     </div>
                   )}
 
@@ -401,7 +433,7 @@ export default function SignupPage() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium mb-1.5">Full Name (Admin/Contact Person) <span className="text-red-500">*</span></label>
                     <input
                       type="text"
                       value={formData.fullName}

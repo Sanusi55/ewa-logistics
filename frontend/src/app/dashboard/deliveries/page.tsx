@@ -5,54 +5,22 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Truck, MapPin, Calendar, Clock, Phone, MessageCircle, 
   Search, Filter, CheckCircle, AlertCircle, XCircle, 
-  Package, ArrowUpRight, Navigation, User
+  Package, ArrowUpRight, Navigation, User, Loader2, Plus
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
-
-// Mock Deliveries Data (Using Naira ₦)
-const mockDeliveries = [
-  { 
-    id: "DEL-8821", orderId: "ORD-9921", driver: "Emmanuel Okafor", phone: "+234 803 123 4567", 
-    vehicle: "Volvo Tipper (ABC-123-DE)", material: "5 tons 1-Inch Granite", 
-    pickup: "Sagamu Quarry, Ogun State", dropoff: "Lekki Phase 1, Lagos", 
-    status: "in-transit", earnings: 45000, eta: "2 hours", date: "2026-06-01" 
-  },
-  { 
-    id: "DEL-8818", orderId: "ORD-9918", driver: "Musa Abdullahi", phone: "+234 805 987 6543", 
-    vehicle: "Man Diesel (XYZ-456-FG)", material: "10 tons Sharp Sand", 
-    pickup: "Ota Sand Pit, Ogun State", dropoff: "Ikeja, Lagos", 
-    status: "delivered", earnings: 30000, eta: "Completed", date: "2026-05-28" 
-  },
-  { 
-    id: "DEL-8815", orderId: "ORD-9915", driver: "Unassigned", phone: "N/A", 
-    vehicle: "Pending Assignment", material: "20 tons Stone Base", 
-    pickup: "Abeokuta Quarry, Ogun State", dropoff: "Wuse 2, Abuja", 
-    status: "scheduled", earnings: 85000, eta: "Pending", date: "2026-05-25" 
-  },
-  { 
-    id: "DEL-8810", orderId: "ORD-9910", driver: "John T.", phone: "+234 809 111 2222", 
-    vehicle: "Mack Truck (JKL-789-HI)", material: "3 tons 3/4 Granite", 
-    pickup: "Ibadan Quarry, Oyo State", dropoff: "Port Harcourt, Rivers", 
-    status: "failed", earnings: 0, eta: "Cancelled", date: "2026-05-20" 
-  },
-  { 
-    id: "DEL-8805", orderId: "ORD-9905", driver: "Samuel O.", phone: "+234 802 333 4444", 
-    vehicle: "Sinotruk (MNO-012-JK)", material: "8 tons Hardcore Granite", 
-    pickup: "Ewekoro Cement, Ogun State", dropoff: "Ibadan, Oyo State", 
-    status: "delivered", earnings: 55000, eta: "Completed", date: "2026-05-15" 
-  },
-];
+import { createClient } from "@/lib/supabase/client";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   "scheduled": { label: "Scheduled", color: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-100 dark:bg-yellow-900/30", icon: Clock },
-  "in-transit": { label: "In Transit", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", icon: Navigation },
+  "loading": { label: "Loading", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", icon: Package },
+  "in_transit": { label: "In Transit", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", icon: Navigation },
   "delivered": { label: "Delivered", color: "text-green-600 dark:text-green-400", bg: "bg-green-100 dark:bg-green-900/30", icon: CheckCircle },
-  "failed": { label: "Failed / Cancelled", color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30", icon: XCircle },
+  "completed": { label: "Completed", color: "text-green-600 dark:text-green-400", bg: "bg-green-100 dark:bg-green-900/30", icon: CheckCircle },
+  "cancelled": { label: "Cancelled", color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30", icon: XCircle },
 };
 
-// Skeleton Loader
 function DeliverySkeleton() {
   return (
     <div className="glass p-5 rounded-xl border border-border animate-pulse space-y-4">
@@ -64,54 +32,131 @@ function DeliverySkeleton() {
         <div className="h-3 w-full bg-muted rounded" />
         <div className="h-3 w-3/4 bg-muted rounded" />
       </div>
-      <div className="flex gap-4 pt-2">
-        <div className="h-8 w-20 bg-muted rounded-lg" />
-        <div className="h-8 w-20 bg-muted rounded-lg" />
-      </div>
     </div>
   );
 }
 
 export default function DeliveriesPage() {
   const { addToast } = useToast();
+  const supabase = createClient();
+  
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [trucks, setTrucks] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  
+  // Assignment Modal State
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
+  const [assignTruckId, setAssignTruckId] = useState("");
+  const [assignDriverId, setAssignDriverId] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1200);
-    return () => clearTimeout(timer);
+    fetchDeliveriesData();
   }, []);
 
-  const filteredDeliveries = mockDeliveries.filter(delivery => {
+  async function fetchDeliveriesData() {
+    setIsLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setIsLoading(false); return; }
+
+    // 1. Fetch Deliveries assigned to this Fleet Company
+    const { data: ordersData, error: ordersError } = await supabase
+      .from("orders")
+      .select(`
+        id,
+        material_type,
+        tonnage,
+        pickup_location,
+        delivery_location,
+        status,
+        delivery_fee,
+        truck_id,
+        driver_id,
+        created_at,
+        trucks (truck_name, plate_number),
+        profiles!orders_driver_id_fkey (full_name, phone)
+      `)
+      .eq("fleet_company_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (!ordersError && ordersData) {
+      setDeliveries(ordersData);
+    }
+
+    // 2. Fetch Fleet's Trucks and Drivers for the assignment dropdown
+    const { data: trucksData } = await supabase.from("trucks").select("id, truck_name, plate_number, status").eq("company_id", user.id).eq("status", "active");
+    if (trucksData) setTrucks(trucksData);
+
+    const { data: driversData } = await supabase.from("fleet_drivers").select("id, full_name, phone, truck_id, status").eq("company_id", user.id).eq("status", "active");
+    if (driversData) setDrivers(driversData);
+
+    setIsLoading(false);
+  }
+
+  const handleOpenAssignModal = (delivery: any) => {
+    setSelectedDelivery(delivery);
+    setAssignTruckId(delivery.truck_id || "");
+    setAssignDriverId(delivery.driver_id || "");
+    setShowAssignModal(true);
+  };
+
+  const handleAssignDelivery = async () => {
+    if (!selectedDelivery || !assignTruckId || !assignDriverId) {
+      addToast({ type: "error", title: "Error", message: "Please select both a truck and a driver." });
+      return;
+    }
+
+    setIsAssigning(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ 
+        truck_id: assignTruckId, 
+        driver_id: assignDriverId,
+        status: "loading" // Move to loading once assigned
+      })
+      .eq("id", selectedDelivery.id);
+
+    if (error) {
+      addToast({ type: "error", title: "Error", message: error.message });
+    } else {
+      addToast({ type: "success", title: "Assigned!", message: "Truck and driver successfully assigned to this delivery." });
+      setShowAssignModal(false);
+      fetchDeliveriesData(); // Refresh data
+    }
+    setIsAssigning(false);
+  };
+
+  const filteredDeliveries = deliveries.filter((delivery: any) => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
-      delivery.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      delivery.driver.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.dropoff.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.material.toLowerCase().includes(searchQuery.toLowerCase());
+      delivery.id.toLowerCase().includes(searchLower) || 
+      (delivery.profiles?.full_name || "").toLowerCase().includes(searchLower) ||
+      delivery.delivery_location.toLowerCase().includes(searchLower) ||
+      delivery.material_type.toLowerCase().includes(searchLower);
+    
     const matchesStatus = statusFilter === "all" || delivery.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
-    total: mockDeliveries.length,
-    active: mockDeliveries.filter(d => d.status === "in-transit" || d.status === "scheduled").length,
-    completed: mockDeliveries.filter(d => d.status === "delivered").length,
-    totalEarnings: mockDeliveries.reduce((acc, curr) => acc + curr.earnings, 0),
+    total: deliveries.length,
+    active: deliveries.filter((d: any) => ["scheduled", "loading", "in_transit"].includes(d.status)).length,
+    completed: deliveries.filter((d: any) => ["delivered", "completed"].includes(d.status)).length,
+    totalEarnings: deliveries
+      .filter((d: any) => ["delivered", "completed"].includes(d.status))
+      .reduce((acc: number, curr: any) => acc + (curr.delivery_fee * 0.95), 0), // 5% commission deducted
   };
 
   const formatNaira = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount || 0);
   };
 
-  const handleContactDriver = (driver: string, phone: string) => {
-    if (phone === "N/A") {
-      addToast({ type: "warning", title: "Driver Unassigned", message: "This delivery does not have a driver assigned yet." });
-    } else {
-      addToast({ type: "success", title: "Opening Chat", message: `Connecting you to ${driver}...` });
-      // In a real app, this would open WhatsApp or an in-app chat
-    }
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <DashboardLayout>
@@ -120,23 +165,18 @@ export default function DeliveriesPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Active Deliveries</h1>
-            <p className="text-muted-foreground mt-1">Track your materials from quarry to construction site.</p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Fleet Deliveries</h1>
+            <p className="text-muted-foreground mt-1">Manage and track all deliveries assigned to your fleet.</p>
           </div>
-          <Link href="/materials">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20">
-              <Package className="w-4 h-4" /> Order Materials
-            </button>
-          </Link>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total Deliveries", value: stats.total, icon: Truck, color: "text-orange-500", bg: "bg-orange-500/10" },
-            { label: "Active / Scheduled", value: stats.active, icon: Navigation, color: "text-blue-500", bg: "bg-blue-500/10" },
+            { label: "Active / Loading", value: stats.active, icon: Navigation, color: "text-blue-500", bg: "bg-blue-500/10" },
             { label: "Completed", value: stats.completed, icon: CheckCircle, color: "text-green-500", bg: "bg-green-500/10" },
-            { label: "Total Driver Earnings", value: formatNaira(stats.totalEarnings), icon: ArrowUpRight, color: "text-purple-500", bg: "bg-purple-500/10" },
+            { label: "Net Fleet Earnings", value: formatNaira(stats.totalEarnings), icon: ArrowUpRight, color: "text-purple-500", bg: "bg-purple-500/10" },
           ].map((stat, i) => (
             <motion.div 
               key={stat.label}
@@ -168,8 +208,8 @@ export default function DeliveriesPage() {
               className="w-full pl-10 pr-4 py-2.5 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm transition-all"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 custom-scrollbar">
-            {["all", "scheduled", "in-transit", "delivered", "failed"].map((status) => (
+          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+            {["all", "scheduled", "loading", "in_transit", "completed", "cancelled"].map((status) => (
               <button 
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -179,7 +219,7 @@ export default function DeliveriesPage() {
                     : "bg-muted hover:bg-muted/80 text-muted-foreground"
                 }`}
               >
-                {status.replace("-", " ")}
+                {status.replace("_", " ")}
               </button>
             ))}
           </div>
@@ -191,9 +231,11 @@ export default function DeliveriesPage() {
             Array(3).fill(0).map((_, i) => <DeliverySkeleton key={i} />)
           ) : filteredDeliveries.length > 0 ? (
             <AnimatePresence>
-              {filteredDeliveries.map((delivery, index) => {
-                const status = statusConfig[delivery.status];
+              {filteredDeliveries.map((delivery: any, index: number) => {
+                const status = statusConfig[delivery.status] || statusConfig["scheduled"];
                 const StatusIcon = status.icon;
+                const driverName = delivery.profiles?.full_name || "Unassigned";
+                const truckInfo = delivery.trucks ? `${delivery.trucks.truck_name} (${delivery.trucks.plate_number})` : "Pending Assignment";
                 
                 return (
                   <motion.div
@@ -207,15 +249,14 @@ export default function DeliveriesPage() {
                     {/* Top Row: ID, Status, Date */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-4 border-b border-border/50">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm font-bold text-foreground">{delivery.id}</span>
+                        <span className="font-mono text-sm font-bold text-foreground">ORD-{delivery.id.slice(0, 8).toUpperCase()}</span>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${status.bg} ${status.color}`}>
                           <StatusIcon className="w-3.5 h-3.5" />
                           {status.label}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {delivery.date}</span>
-                        <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> ETA: {delivery.eta}</span>
+                        <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatDate(delivery.created_at)}</span>
                       </div>
                     </div>
 
@@ -231,11 +272,11 @@ export default function DeliveriesPage() {
                         <div className="space-y-6 flex-1">
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Pickup Location</p>
-                            <p className="text-sm font-semibold text-foreground">{delivery.pickup}</p>
+                            <p className="text-sm font-semibold text-foreground">{delivery.pickup_location}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Dropoff Location</p>
-                            <p className="text-sm font-semibold text-foreground">{delivery.dropoff}</p>
+                            <p className="text-sm font-semibold text-foreground">{delivery.delivery_location}</p>
                           </div>
                         </div>
                       </div>
@@ -246,24 +287,26 @@ export default function DeliveriesPage() {
                           <Package className="w-4 h-4 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-xs text-muted-foreground">Material</p>
-                            <p className="text-sm font-medium text-foreground">{delivery.material}</p>
+                            <p className="text-sm font-medium text-foreground">{delivery.tonnage} Tons {delivery.material_type}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
                           <Truck className="w-4 h-4 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-xs text-muted-foreground">Vehicle & Driver</p>
-                            <p className="text-sm font-medium text-foreground">{delivery.vehicle}</p>
+                            <p className="text-sm font-medium text-foreground">{truckInfo}</p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <User className="w-3 h-3" /> {delivery.driver}
+                              <User className="w-3 h-3" /> {driverName}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
                           <ArrowUpRight className="w-4 h-4 text-green-500 mt-0.5" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Driver Earnings</p>
-                            <p className="text-sm font-bold text-green-600 dark:text-green-400">{formatNaira(delivery.earnings)}</p>
+                            <p className="text-xs text-muted-foreground">Fleet Net Earnings (95%)</p>
+                            <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                              {delivery.status === "completed" || delivery.status === "delivered" ? formatNaira(delivery.delivery_fee * 0.95) : "Pending"}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -271,17 +314,19 @@ export default function DeliveriesPage() {
 
                     {/* Bottom Row: Actions */}
                     <div className="flex items-center justify-end gap-3 pt-2">
+                      {delivery.status === "scheduled" && (
+                        <button 
+                          onClick={() => handleOpenAssignModal(delivery)}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-bold hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Assign Truck & Driver
+                        </button>
+                      )}
                       <button 
-                        onClick={() => addToast({ type: "info", title: "Tracking Details", message: `Opening live map for ${delivery.id}...` })}
+                        onClick={() => addToast({ type: "info", title: "Tracking", message: "Live map tracking coming soon!" })}
                         className="flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg text-xs font-medium transition-colors cursor-pointer"
                       >
                         <MapPin className="w-3.5 h-3.5" /> View Map
-                      </button>
-                      <button 
-                        onClick={() => handleContactDriver(delivery.driver, delivery.phone)}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        <Phone className="w-3.5 h-3.5" /> Contact Driver
                       </button>
                     </div>
                   </motion.div>
@@ -305,6 +350,97 @@ export default function DeliveriesPage() {
           )}
         </div>
       </motion.div>
+
+      {/* Assign Truck & Driver Modal */}
+      <AnimatePresence>
+        {showAssignModal && selectedDelivery && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isAssigning && setShowAssignModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl border border-border">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Truck className="w-6 h-6 text-orange-500" /> Assign Resources
+                  </h3>
+                  <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-xl mb-6">
+                  <p className="text-xs text-muted-foreground mb-1">Delivery Details</p>
+                  <p className="font-bold">{selectedDelivery.tonnage} Tons {selectedDelivery.material_type}</p>
+                  <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {selectedDelivery.delivery_location}
+                  </p>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Select Truck <span className="text-red-500">*</span></label>
+                    <select 
+                      value={assignTruckId} 
+                      onChange={(e) => setAssignTruckId(e.target.value)}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer"
+                    >
+                      <option value="">Choose a truck...</option>
+                      {trucks.map((t: any) => (
+                        <option key={t.id} value={t.id}>{t.truck_name} ({t.plate_number})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Select Driver <span className="text-red-500">*</span></label>
+                    <select 
+                      value={assignDriverId} 
+                      onChange={(e) => setAssignDriverId(e.target.value)}
+                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer"
+                    >
+                      <option value="">Choose a driver...</option>
+                      {drivers.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.full_name} ({d.phone})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowAssignModal(false)}
+                    disabled={isAssigning}
+                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleAssignDelivery}
+                    disabled={isAssigning || !assignTruckId || !assignDriverId}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isAssigning ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Assigning...</>
+                    ) : (
+                      <><CheckCircle className="w-4 h-4" /> Confirm Assignment</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

@@ -27,13 +27,15 @@ export default function DashboardRedirectPage() {
 
       const role = profile?.role || "customer";
 
-      // ✅ Redirect to the specific dashboard based on role
+      // ✅ UPDATED: Added fleet_company redirect
       if (role === "supplier") {
         router.push("/dashboard/supplier");
       } else if (role === "driver") {
         router.push("/dashboard/driver");
       } else if (role === "admin") {
         router.push("/admin");
+      } else if (role === "fleet_company") {
+        router.push("/dashboard/fleet");
       } else {
         router.push("/dashboard/customer");
       }
@@ -42,7 +44,6 @@ export default function DashboardRedirectPage() {
     checkRole();
   }, [router]);
 
-  // ✅ Loading State
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
