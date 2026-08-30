@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { TOTP, Secret } from "otpauth"; // ✅ Fixed: Import Secret directly
+import { TOTP, Secret } from "otpauth";
 
 // ============================================
 // 🔐 REGULAR LOGIN (Customer/Supplier/Driver/Fleet)
@@ -28,11 +28,15 @@ export async function login(formData: FormData) {
       .eq("id", authData.user.id)
       .maybeSingle();
 
-    // ✅ UPDATED: Route users to their specific dashboards based on their role
+    // 🚫 STRICTLY BLOCK ADMINS FROM GENERAL LOGIN
     if (profile?.role === "admin") {
-      redirect("/admin");
-    } else if (profile?.role === "fleet_company") {
-      redirect("/dashboard/fleet"); // ✅ Fleet Companies now go to their specific dashboard
+      await supabase.auth.signOut(); // Sign them out immediately for security
+      return { error: "Admins must use the dedicated Admin Portal at /admin/login" };
+    }
+
+    // ✅ Route other users to their specific dashboards
+    if (profile?.role === "fleet_company") {
+      redirect("/dashboard/fleet");
     }
   }
 
@@ -198,7 +202,6 @@ export async function verifyAdmin2FA(otpCode: string) {
     return { error: "2FA not configured. Please contact support." };
   }
 
-  // ✅ Fixed: Use Secret.fromBase32 instead of TOTP.Secret.fromBase32
   const totp = new TOTP({
     issuer: "EWA Logistics",
     label: `EWA Admin (${user.email})`,
@@ -271,4 +274,56 @@ export async function resetPassword(formData: FormData) {
   }
 
   return { success: true, message: "Password updated successfully! Redirecting to login..." };
+}
+
+// ============================================
+// 🔓 UNLOCK ADMIN SESSION (Verify Password + 2FA to unlock screen)
+// ============================================
+export async function unlockAdminSession(formData: FormData) {
+  const supabase = await createClient();
+  const password = formData.get("password") as string;
+  const otpCode = formData.get("otpCode") as string;
+
+  // 1. Get current user email to re-authenticate
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user || !user.email) {
+    return { error: "Session expired. Please log in again." };
+  }
+
+  // 2. Verify password by attempting to sign in (this securely refreshes the session)
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+
+  if (authError) {
+    return { error: "Invalid password." };
+  }
+
+  // 3. Verify 2FA code
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("totp_secret")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile || !profile.totp_secret) {
+    return { error: "2FA not configured." };
+  }
+
+  const totp = new TOTP({
+    issuer: "EWA Logistics",
+    label: `EWA Admin (${user.email})`,
+    algorithm: "SHA1",
+    digits: 6,
+    period: 30,
+    secret: Secret.fromBase32(profile.totp_secret),
+  });
+
+  const delta = totp.validate({ token: otpCode, window: 1 });
+  if (delta === null) {
+    return { error: "Invalid 2FA code." };
+  }
+
+  return { success: true };
 }

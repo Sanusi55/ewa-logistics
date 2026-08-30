@@ -35,21 +35,22 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // ✅ PUBLIC ROUTES - Anyone can access (including all public pages)
+  // ✅ PUBLIC ROUTES - Anyone can access (including payment redirects)
   const publicRoutes = [
     "/", 
     "/login", 
     "/signup", 
-    "/admin",
     "/materials",
-    "/about",             // ✅ About Us Page
-    "/delivery-code",     // ✅ Delivery Code Page
-    "/careers",           // ✅ Careers Page
-    "/press",             // ✅ Press/Media Page
-    "/privacy",           // ✅ Privacy Policy
-    "/terms",             // ✅ Terms & Conditions
-    "/escrow-policy",     // ✅ Escrow Policy
-    "/refund-policy",     // ✅ Refund Policy
+    "/about",
+    "/delivery-code",
+    "/careers",
+    "/press",
+    "/privacy",
+    "/terms",
+    "/escrow-policy",
+    "/refund-policy",
+    "/payment/success", // ✅ ADDED: Allow payment success page to always load
+    "/payment/cancel",  // ✅ ADDED: Allow payment cancel page to always load
   ];
   
   // ✅ Check if route is public OR if it's a blog post (/blog/anything)
@@ -72,8 +73,11 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // ✅ NOT LOGGED IN - Redirect to login
+  // ✅ NOT LOGGED IN - Redirect to login, BUT allow access to /admin/login
   if (!user) {
+    if (pathname === "/admin/login") {
+      return supabaseResponse; // Allow unauthenticated users to see the admin login page
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -88,11 +92,20 @@ export async function middleware(request: NextRequest) {
 
   const userRole = profile?.role || "customer";
 
-  // ✅ ADMIN ROUTES - Only admins
+  // ✅ STRICT ADMIN ROUTES PROTECTION
   if (pathname.startsWith("/admin")) {
+    // 1. If they are NOT an admin, forcefully sign them out and kick them to the main login
     if (userRole !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      await supabase.auth.signOut(); 
+      return NextResponse.redirect(new URL("/login", request.url));
     }
+    
+    // 2. If they ARE an admin, but they try to visit the /admin/login page, send them to the dashboard
+    if (pathname === "/admin/login") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+
+    // 3. Otherwise, allow access to /admin routes
     return supabaseResponse;
   }
 

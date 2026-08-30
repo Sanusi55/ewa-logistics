@@ -12,8 +12,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/navbar";
 import { useToast } from "@/components/providers/toast-provider";
 import { getMaterialById } from "@/app/actions/materials";
-import { initializeSecurePayment } from "@/app/actions/paystack";
+import { initializeSecurePayment } from "@/app/actions/paystack"; 
 import { createClient } from "@/lib/supabase/client";
+
+// ✅ NEW: Array of all Nigerian states for the dropdown
+const nigerianStates = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT (Abuja)", "Gombe",
+  "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos",
+  "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto",
+  "Taraba", "Yobe", "Zamfara"
+];
 
 function OrderPageContent() {
   const router = useRouter();
@@ -127,7 +136,7 @@ function OrderPageContent() {
       addToast({ 
         type: "info", 
         title: "Redirecting...", 
-        message: "Taking you to secure Paystack checkout" 
+        message: "Taking you to secure Flutterwave checkout" 
       });
       window.location.href = result.checkoutUrl;
     }
@@ -142,7 +151,7 @@ function OrderPageContent() {
   };
 
   const paymentMethods = [
-    { id: "card", label: "Credit / Debit Card", icon: CreditCard, desc: "Secure payment via Paystack" },
+    { id: "card", label: "Credit / Debit Card", icon: CreditCard, desc: "Secure payment via Flutterwave" },
     { id: "bank", label: "Bank Transfer", icon: Building2, desc: "Direct transfer to escrow account" },
     { id: "mobile", label: "Mobile Money", icon: Smartphone, desc: "Pay via USSD or Mobile Wallet" },
   ];
@@ -252,16 +261,19 @@ function OrderPageContent() {
                       </div>
                     </div>
 
-                    {/* ✅ UPDATED: Replaced dropdown with a standard text input for 100% mobile compatibility */}
+                    {/* ✅ UPDATED: Replaced text input with a styled dropdown select */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5">State <span className="text-red-500">*</span></label>
-                      <input 
-                        type="text" 
+                      <select 
                         value={formData.state}
                         onChange={(e) => setFormData({...formData, state: e.target.value})}
-                        className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all ${errors.state ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
-                        placeholder="e.g. Lagos"
-                      />
+                        className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all appearance-none cursor-pointer ${errors.state ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
+                      >
+                        <option value="" disabled>Select your state</option>
+                        {nigerianStates.map((state) => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
                       {errors.state && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.state}</p>}
                     </div>
 

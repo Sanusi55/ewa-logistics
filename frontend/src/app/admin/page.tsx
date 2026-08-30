@@ -169,7 +169,6 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   
-  // ✅ NEW: 2FA & Setup States
   const [otpInput, setOtpInput] = useState("");
   const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
   const [totpSecret, setTotpSecret] = useState("");
@@ -217,14 +216,29 @@ export default function AdminPage() {
     if (tab) setActiveTab(tab);
   }, [searchParams]);
 
-  // 🔒 UPDATED: ENFORCE 2FA ON EVERY VISIT
+  // ✅ IMPROVED: Actually checks if the user is already a logged-in admin before forcing login
   async function checkAuth() {
     setAuthState("loading");
+    const { data: { user } } = await supabase.auth.getUser();
     
-    // We intentionally bypass the automatic dashboard redirect.
-    // Even if the user has an active session, we require them to 
-    // enter their password and 2FA code every time they visit /admin.
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "admin") {
+        setAuthState("dashboard");
+        fetchAllData();
+        setIsLoading(false);
+        return;
+      }
+    }
+    
+    // If not logged in or not an admin, show login
     setAuthState("login");
+    setIsLoading(false);
   }
 
   async function handleAdminLogin(formData: FormData) {
@@ -469,7 +483,6 @@ export default function AdminPage() {
     );
   }
 
-  // ✅ UPDATED: Login, Setup, and 2FA States
   if (authState === "login" || authState === "setup" || authState === "2fa") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
@@ -820,7 +833,7 @@ export default function AdminPage() {
             <motion.div key="listings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700 flex gap-2 flex-wrap">
                 {["all", "pending", "approved", "rejected"].map((filter) => (
-                  <button key={filter} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${filter === "all" ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>{filter}</button>
+                  <button key={filter} onClick={() => {}} className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${filter === "all" ? "bg-gradient-to-r from-red-500 to-orange-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>{filter}</button>
                 ))}
               </div>
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
@@ -1010,7 +1023,7 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {withdrawals.length === 0 ? (
-                        <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td></tr>
+                        <tr><td colSpan={7} className="p-8 text-center text-slate-400">No withdrawal requests yet.</td></tr>
                       ) : (
                         withdrawals.map((w: any) => (
                           <tr key={w.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
@@ -1080,7 +1093,7 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {disputes.length === 0 ? (
-                        <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No disputes reported yet.</td></tr>
+                        <tr><td colSpan={7} className="p-8 text-center text-slate-400">No disputes reported yet.</td></tr>
                       ) : (
                         disputes.map((d: any) => (
                           <tr key={d.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
@@ -1323,28 +1336,28 @@ export default function AdminPage() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isResolvingDispute && setShowResolveModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+              <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-slate-700 shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-500"><AlertTriangle className="w-6 h-6" /> Review Dispute</h3>
-                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-400"><AlertTriangle className="w-6 h-6" /> Review Dispute</h3>
+                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5 text-slate-400" /></button>
                 </div>
                 <div className="space-y-4 mb-6">
-                  <div className="p-4 bg-muted/30 rounded-xl border border-border">
-                    <p className="text-xs text-muted-foreground mb-1">Reported By</p>
+                  <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1">Reported By</p>
                     <p className="font-semibold text-white">{selectedDispute.full_name} ({selectedDispute.user_role || selectedDispute.raised_by_role})</p>
                     <p className="text-xs text-slate-400 mt-1">Order: {selectedDispute.order_id.slice(0, 8)}...</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">User's Reason</label>
-                    <p className="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-border">{selectedDispute.reason}</p>
+                    <label className="block text-sm font-medium mb-1.5 text-slate-300">User's Reason</label>
+                    <p className="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-700">{selectedDispute.reason}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Admin Notes / Resolution Details <span className="text-red-500">*</span></label>
-                    <textarea value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} rows={3} className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none" placeholder="e.g. Refunded the customer, warned the driver, etc." required disabled={isResolvingDispute} />
+                    <label className="block text-sm font-medium mb-1.5 text-slate-300">Admin Notes / Resolution Details <span className="text-red-500">*</span></label>
+                    <textarea value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} rows={3} className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none text-white" placeholder="e.g. Refunded the customer, warned the driver, etc." required disabled={isResolvingDispute} />
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer">Cancel</button>
+                  <button onClick={() => setShowResolveModal(false)} disabled={isResolvingDispute} className="flex-1 py-3 border border-slate-600 rounded-xl font-medium hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer text-white">Cancel</button>
                   <button onClick={() => handleResolveDispute(selectedDispute.id, "rejected")} disabled={isResolvingDispute || !adminNotes.trim()} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
                     {isResolvingDispute ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />} Reject
                   </button>

@@ -6,9 +6,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Shield, BarChart3, Users, Package, Truck, 
   Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2,
-  Layers, CreditCard, AlertTriangle
+  Layers, CreditCard, AlertTriangle, Lock, Key, Smartphone, AlertCircle
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { unlockAdminSession } from "@/app/actions/auth";
 
 const navItems = [
   { name: "Overview", tab: "overview", icon: BarChart3 },
@@ -38,40 +39,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClient();
 
   const currentTab = searchParams.get("tab") || "overview";
 
-  // ✅ UPDATED: Automatic Session Timeout (5 Minutes of Inactivity)
+  // ✅ UPDATED: Automatic Screen Lock after 1 Minute (60,000ms) of Inactivity
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     
     const resetTimer = () => {
       clearTimeout(timeout);
-      // Set timeout for 5 minutes (5 * 60 * 1000 milliseconds = 300,000ms)
-      timeout = setTimeout(async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
-      }, 5 * 60 * 1000); 
+      if (!isLocked) {
+        // 1 minute = 60 * 1000 milliseconds
+        timeout = setTimeout(() => {
+          setIsLocked(true);
+        }, 60 * 1000); 
+      }
     };
 
-    // List of events that count as "activity"
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    
-    // Add event listeners to the window
     events.forEach(event => window.addEventListener(event, resetTimer));
     
-    // Start the timer initially
     resetTimer();
 
-    // Cleanup function to remove listeners and clear timeout when component unmounts
     return () => {
       events.forEach(event => window.removeEventListener(event, resetTimer));
       clearTimeout(timeout);
     };
-  }, [supabase, router]);
+  }, [isLocked]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -83,9 +81,78 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     router.push(`/admin?tab=${tab}`);
   };
 
+  const handleUnlock = async (formData: FormData) => {
+    const result = await unlockAdminSession(formData);
+    if (result?.error) {
+      alert(result.error); // You can replace this with your toast provider if preferred
+    } else {
+      setIsLocked(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex overflow-x-hidden relative">
       
+      {/* 🔒 AUTO-LOCK SCREEN OVERLAY */}
+      {isLocked && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-red-900/50 rounded-2xl p-8 shadow-2xl shadow-red-900/20">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Lock className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Session Locked</h2>
+              <p className="text-slate-400 text-sm">Inactive for 1 minute. Enter your credentials to unlock.</p>
+            </div>
+
+            <form action={handleUnlock} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">Password</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input 
+                    name="password"
+                    type="password" 
+                    required
+                    autoFocus
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-white placeholder-slate-600"
+                    placeholder="Enter your password"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-300">2FA Code</label>
+                <div className="relative">
+                  <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input 
+                    name="otpCode"
+                    type="text" 
+                    required
+                    maxLength={6}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-white text-center tracking-[0.5em] font-mono text-xl placeholder-slate-600"
+                    placeholder="000000"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold rounded-xl hover:from-red-500 hover:to-red-400 transition-all cursor-pointer shadow-lg shadow-red-900/40"
+              >
+                <Lock className="w-4 h-4" /> Unlock Session
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-1 mx-auto">
+                <LogOut className="w-4 h-4" /> Sign Out Completely
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
@@ -96,7 +163,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:sticky top-0 left-0 z-50 h-screen w-64 bg-slate-900/95 backdrop-blur-md border-r border-slate-700 
+        fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-slate-900/95 backdrop-blur-md border-r border-slate-700 
         transform transition-transform duration-300 ease-in-out flex flex-col
         ${isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}>
@@ -147,7 +214,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col min-h-screen w-full overflow-x-hidden">
         
         {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between">
+        <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between">
           <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-slate-400 hover:text-white mr-4">
             <Menu className="w-6 h-6" />
           </button>
