@@ -291,7 +291,7 @@ export default function AboutPage() {
                 Order Materials <ArrowRight className="w-4 h-4" />
               </Link>
               <Link 
-                href="/contact"
+                href="/#contact"
                 className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-border rounded-xl font-semibold hover:bg-muted transition-colors cursor-pointer"
               >
                 Contact Us
@@ -301,30 +301,30 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Contact Info */}
+      {/* ✅ UPDATED: Contact Info for Flutterwave Compliance */}
       <section className="py-12 px-6 bg-muted/30 border-t border-border">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-3 gap-6 text-center">
             <div className="flex flex-col items-center gap-2">
               <MapPin className="w-5 h-5 text-orange-500" />
-              <p className="text-sm font-medium">Babangida Market FHA Lugbe, Abuja</p>
+              <p className="text-sm font-medium">Hamza Plaza, FHA, Lugbe, Abuja</p>
             </div>
             <div className="flex flex-col items-center gap-2">
               <Phone className="w-5 h-5 text-orange-500" />
-              <p className="text-sm font-medium">+234 816 130 5942</p>
+              <p className="text-sm font-medium">08161305942</p>
             </div>
             <div className="flex flex-col items-center gap-2">
               <Mail className="w-5 h-5 text-orange-500" />
-              <p className="text-sm font-medium">support@ewalogistics.com</p>
+              <p className="text-sm font-medium">info@ewalogistics.com</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
+      {/* ✅ UPDATED: Footer with correct RC and Address */}
       <footer className="py-8 px-6 border-t border-border text-center text-sm text-muted-foreground">
         <p>© {new Date().getFullYear()} EWA Logistics Limited. All rights reserved.</p>
-        <p className="mt-2">RC: 9608218 | Babangida Market FHA Lugbe, Abuja, Nigeria</p>
+        <p className="mt-2">RC: 8131924 | Hamza Plaza, FHA, Lugbe, Abuja, Nigeria</p>
       </footer>
     </div>
   );

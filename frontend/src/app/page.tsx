@@ -463,10 +463,11 @@ export default function Home() {
             <h2 className="text-3xl font-bold mb-4">Get in Touch</h2>
             <p className="text-muted-foreground mb-6">Have questions? We're here to help 24/7.</p>
             
+            {/* ✅ UPDATED: Contact Info for Flutterwave Compliance */}
             <div className="space-y-4 mb-8">
-              <a href="tel:+2348161305942" className="flex items-center gap-3 hover:text-orange-500 transition-colors cursor-pointer">
+              <a href="tel:08161305942" className="flex items-center gap-3 hover:text-orange-500 transition-colors cursor-pointer">
                 <Phone className="w-5 h-5 text-orange-500 flex-shrink-0" />
-                <span>+234 816 130 5942</span>
+                <span>08161305942</span>
               </a>
               
               <a href="https://wa.me/2349035790128" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 transition-all group cursor-pointer">
@@ -479,15 +480,15 @@ export default function Home() {
                 </div>
               </a>
               
-              <a href="mailto:support@ewalogistics.com" className="flex items-center gap-3 hover:text-orange-500 transition-colors cursor-pointer">
+              <a href="mailto:info@ewalogistics.com" className="flex items-center gap-3 hover:text-orange-500 transition-colors cursor-pointer">
                 <Mail className="w-5 h-5 text-orange-500 flex-shrink-0" />
-                <span>support@ewalogistics.com</span>
+                <span>info@ewalogistics.com</span>
               </a>
               
               <div className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">Abuja, Nigeria</p>
+                  <p className="font-medium">Hamza Plaza, FHA, Lugbe, Abuja</p>
                 </div>
               </div>
             </div>
@@ -574,9 +575,6 @@ export default function Home() {
           </motion.form>
         </div>
       </section>
-
-      {/* ✅ FOOTER REMOVED FROM HERE. The global <Footer /> component in layout.tsx handles this now. */}
-      
     </div>
   );
 }
