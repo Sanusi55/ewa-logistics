@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, ArrowRight, CheckCircle, AlertCircle, MapPin, 
   CreditCard, Building2, Smartphone, Truck, Package, 
-  ShieldCheck, X, Loader2, ChevronRight
+  ShieldCheck, X, Loader2, ChevronRight, ChevronDown // ✅ Added ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,7 +15,7 @@ import { getMaterialById } from "@/app/actions/materials";
 import { initializeSecurePayment } from "@/app/actions/paystack"; 
 import { createClient } from "@/lib/supabase/client";
 
-// ✅ NEW: Array of all Nigerian states for the dropdown
+// ✅ Array of all Nigerian states for the dropdown
 const nigerianStates = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
   "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT (Abuja)", "Gombe",
@@ -43,7 +43,7 @@ function OrderPageContent() {
     address: "",
     city: "",
     state: "",
-    quantity: 1,
+    quantity: 0, // ✅ CHANGED: Default quantity is now 0
     paymentMethod: "card",
     promoCode: "",
     useCustomOffer: false,
@@ -261,19 +261,22 @@ function OrderPageContent() {
                       </div>
                     </div>
 
-                    {/* ✅ UPDATED: Replaced text input with a styled dropdown select */}
+                    {/* ✅ FIXED: Added a clear dropdown arrow icon so customers know it's clickable */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5">State <span className="text-red-500">*</span></label>
-                      <select 
-                        value={formData.state}
-                        onChange={(e) => setFormData({...formData, state: e.target.value})}
-                        className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all appearance-none cursor-pointer ${errors.state ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
-                      >
-                        <option value="" disabled>Select your state</option>
-                        {nigerianStates.map((state) => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select 
+                          value={formData.state}
+                          onChange={(e) => setFormData({...formData, state: e.target.value})}
+                          className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all appearance-none cursor-pointer pr-10 ${errors.state ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
+                        >
+                          <option value="" disabled>Select your state</option>
+                          {nigerianStates.map((state) => (
+                            <option key={state} value={state}>{state}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                      </div>
                       {errors.state && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.state}</p>}
                     </div>
 
@@ -388,14 +391,16 @@ function OrderPageContent() {
                       </div>
                     </div>
                     
+                    {/* ✅ FIXED: Quantity now defaults to 0, forcing the customer to type it */}
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Quantity ({material.unit})</label>
+                      <label className="block text-sm font-medium mb-1.5">Quantity ({material.unit}) <span className="text-red-500">*</span></label>
                       <input 
                         type="number" 
-                        min="1"
-                        value={formData.quantity}
-                        onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 1})}
+                        min="0"
+                        value={formData.quantity === 0 ? "" : formData.quantity}
+                        onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
                         className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        placeholder="0"
                       />
                     </div>
                   </div>

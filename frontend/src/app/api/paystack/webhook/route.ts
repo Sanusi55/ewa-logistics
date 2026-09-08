@@ -9,19 +9,17 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Get the raw body and Flutterwave verification hash
-    const rawBody = await req.text();
+    // 1. Get the JSON body and Flutterwave verification hash
+    // Note: req.json() is more reliable than req.text() in Next.js App Router
+    const event = await req.json();
     const verifHash = req.headers.get("verif-hash");
     
-    // Optional but recommended: Verify the hash 
-    // (You must set FLUTTERWAVE_SECRET_HASH in your .env.local from your Flutterwave dashboard)
+    // Verify the hash (Matches the secret hash set in your Flutterwave dashboard)
     const secretHash = process.env.FLUTTERWAVE_SECRET_HASH;
     if (secretHash && verifHash !== secretHash) {
-      console.error("❌ Invalid Flutterwave signature");
+      console.error("❌ Invalid Flutterwave signature. Possible spoofing attempt.");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
-
-    const event = JSON.parse(rawBody);
 
     // 2. Handle successful payment
     // Flutterwave sends "charge.completed" for successful payments
@@ -30,10 +28,17 @@ export async function POST(req: NextRequest) {
       const transactionId = event.data.id;
       const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
 
-      // 3. Double-check with Flutterwave API to be 100% sure
+      // Safety check to ensure we have the data we need
+      if (!txRef || !transactionId || !secretKey) {
+        console.error("❌ Missing required data in webhook payload or environment variables.");
+        return NextResponse.json({ error: "Missing data" }, { status: 400 });
+      }
+
+      // 3. Double-check with Flutterwave API to be 100% sure (Server-to-Server Verification)
       const verifyResponse = await fetch(
         `https://api.flutterwave.com/v3/transactions/${transactionId}/verify`,
         {
+          method: "GET",
           headers: { 
             Authorization: `Bearer ${secretKey}`,
             "Content-Type": "application/json"
@@ -43,24 +48,30 @@ export async function POST(req: NextRequest) {
       
       const verifyData = await verifyResponse.json();
 
-      if (verifyData.status === "success" && verifyData.data.status === "successful") {
+      // ✅ CRITICAL SECURITY CHECK: Verify status AND that the tx_ref matches ours
+      if (
+        verifyData.status === "success" && 
+        verifyData.data?.status === "successful" && 
+        verifyData.data.tx_ref === txRef
+      ) {
         // 4. Update the order in the database
         const { error } = await supabaseAdmin
           .from("orders")
           .update({ 
             is_paid: true, 
-            status: "pending_supplier_acceptance" // Now the supplier can see it!
+            status: "pending_supplier_acceptance", // Now the supplier can see it!
+            updated_at: new Date().toISOString()
           })
-          .eq("payment_reference", txRef); // ✅ Updated to match the new column name
+          .eq("payment_reference", txRef);
 
         if (error) {
           console.error("❌ Webhook DB update error:", error);
           return NextResponse.json({ error: "DB update failed" }, { status: 500 });
         }
         
-        console.log(`✅ Order with tx_ref ${txRef} successfully marked as paid!`);
+        console.log(`✅ SUCCESS: Order with tx_ref ${txRef} securely marked as paid!`);
       } else {
-        console.error("❌ Flutterwave API verification failed:", verifyData);
+        console.error("❌ Flutterwave API verification failed for tx_ref:", txRef, verifyData);
       }
     }
 
