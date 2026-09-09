@@ -24,11 +24,13 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
+
+  // ✅ CRITICAL FIX: Allow API routes (like webhooks) to pass through without auth checks
+  if (pathname.startsWith('/api/')) {
+    return supabaseResponse;
+  }
 
   const publicRoutes = [
     "/", 
@@ -59,7 +61,6 @@ export async function middleware(request: NextRequest) {
         .single();
       
       const role = profile?.role || "customer";
-      // ✅ SAFE ROLE: Only allow known roles, default to "customer" to prevent 404s
       const safeRole = ["admin", "customer", "supplier", "driver"].includes(role) ? role : "customer";
       
       const redirectPath = safeRole === "admin" ? "/admin" : `/dashboard/${safeRole}`;
@@ -87,7 +88,6 @@ export async function middleware(request: NextRequest) {
     .single();
 
   const userRole = profile?.role || "customer";
-  // ✅ SAFE ROLE: Prevents redirects to non-existent folders like /dashboard/fleet
   const safeRole = ["admin", "customer", "supplier", "driver"].includes(userRole) ? userRole : "customer";
 
   console.log(`🔍 [MIDDLEWARE CHECK] Path: ${pathname} | DB Role: "${userRole}" | Safe Role Used: "${safeRole}"`);
@@ -109,7 +109,6 @@ export async function middleware(request: NextRequest) {
     if (safeRole === "admin") {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
-    // ✅ This now safely redirects to /dashboard/customer, /dashboard/supplier, or /dashboard/driver
     return NextResponse.redirect(new URL(`/dashboard/${safeRole}`, request.url));
   }
 
