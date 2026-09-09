@@ -15,15 +15,10 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            supabaseResponse.cookies.set(name, value, options);
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
         },
       },
     }
@@ -35,7 +30,6 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // ✅ PUBLIC ROUTES - Anyone can access (including payment redirects)
   const publicRoutes = [
     "/", 
     "/login", 
@@ -49,15 +43,14 @@ export async function middleware(request: NextRequest) {
     "/terms",
     "/escrow-policy",
     "/refund-policy",
-    "/payment/success", // ✅ ADDED: Allow payment success page to always load
-    "/payment/cancel",  // ✅ ADDED: Allow payment cancel page to always load
+    "/payment/success", 
+    "/payment/cancel",
   ];
   
-  // ✅ Check if route is public OR if it's a blog post (/blog/anything)
   const isPublicRoute = publicRoutes.some(route => pathname === route) || pathname.startsWith("/blog");
 
+  // 1. Handle Public Routes
   if (isPublicRoute) {
-    // If logged in and trying to access login/signup, redirect based on role
     if (user && (pathname === "/login" || pathname === "/signup")) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -65,25 +58,28 @@ export async function middleware(request: NextRequest) {
         .eq("id", user.id)
         .single();
       
-      if (profile?.role === "admin") {
-        return NextResponse.redirect(new URL("/admin", request.url));
-      }
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      const role = profile?.role || "customer";
+      // ✅ SAFE ROLE: Only allow known roles, default to "customer" to prevent 404s
+      const safeRole = ["admin", "customer", "supplier", "driver"].includes(role) ? role : "customer";
+      
+      const redirectPath = safeRole === "admin" ? "/admin" : `/dashboard/${safeRole}`;
+      return NextResponse.redirect(new URL(redirectPath, request.url));
     }
     return supabaseResponse;
   }
 
-  // ✅ NOT LOGGED IN - Redirect to login, BUT allow access to /admin/login
+  // 2. NOT LOGGED IN - Redirect to login
   if (!user) {
     if (pathname === "/admin/login") {
-      return supabaseResponse; // Allow unauthenticated users to see the admin login page
+      return supabaseResponse;
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
-  // ✅ GET USER PROFILE
+  // 3. GET USER PROFILE
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -91,30 +87,43 @@ export async function middleware(request: NextRequest) {
     .single();
 
   const userRole = profile?.role || "customer";
+  // ✅ SAFE ROLE: Prevents redirects to non-existent folders like /dashboard/fleet
+  const safeRole = ["admin", "customer", "supplier", "driver"].includes(userRole) ? userRole : "customer";
 
-  // ✅ STRICT ADMIN ROUTES PROTECTION
+  console.log(`🔍 [MIDDLEWARE CHECK] Path: ${pathname} | DB Role: "${userRole}" | Safe Role Used: "${safeRole}"`);
+
+  // 4. STRICT ADMIN ROUTES PROTECTION
   if (pathname.startsWith("/admin")) {
-    // 1. If they are NOT an admin, forcefully sign them out and kick them to the main login
-    if (userRole !== "admin") {
+    if (safeRole !== "admin") {
       await supabase.auth.signOut(); 
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    
-    // 2. If they ARE an admin, but they try to visit the /admin/login page, send them to the dashboard
     if (pathname === "/admin/login") {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
-
-    // 3. Otherwise, allow access to /admin routes
     return supabaseResponse;
   }
 
-  // ✅ ROLE-BASED REDIRECTS for /dashboard
+  // 5. STRICT DASHBOARD ROUTE PROTECTION & REDIRECTS
   if (pathname === "/dashboard") {
-    if (userRole === "admin") {
+    if (safeRole === "admin") {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
-    return supabaseResponse;
+    // ✅ This now safely redirects to /dashboard/customer, /dashboard/supplier, or /dashboard/driver
+    return NextResponse.redirect(new URL(`/dashboard/${safeRole}`, request.url));
+  }
+
+  // Prevent cross-role access
+  if (pathname.startsWith("/dashboard/supplier") && safeRole !== "supplier" && safeRole !== "admin") {
+    return NextResponse.redirect(new URL("/dashboard/customer", request.url));
+  }
+
+  if (pathname.startsWith("/dashboard/driver") && safeRole !== "driver" && safeRole !== "admin") {
+    return NextResponse.redirect(new URL("/dashboard/customer", request.url));
+  }
+
+  if (pathname.startsWith("/dashboard/customer") && safeRole !== "customer" && safeRole !== "admin") {
+    return NextResponse.redirect(new URL(`/dashboard/${safeRole}`, request.url));
   }
 
   // ✅ ALL OTHER ROUTES - Allow access

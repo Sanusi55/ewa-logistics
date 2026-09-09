@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { headers } from 'next/headers';
 
 export async function initializeSecurePayment(orderData: {
   material_type: string;
@@ -71,7 +72,7 @@ export async function initializeSecurePayment(orderData: {
       total_amount: orderData.total_amount,
       status: "pending_payment",
       is_paid: false,
-      payment_reference: txRef, // ✅ Matches the fresh database column
+      payment_reference: txRef,
       delivery_code: deliveryCode,
     })
     .select()
@@ -82,8 +83,14 @@ export async function initializeSecurePayment(orderData: {
     return { error: `Failed to create order: ${orderError.message}` };
   }
 
-  // 5. Get base URL and set success redirect
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  // 5. Get base URL dynamically (✅ FIXED: Added 'await' to headers() for Next.js 15+)
+  const headersList = await headers();
+  const host = headersList.get('host');
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  
+  // Use the dynamic host if available, otherwise fall back to env variables
+  const baseUrl = host ? `${protocol}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000");
+  
   const successRedirectUrl = `${baseUrl}/payment/success?order_id=${order.id}&tx_ref=${txRef}`;
 
   // 6. Initialize Transaction with Flutterwave

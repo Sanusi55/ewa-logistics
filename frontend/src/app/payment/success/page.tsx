@@ -119,14 +119,15 @@ function PaymentSuccessContent() {
               </div>
             )}
 
-            <Link href="/dashboard">
+            {/* ✅ EXPLICITLY redirect to customer dashboard to prevent fleet/supplier mix-ups */}
+            <Link href="/dashboard/customer">
               <button className="w-full flex items-center justify-center gap-2 py-3.5 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600 transition-colors cursor-pointer shadow-lg shadow-orange-500/20">
-                Go to Dashboard <ArrowRight className="w-4 h-4" />
+                Go to My Dashboard <ArrowRight className="w-4 h-4" />
               </button>
             </Link>
             
             <div className="mt-4">
-              <Link href="/dashboard/orders" className="text-sm text-muted-foreground hover:text-orange-500 transition-colors">
+              <Link href="/dashboard/customer/orders" className="text-sm text-muted-foreground hover:text-orange-500 transition-colors">
                 View Order History
               </Link>
             </div>

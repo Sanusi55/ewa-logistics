@@ -9,7 +9,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 // ============================================
-// 📦 CREATE ORDER
+// 📦 CREATE ORDER (SECURED: Waits for Payment)
 // ============================================
 export async function createOrder(orderData: {
   material_type: string;
@@ -19,7 +19,7 @@ export async function createOrder(orderData: {
   delivery_address: string;
   customer_notes?: string;
   total_amount: number;
-  delivery_fee_offer?: number | null; // ✅ NEW: Customer's delivery offer
+  delivery_fee_offer?: number | null;
 }) {
   const supabase = await createClient();
   
@@ -34,10 +34,7 @@ export async function createOrder(orderData: {
       return { error: "All fields are required" };
     }
 
-    // ✅ FIXED: Generates a random 4-digit number (e.g., "4829")
     const deliveryCode = Math.floor(1000 + Math.random() * 9000).toString();
-    
-    // ✅ NEW: Flat 5k service charge for customers
     const service_charge = 5000; 
 
     const { data, error } = await supabase
@@ -53,8 +50,9 @@ export async function createOrder(orderData: {
         delivery_code: deliveryCode,
         total_amount: orderData.total_amount,
         service_charge: service_charge,
-        delivery_fee_offer: orderData.delivery_fee_offer || null, // ✅ NEW: Save the offer to the database
-        status: "pending_supplier_acceptance",
+        delivery_fee_offer: orderData.delivery_fee_offer || null,
+        status: "pending_payment", // ✅ SECURED: Must wait for payment first!
+        is_paid: false,            // ✅ SECURED: Explicitly mark as unpaid
       })
       .select()
       .single();
@@ -66,15 +64,15 @@ export async function createOrder(orderData: {
 
     await supabase.from("order_status_history").insert({
       order_id: data.id,
-      new_status: "pending_supplier_acceptance",
+      new_status: "pending_payment", // ✅ SECURED
       changed_by: user.id,
-      notes: "Order created",
+      notes: "Order created, awaiting payment", // ✅ SECURED
     });
 
     return { 
       success: true, 
       order: data,
-      message: "Order created successfully! Waiting for supplier acceptance." 
+      message: "Order created! Please proceed to payment." 
     };
   } catch (error: any) {
     console.error("❌ Create order exception:", error);
@@ -126,7 +124,7 @@ export async function getAvailableJobs() {
 }
 
 // ============================================
-// 📋 GET USER ORDERS (WITH DIAGNOSTIC TEST)
+// 📋 GET USER ORDERS (SECURED FOR ALL ROLES)
 // ============================================
 export async function getUserOrders(role: "customer" | "supplier" | "driver") {
   console.log("🚀 [SERVER ACTION] getUserOrders started for role:", role);
@@ -142,15 +140,6 @@ export async function getUserOrders(role: "customer" | "supplier" | "driver") {
       return { error: "Unauthorized", orders: [] };
     }
 
-    // 🔍 DIAGNOSTIC TEST: Fetch ALL pending orders without complex filters to prove connection
-    const { data: debugData, error: debugError } = await supabase
-      .from("orders")
-      .select("id, status, customer_id")
-      .eq("status", "pending_supplier_acceptance");
-    
-    console.log("🔍 [DIAGNOSTIC TEST] Raw pending orders found:", debugData?.length, "Error:", debugError);
-
-    // Normal Query
     let query = supabase
       .from("orders")
       .select(`
@@ -169,9 +158,9 @@ export async function getUserOrders(role: "customer" | "supplier" | "driver") {
     if (role === "customer") {
       query = query.eq("customer_id", user.id);
     } else if (role === "supplier") {
-      // ✅ Fetch ALL pending orders OR orders assigned to this supplier
+      // ✅ SECURED: Fetch ONLY paid orders pending acceptance, OR orders already assigned to this supplier
       query = query.or(
-        `supplier_id.eq.${user.id},status.eq.pending_supplier_acceptance`
+        `supplier_id.eq.${user.id},and(status.eq.pending_supplier_acceptance,is_paid.eq.true)`
       );
     } else if (role === "driver") {
       query = query.eq("driver_id", user.id);
@@ -267,7 +256,6 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       return { error: "Unauthorized" };
     }
 
-    // ✅ NEW: Fetch order to calculate commission based on material type and tonnage
     const { data: order, error: orderFetchError } = await supabase
       .from("orders")
       .select("material_type, tonnage")
@@ -278,9 +266,9 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
     if (order) {
       const isGranite = order.material_type.toLowerCase().includes("granite");
       if (isGranite) {
-        supplier_commission = order.tonnage * 500; // ✅ ₦500 per ton for granite
+        supplier_commission = order.tonnage * 500;
       } else {
-        supplier_commission = 5000; // ✅ Fixed ₦5000 per trip for sand, stone base, etc.
+        supplier_commission = 5000;
       }
     }
 
@@ -289,7 +277,7 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       .update({
         supplier_id: user.id,
         material_price: materialPrice,
-        supplier_commission: supplier_commission, // ✅ NEW: Save calculated commission
+        supplier_commission: supplier_commission,
         status: "driver_searching",
         supplier_accepted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -448,7 +436,6 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
       .eq("id", bid.driver_id)
       .single();
 
-    // ✅ NEW: Calculate Driver Commission (5% of accepted delivery charge)
     const driver_commission = bid.bid_amount * 0.05;
 
     await supabase
@@ -469,7 +456,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
         driver_name: driver?.full_name || "Unknown",
         driver_phone: driver?.phone || "Not provided",
         delivery_fee: bid.bid_amount,
-        driver_commission: driver_commission, // ✅ NEW: Save calculated commission
+        driver_commission: driver_commission,
         status: "driver_assigned",
         driver_assigned_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -605,7 +592,6 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
-    // 1. Verify order and code
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("delivery_code, driver_id, status, customer_id")
@@ -618,7 +604,6 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
 
     let evidenceUrl = null;
 
-    // 2. Upload evidence if provided
     if (evidenceFile) {
       const fileExt = evidenceFile.name.split('.').pop();
       const fileName = `${orderId}-${Date.now()}.${fileExt}`;
@@ -637,7 +622,6 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       }
     }
 
-    // 3. Update order status to delivered
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -650,7 +634,6 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
 
     if (updateError) return { error: "Failed to update delivery status" };
 
-    // 4. Record evidence in database if uploaded
     if (evidenceUrl) {
       await supabase.from("delivery_evidence").insert({
         order_id: orderId,
@@ -662,7 +645,6 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       });
     }
 
-    // 5. Record status history
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: order.status,
@@ -688,7 +670,6 @@ export async function uploadSupplierEvidence(orderId: string, evidenceFile: File
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
-    // 1. Verify order belongs to this supplier
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("id, supplier_id, status")
@@ -699,7 +680,6 @@ export async function uploadSupplierEvidence(orderId: string, evidenceFile: File
     if (order.supplier_id !== user.id) return { error: "You don't have permission to upload evidence for this order" };
     if (order.status !== "delivered") return { error: "Can only upload evidence for delivered orders" };
 
-    // 2. Upload file to Supabase Storage
     const fileExt = evidenceFile.name.split('.').pop();
     const fileName = `supplier-${orderId}-${Date.now()}.${fileExt}`;
     
@@ -716,7 +696,6 @@ export async function uploadSupplierEvidence(orderId: string, evidenceFile: File
       .from('delivery-evidence')
       .getPublicUrl(`public/${fileName}`);
 
-    // 3. Record evidence in database
     const { error: insertError } = await supabase.from("delivery_evidence").insert({
       order_id: orderId,
       supplier_id: user.id,
@@ -747,7 +726,6 @@ export async function confirmCustomerDelivery(orderId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
-    // 1. Fetch full order details for financial calculation
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*")
@@ -758,24 +736,18 @@ export async function confirmCustomerDelivery(orderId: string) {
     if (order.customer_id !== user.id) return { error: "You are not the customer for this order" };
     if (order.status === "completed") return { error: "Order is already completed" };
 
-    // 2. Calculate EWA Commissions & Net Payouts
     const service_charge = order.service_charge || 5000;
     const supplier_commission = order.supplier_commission || 0;
     const driver_commission = order.driver_commission || 0;
     
-    // ✅ EWA Revenue = Service Charge + Supplier Commission + Driver Commission
     const ewa_revenue = service_charge + supplier_commission + driver_commission;
 
-    // ✅ Net Payouts (Gross Amount - Commission)
-    // Note: Assuming material_price is the total agreed material cost. 
-    // If material_price is per-ton in your system, change this to: (order.material_price || 0) * (order.tonnage || 1)
     const gross_supplier_amount = order.material_price || 0; 
     const net_supplier_payout = Math.max(0, gross_supplier_amount - supplier_commission);
 
     const gross_driver_amount = order.delivery_fee || 0;
     const net_driver_payout = Math.max(0, gross_driver_amount - driver_commission);
 
-    // 3. Update Order to Completed and store financial breakdown
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -792,7 +764,6 @@ export async function confirmCustomerDelivery(orderId: string) {
 
     if (updateError) return { error: "Failed to confirm delivery" };
 
-    // 4. Credit EWA Wallet (Admin Revenue)
     await supabase.from("ewa_wallet_transactions").insert({
       order_id: orderId,
       amount: ewa_revenue,
@@ -800,7 +771,6 @@ export async function confirmCustomerDelivery(orderId: string) {
       description: `Commission & Service Charge for Order ${orderId}`,
     });
 
-    // 5. Credit Supplier Earnings Dashboard
     if (net_supplier_payout > 0 && order.supplier_id) {
       await supabase.from("supplier_earnings").insert({
         user_id: order.supplier_id,
@@ -810,7 +780,6 @@ export async function confirmCustomerDelivery(orderId: string) {
       });
     }
 
-    // 6. Credit Driver Earnings Dashboard
     if (net_driver_payout > 0 && order.driver_id) {
       await supabase.from("driver_earnings").insert({
         user_id: order.driver_id,
@@ -820,7 +789,6 @@ export async function confirmCustomerDelivery(orderId: string) {
       });
     }
 
-    // 7. Record status history
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: order.status,
