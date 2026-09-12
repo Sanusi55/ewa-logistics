@@ -449,6 +449,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
       .eq("order_id", orderId)
       .neq("id", bidId);
 
+    // ✅ CHANGED: Status is now pending_delivery_payment instead of driver_assigned
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .update({
@@ -457,7 +458,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
         driver_phone: driver?.phone || "Not provided",
         delivery_fee: bid.bid_amount,
         driver_commission: driver_commission,
-        status: "driver_assigned",
+        status: "pending_delivery_payment", // ✅ Wait for delivery payment first
         driver_assigned_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -473,9 +474,9 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: "driver_searching",
-      new_status: "driver_assigned",
+      new_status: "pending_delivery_payment", // ✅ Updated history
       changed_by: user.id,
-      notes: `Customer accepted bid from driver`,
+      notes: `Customer accepted bid from driver, awaiting delivery payment`,
     });
 
     if (resend) {
@@ -490,11 +491,11 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
           await resend.emails.send({
             from: "EWA Logistics <onboarding@resend.dev>",
             to: [supplier.email],
-            subject: `🚛 Driver Assigned to Order`,
+            subject: `🚛 Driver Bid Accepted - Awaiting Delivery Payment`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #ea580c;">Driver Assigned!</h2>
-                <p>A driver has been assigned to your order.</p>
+                <h2 style="color: #ea580c;">Driver Bid Accepted!</h2>
+                <p>The customer has accepted a driver's bid. Once the delivery fee is paid, the driver will be officially assigned.</p>
                 <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
                   <p><strong>Driver Name:</strong> ${order.driver_name}</p>
                   <p><strong>Driver Phone:</strong> ${order.driver_phone}</p>
@@ -514,11 +515,83 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
     return { 
       success: true, 
       order: order,
-      message: "Driver assigned successfully!" 
+      message: "Driver bid accepted! Awaiting delivery payment." 
     };
   } catch (error: any) {
     console.error("❌ Accept bid exception:", error);
     return { error: error.message };
+  }
+}
+
+// ============================================
+// 💰 CUSTOMER CONFIRMS DELIVERY PAYMENT (NEW)
+// ============================================
+export async function confirmDeliveryPayment(orderId: string, proofFile?: File) {
+  const supabase = await createClient();
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    // 1. Verify order belongs to this customer
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("customer_id, status, delivery_fee, driver_id")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) return { error: "Order not found" };
+    if (order.customer_id !== user.id) return { error: "You are not the customer for this order" };
+    if (order.status !== "pending_delivery_payment") return { error: "Order is not pending delivery payment" };
+
+    let proofUrl = null;
+
+    // 2. Upload proof of payment if provided
+    if (proofFile) {
+      const fileExt = proofFile.name.split('.').pop();
+      const fileName = `delivery-payment-${orderId}-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('delivery-evidence') // Reusing existing bucket
+        .upload(`public/${fileName}`, proofFile);
+        
+      if (uploadError) {
+        console.error("❌ Payment proof upload error:", uploadError);
+      } else {
+        const { data: { publicUrl } } = supabase.storage
+          .from('delivery-evidence')
+          .getPublicUrl(`public/${fileName}`);
+        proofUrl = publicUrl;
+      }
+    }
+
+    // 3. Update order status to driver_assigned
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        status: "driver_assigned", // ✅ NOW the driver is officially assigned
+        updated_at: new Date().toISOString(),
+        // Note: If you add 'delivery_payment_confirmed' and 'delivery_payment_proof_url' columns to your 'orders' table, uncomment the lines below:
+        // delivery_payment_confirmed: true,
+        // delivery_payment_proof_url: proofUrl,
+      })
+      .eq("id", orderId);
+
+    if (updateError) return { error: "Failed to confirm delivery payment" };
+
+    // 4. Record status history
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      old_status: "pending_delivery_payment",
+      new_status: "driver_assigned",
+      changed_by: user.id,
+      notes: "Customer confirmed delivery fee payment. Driver officially assigned.",
+    });
+
+    return { success: true, message: "Delivery payment confirmed! Driver has been officially assigned." };
+  } catch (error: any) {
+    console.error("❌ Confirm delivery payment exception:", error);
+    return { error: error.message || "An unexpected error occurred" };
   }
 }
 

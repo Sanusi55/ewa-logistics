@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getUserOrders, customerAcceptBid } from "@/app/actions/orders";
+import { getUserOrders, customerAcceptBid, confirmDeliveryPayment } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
 import { useToast } from "@/components/providers/toast-provider";
 import MagneticButton from "@/components/magnetic-button";
@@ -24,6 +24,12 @@ export default function CustomerDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [acceptingBidId, setAcceptingBidId] = useState<string | null>(null);
+
+  // ✅ NEW: Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
 
   // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -50,10 +56,10 @@ export default function CustomerDashboardPage() {
         return;
       }
 
-      // Sort orders: 'driver_searching' first, then by date
+      // Sort orders: 'driver_searching' and 'pending_delivery_payment' first, then by date
       const sortedOrders = (result.orders || []).sort((a: any, b: any) => {
-        if (a.status === "driver_searching" && b.status !== "driver_searching") return -1;
-        if (a.status !== "driver_searching" && b.status === "driver_searching") return 1;
+        if ((a.status === "driver_searching" || a.status === "pending_delivery_payment") && !(b.status === "driver_searching" || b.status === "pending_delivery_payment")) return -1;
+        if (!(a.status === "driver_searching" || a.status === "pending_delivery_payment") && (b.status === "driver_searching" || b.status === "pending_delivery_payment")) return 1;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
@@ -78,8 +84,8 @@ export default function CustomerDashboardPage() {
 
       addToast({ 
         type: "success", 
-        title: "Driver Assigned! 🎉", 
-        message: "You have successfully accepted this driver's bid." 
+        title: "Driver Selected! 🎉", 
+        message: "Please proceed to pay the delivery fee to officially assign the driver." 
       });
       
       await loadOrders(); // Refresh to show updated status
@@ -87,6 +93,31 @@ export default function CustomerDashboardPage() {
       addToast({ type: "error", title: "Error", message: error.message || "Failed to accept bid" });
     } finally {
       setAcceptingBidId(null);
+    }
+  };
+
+  const handleOpenPaymentModal = (order: any) => {
+    setSelectedOrderForPayment(order);
+    setPaymentProof(null);
+    setShowPaymentModal(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!selectedOrderForPayment) return;
+    setIsConfirmingPayment(true);
+    try {
+      const result = await confirmDeliveryPayment(selectedOrderForPayment.id, paymentProof || undefined);
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ type: "success", title: "Payment Confirmed! 🎉", message: result.message });
+        setShowPaymentModal(false);
+        await loadOrders();
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to confirm payment" });
+    } finally {
+      setIsConfirmingPayment(false);
     }
   };
 
@@ -120,6 +151,7 @@ export default function CustomerDashboardPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600",
+      pending_delivery_payment: "bg-orange-500/10 text-orange-600", // ✅ ADDED
       driver_searching: "bg-blue-500/10 text-blue-600",
       no_driver_available: "bg-orange-500/10 text-orange-600",
       driver_assigned: "bg-green-500/10 text-green-600",
@@ -136,6 +168,7 @@ export default function CustomerDashboardPage() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending_supplier_acceptance: "Pending Supplier Acceptance",
+      pending_delivery_payment: "Pending Delivery Payment", // ✅ ADDED
       driver_searching: "Finding Best Driver",
       no_driver_available: "No Driver Available",
       driver_assigned: "Driver Assigned",
@@ -193,7 +226,6 @@ export default function CustomerDashboardPage() {
         ) : (
           <div className="space-y-6">
             {orders.map((order, index) => {
-              // Calculate total dynamically based on available data
               const materialCost = order.total_amount || 0;
               const serviceCharge = order.service_charge || 5000;
               const deliveryFee = order.delivery_fee || 0;
@@ -206,7 +238,7 @@ export default function CustomerDashboardPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                   className={`glass rounded-2xl p-6 md:p-8 transition-all shadow-sm ${
-                    order.status === "driver_searching" ? "bg-blue-500/5" : ""
+                    order.status === "driver_searching" || order.status === "pending_delivery_payment" ? "bg-blue-500/5" : ""
                   }`}
                 >
                   {/* Order Header */}
@@ -245,7 +277,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Cost Breakdown Section (Plain, no borders) */}
+                  {/* Cost Breakdown Section */}
                   <div className="mb-6 p-4 bg-muted/20 rounded-xl">
                     <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Order Cost Breakdown</h4>
                     <div className="space-y-2 text-sm">
@@ -276,9 +308,9 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
 
-                  {/* DRIVER BIDDING SECTION (No top border) */}
+                  {/* DRIVER BIDDING SECTION */}
                   {order.status === "driver_searching" && (
-                    <div className="mt-6 pt-6">
+                    <div className="mt-6 pt-6 border-t border-border">
                       <div className="flex items-center gap-2 mb-4">
                         <Truck className="w-5 h-5 text-blue-500" />
                         <h4 className="text-lg font-bold">Driver Bids ({order.driver_bids?.length || 0})</h4>
@@ -293,7 +325,6 @@ export default function CustomerDashboardPage() {
                       ) : (
                         <div className="space-y-3">
                           {order.driver_bids.map((bid: any) => {
-                            // ✅ Check if this bid matches the customer's original offer
                             const isMatchingOffer = order.delivery_fee_offer && bid.bid_amount === order.delivery_fee_offer;
                             
                             return (
@@ -302,9 +333,7 @@ export default function CustomerDashboardPage() {
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-                                  isMatchingOffer 
-                                    ? "bg-green-500/10" 
-                                    : "bg-muted/20"
+                                  isMatchingOffer ? "bg-green-500/10" : "bg-muted/20"
                                 }`}
                               >
                                 <div className="flex-1">
@@ -356,9 +385,42 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* ASSIGNED DRIVER SECTION (No top border) */}
+                  {/* ✅ NEW: PENDING DELIVERY PAYMENT SECTION */}
+                  {order.status === "pending_delivery_payment" && order.driver_name && (
+                    <div className="mt-6 pt-6 border-t border-border">
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className="w-5 h-5 text-orange-500" />
+                        <h4 className="text-lg font-bold">Action Required: Pay Delivery Fee</h4>
+                      </div>
+                      
+                      <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl mb-4">
+                        <p className="text-sm text-muted-foreground mb-3">You have selected a driver. Please pay the delivery fee to officially assign them to your order.</p>
+                        
+                        <div className="flex items-center justify-between p-3 bg-background rounded-lg mb-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Selected Driver</p>
+                            <p className="font-semibold">{order.driver_name}</p>
+                            <a href={`tel:${order.driver_phone}`} className="text-xs text-orange-500 hover:underline">{order.driver_phone}</a>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Delivery Fee</p>
+                            <p className="text-xl font-bold text-orange-500">{formatNaira(order.delivery_fee)}</p>
+                          </div>
+                        </div>
+                        
+                        <MagneticButton
+                          onClick={() => handleOpenPaymentModal(order)}
+                          className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
+                        >
+                          <DollarSign className="w-4 h-4" /> Make Delivery Payment
+                        </MagneticButton>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ASSIGNED DRIVER SECTION */}
                   {(order.status === "driver_assigned" || order.status === "supplier_driver_assigned" || order.status === "loading" || order.status === "in_transit") && order.driver_name && (
-                    <div className="mt-6 pt-6">
+                    <div className="mt-6 pt-6 border-t border-border">
                       <div className="flex items-center gap-2 mb-4">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                         <h4 className="text-lg font-bold">Assigned Driver</h4>
@@ -395,7 +457,7 @@ export default function CustomerDashboardPage() {
                         </div>
                       </div>
                       
-                      {/* Delivery Code Reminder (Subtle border) */}
+                      {/* Delivery Code Reminder */}
                       {(order.status === "in_transit" || order.status === "loading" || order.status === "driver_assigned" || order.status === "supplier_driver_assigned") && order.delivery_code && (
                         <div className="mt-6 p-5 bg-orange-500/5 border border-orange-500/20 rounded-xl flex items-start gap-4">
                           <div className="p-3 bg-orange-500 rounded-full flex-shrink-0">
@@ -415,9 +477,9 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* Delivered / Completed State (No top border) */}
+                  {/* Delivered / Completed State */}
                   {(order.status === "delivered" || order.status === "completed") && (
-                    <div className="mt-6 pt-6">
+                    <div className="mt-6 pt-6 border-t border-border">
                       <div className="p-6 bg-emerald-500/5 rounded-xl text-center">
                         <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
                         <h4 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">Delivery Completed!</h4>
@@ -432,6 +494,178 @@ export default function CustomerDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* ✅ NEW: Delivery Payment Modal */}
+      <AnimatePresence>
+        {showPaymentModal && selectedOrderForPayment && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isConfirmingPayment && setShowPaymentModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <DollarSign className="w-6 h-6 text-orange-500" /> Make Delivery Payment
+                  </h3>
+                  <button onClick={() => setShowPaymentModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div className="p-4 bg-orange-500/10 rounded-xl">
+                    <p className="text-sm text-muted-foreground mb-1">Amount to Pay</p>
+                    <p className="text-2xl font-bold text-orange-500">{formatNaira(selectedOrderForPayment.delivery_fee)}</p>
+                  </div>
+
+                  <div className="p-4 bg-muted/30 rounded-xl text-sm">
+                    <p className="font-semibold text-foreground mb-2">Transfer to this account:</p>
+                    <p className="font-mono text-lg font-bold">1234567890</p>
+                    <p className="text-muted-foreground">EWA Logistics Escrow</p>
+                    <p className="text-muted-foreground">Opay / Moniepoint</p>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">⚠️ Please include your Order ID as reference.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Upload Payment Proof (Optional but recommended)</label>
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-muted-foreground/20 rounded-xl cursor-pointer hover:bg-muted/30 transition-colors bg-muted/10">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                        className="hidden"
+                        disabled={isConfirmingPayment}
+                      />
+                      {paymentProof ? (
+                        <div className="text-center">
+                          <p className="text-sm font-medium truncate max-w-[250px]">{paymentProof.name}</p>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <p className="text-sm font-medium">Click to upload receipt</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowPaymentModal(false)}
+                    disabled={isConfirmingPayment}
+                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <MagneticButton 
+                    onClick={handleConfirmPayment}
+                    disabled={isConfirmingPayment}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isConfirmingPayment ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+                    ) : (
+                      <><CheckCircle className="w-4 h-4" /> I Have Paid</>
+                    )}
+                  </MagneticButton>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Dispute Modal (Existing) */}
+      <AnimatePresence>
+        {showDisputeModal && disputeOrderId && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
+                    <AlertTriangle className="w-6 h-6" /> Report Dispute
+                  </h3>
+                  <button 
+                    onClick={() => setShowDisputeModal(false)}
+                    disabled={isSubmittingDispute}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-red-500/10 rounded-xl mb-6">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    ⚠️ Are you experiencing an issue with this delivery?
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Our admin team will review your dispute and contact you shortly. Please provide as much detail as possible.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateDispute} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Reason for Dispute <span className="text-red-500">*</span></label>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 transition-all resize-none"
+                      placeholder="e.g. Driver unreachable, incorrect delivery location, payment issue..."
+                      required
+                      disabled={isSubmittingDispute}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowDisputeModal(false)}
+                      disabled={isSubmittingDispute}
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingDispute || !disputeReason.trim()}
+                      className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSubmittingDispute ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+                      ) : (
+                        <><AlertTriangle className="w-4 h-4" /> Submit Dispute</>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
