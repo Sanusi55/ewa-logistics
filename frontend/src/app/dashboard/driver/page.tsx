@@ -161,11 +161,12 @@ export default function DriverDashboardPage() {
 
     if (bidsData) setMyBids(bidsData);
 
+    // ✅ FIXED: Added "driver_assigned" to the status array so the driver can see the order to input the code
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*")
       .eq("driver_id", user.id)
-      .in("status", ["loading", "in_transit", "delivered", "completed"])
+      .in("status", ["driver_assigned", "loading", "in_transit", "delivered", "completed"])
       .order("created_at", { ascending: false });
 
     if (ordersData) setActiveOrders(ordersData);
@@ -460,7 +461,7 @@ export default function DriverDashboardPage() {
     });
   };
 
-  const activeDelivery = activeOrders.find(o => o.status === "in_transit" || o.status === "loading");
+  const activeDelivery = activeOrders.find(o => o.status === "driver_assigned" || o.status === "in_transit" || o.status === "loading");
   const completedDeliveries = activeOrders.filter(o => o.status === "delivered" || o.status === "completed");
   
   const todayEarnings = availableBalance;
