@@ -1,6 +1,45 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+
+// ============================================
+// ✅ BASIC AUTHENTICATION ACTIONS (ADDED)
+// ============================================
+
+export async function login(formData: FormData) {
+  const supabase = await createClient();
+
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+
+  if (!email || !password) {
+    return { error: "Email and password are required" };
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error("❌ Login Error:", error.message);
+    return { error: "Invalid email or password. Please check your credentials." };
+  }
+
+  // Returning a simple, serializable object prevents the "unexpected response" error
+  return { success: true };
+}
+
+export async function logout() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
+// ============================================
+// ✅ ADMIN ACTIONS (Your existing code)
+// ============================================
 
 // ✅ Verify admin access with detailed logging
 async function requireAdmin() {
@@ -69,22 +108,22 @@ export async function getAdminStats() {
   const { data: bids } = await supabase.from("driver_bids").select("id, status, bid_amount, created_at");
 
   const totalUsers = users?.length || 0;
-  const customers = users?.filter(u => u.role === "customer").length || 0;
-  const drivers = users?.filter(u => u.role === "driver").length || 0;
-  const suppliers = users?.filter(u => u.role === "supplier").length || 0;
-  const admins = users?.filter(u => u.role === "admin").length || 0;
-  const suspendedUsers = users?.filter(u => u.is_suspended).length || 0;
+  const customers = users?.filter((u: any) => u.role === "customer").length || 0;
+  const drivers = users?.filter((u: any) => u.role === "driver").length || 0;
+  const suppliers = users?.filter((u: any) => u.role === "supplier").length || 0;
+  const admins = users?.filter((u: any) => u.role === "admin").length || 0;
+  const suspendedUsers = users?.filter((u: any) => u.is_suspended).length || 0;
 
   const totalOrders = orders?.length || 0;
-  const pendingOrders = orders?.filter(o => o.status === "pending_supplier_acceptance").length || 0;
-  const awaitingDriver = orders?.filter(o => o.status === "driver_searching" || o.status === "no_driver_available").length || 0;
-  const inTransit = orders?.filter(o => o.status === "in_transit" || o.status === "loading" || o.status === "driver_assigned" || o.status === "supplier_driver_assigned").length || 0;
-  const delivered = orders?.filter(o => o.status === "delivered").length || 0;
-  const cancelled = orders?.filter(o => o.status === "cancelled").length || 0;
+  const pendingOrders = orders?.filter((o: any) => o.status === "pending_supplier_acceptance").length || 0;
+  const awaitingDriver = orders?.filter((o: any) => o.status === "driver_searching" || o.status === "no_driver_available").length || 0;
+  const inTransit = orders?.filter((o: any) => o.status === "in_transit" || o.status === "loading" || o.status === "driver_assigned" || o.status === "supplier_driver_assigned").length || 0;
+  const delivered = orders?.filter((o: any) => o.status === "delivered").length || 0;
+  const cancelled = orders?.filter((o: any) => o.status === "cancelled").length || 0;
 
-  const totalRevenue = orders?.filter(o => o.status === "delivered").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
-  const pendingRevenue = orders?.filter(o => o.status !== "delivered" && o.status !== "cancelled").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
-  const totalDriverEarnings = orders?.filter(o => o.status === "delivered" && o.driver_id).reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0) || 0;
+  const totalRevenue = orders?.filter((o: any) => o.status === "delivered").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
+  const pendingRevenue = orders?.filter((o: any) => o.status !== "delivered" && o.status !== "cancelled").reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0) || 0;
+  const totalDriverEarnings = orders?.filter((o: any) => o.status === "delivered" && o.driver_id).reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0) || 0;
 
   const revenueByDay = [];
   for (let i = 6; i >= 0; i--) {

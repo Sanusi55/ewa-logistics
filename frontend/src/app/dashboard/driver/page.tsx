@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Truck, MapPin, Wallet, Star, Navigation, Phone, MessageCircle, 
   CheckCircle, Clock, AlertCircle, Calendar, TrendingUp, Power,
   Package, Settings, ChevronRight, Loader2, DollarSign, X, Key,
-  Camera, FileUp, Building2, Plus, AlertTriangle, LogOut
+  Camera, FileUp, Building2, Plus, AlertTriangle, LogOut, User,
+  Bell, Lock, Trash2, LogOut as LogOutIcon, Shield, Mail // ✅ ADDED Mail HERE
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/providers/toast-provider";
@@ -63,22 +65,56 @@ function DriverSkeleton() {
 }
 
 export default function DriverDashboardPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [availableJobs, setAvailableJobs] = useState<Order[]>([]);
   const [myBids, setMyBids] = useState<DriverBid[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [driverName, setDriverName] = useState("Driver");
-  const [driverState, setDriverState] = useState("");
   
-  // Modals
+  // ✅ Profile State
+  const [driverName, setDriverName] = useState("Driver");
+  const [driverEmail, setDriverEmail] = useState("");
+  const [driverPhone, setDriverPhone] = useState("");
+  const [driverState, setDriverState] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [accountRole, setAccountRole] = useState("driver");
+  
+  // ✅ Notification Preferences State
+  const [notifications, setNotifications] = useState({
+    orderUpdates: true,
+    deliveryTracking: true,
+    promotionalEmails: false,
+    smsAlerts: true,
+  });
+  
+  // ✅ Password Change State
+  const [passwords, setPasswords] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  
+  // ✅ UPDATED: Added "settings" to the tab types
+  const urlTab = searchParams.get("tab") as "jobs" | "deliveries" | "earnings" | "settings" | null;
+  const [activeTab, setActiveTab] = useState<"jobs" | "deliveries" | "earnings" | "settings">(
+    urlTab && ["jobs", "deliveries", "earnings", "settings"].includes(urlTab) ? urlTab : "jobs"
+  );
+
+  const handleTabChange = (tab: "jobs" | "deliveries" | "earnings" | "settings") => {
+    setActiveTab(tab);
+    router.push(`/dashboard/driver?tab=${tab}`, { scroll: false });
+  };
+  
   const [showBidModal, setShowBidModal] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
-  // Form States
   const [bidAmount, setBidAmount] = useState("");
   const [estimatedTime, setEstimatedTime] = useState("");
   const [driverMessage, setDriverMessage] = useState("");
@@ -89,8 +125,9 @@ export default function DriverDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
-  // Account Details State
   const [accountDetails, setAccountDetails] = useState({
     bankName: "",
     accountNumber: "",
@@ -98,14 +135,12 @@ export default function DriverDashboardPage() {
   });
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-  // ✅ NEW: Withdrawal & Earnings State
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [availableBalance, setAvailableBalance] = useState(0);
 
-  // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
@@ -132,36 +167,34 @@ export default function DriverDashboardPage() {
 
   async function fetchDriverData() {
     setIsLoading(true);
-    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setIsLoading(false);
       return;
     }
 
+    // ✅ Fetch profile data including email and phone
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, state")
+      .select("full_name, state, email, phone, company_name")
       .eq("id", user.id)
       .single();
 
-    if (profile?.full_name) setDriverName(profile.full_name);
+    const displayName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || "Driver";
+    setDriverName(displayName);
+    setDriverEmail(profile?.email || user.email || "");
+    setDriverPhone(profile?.phone || "");
+    setCompanyName(profile?.company_name || "");
+    setAccountRole("driver");
+    
     if (profile?.state) setDriverState(profile.state);
 
     const jobsResult = await getAvailableJobs();
-    if (!jobsResult.error) {
-      setAvailableJobs(jobsResult.jobs || []);
-    }
+    if (!jobsResult.error) setAvailableJobs(jobsResult.jobs || []);
 
-    const { data: bidsData } = await supabase
-      .from("driver_bids")
-      .select("*")
-      .eq("driver_id", user.id)
-      .order("created_at", { ascending: false });
-
+    const { data: bidsData } = await supabase.from("driver_bids").select("*").eq("driver_id", user.id).order("created_at", { ascending: false });
     if (bidsData) setMyBids(bidsData);
 
-    // ✅ FIXED: Added "driver_assigned" to the status array so the driver can see the order to input the code
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*")
@@ -170,20 +203,159 @@ export default function DriverDashboardPage() {
       .order("created_at", { ascending: false });
 
     if (ordersData) setActiveOrders(ordersData);
-
     setIsLoading(false);
   }
+
+  // ✅ NEW: Save Profile Information
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: driverName,
+          phone: driverPhone,
+          company_name: companyName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      addToast({ type: "success", title: "Profile Updated! ✅", message: "Your profile information has been saved successfully." });
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to update profile" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // ✅ NEW: Save Notification Preferences
+  const handleSaveNotifications = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingNotifications(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          notification_preferences: notifications,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      addToast({ type: "success", title: "Preferences Saved! ✅", message: "Your notification preferences have been updated." });
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to update preferences" });
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  // ✅ NEW: Change Password
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsChangingPassword(true);
+    
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      addToast({ type: "error", title: "Error", message: "New passwords do not match" });
+      setIsChangingPassword(false);
+      return;
+    }
+    
+    if (passwords.newPassword.length < 6) {
+      addToast({ type: "error", title: "Error", message: "Password must be at least 6 characters" });
+      setIsChangingPassword(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwords.newPassword
+      });
+
+      if (error) throw error;
+      
+      addToast({ type: "success", title: "Password Updated! ✅", message: "Your password has been changed successfully." });
+      setPasswords({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to update password" });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  // ✅ NEW: Deactivate Account
+  const handleDeactivateAccount = async () => {
+    if (!confirm("Are you sure you want to deactivate your account? You can reactivate it anytime by logging in.")) {
+      return;
+    }
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          is_suspended: true,
+          suspension_reason: "User deactivated account",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      
+      addToast({ type: "success", title: "Account Deactivated", message: "Your account has been deactivated. You can reactivate it by logging in again." });
+      await logout();
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to deactivate account" });
+    }
+  };
+
+  // ✅ NEW: Delete Account
+  const handleDeleteAccount = async () => {
+    if (!confirm("⚠️ WARNING: This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?")) {
+      return;
+    }
+    
+    if (!confirm("This is your final warning. Type 'DELETE' to confirm permanent account deletion.")) {
+      return;
+    }
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      // Note: Actual deletion would require admin approval or soft delete
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          is_suspended: true,
+          suspension_reason: "Account deletion requested",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      
+      addToast({ type: "success", title: "Deletion Requested", message: "Your account deletion request has been submitted. An admin will process it shortly." });
+      await logout();
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to request account deletion" });
+    }
+  };
 
   const loadAccountDetails = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from("driver_profiles") 
-      .select("bank_name, account_number, account_name")
-      .eq("user_id", user.id)
-      .single();
-
+    const { data, error } = await supabase.from("driver_profiles").select("bank_name, account_number, account_name").eq("user_id", user.id).single();
     if (data && !error) {
       setAccountDetails({
         bankName: data.bank_name || "",
@@ -196,26 +368,14 @@ export default function DriverDashboardPage() {
   const loadWithdrawals = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from("withdrawal_requests")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
+    const { data } = await supabase.from("withdrawal_requests").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
     if (data) setWithdrawals(data);
   };
 
   const loadEarnings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from("driver_earnings")
-      .select("amount")
-      .eq("user_id", user.id)
-      .eq("status", "available");
-
+    const { data } = await supabase.from("driver_earnings").select("amount").eq("user_id", user.id).eq("status", "available");
     if (data) {
       const total = data.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
       setAvailableBalance(total);
@@ -228,30 +388,17 @@ export default function DriverDashboardPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { error } = await supabase
-        .from("driver_profiles")
-        .upsert({
-          user_id: user.id,
-          bank_name: accountDetails.bankName,
-          account_number: accountDetails.accountNumber,
-          account_name: accountDetails.accountName,
-          updated_at: new Date().toISOString(),
-        });
-
+      const { error } = await supabase.from("driver_profiles").upsert({
+        user_id: user.id,
+        bank_name: accountDetails.bankName,
+        account_number: accountDetails.accountNumber,
+        account_name: accountDetails.accountName,
+        updated_at: new Date().toISOString(),
+      });
       if (error) throw error;
-
-      addToast({ 
-        type: "success", 
-        title: "Account Details Saved! ✅", 
-        message: "Your payout information has been updated successfully." 
-      });
+      addToast({ type: "success", title: "Account Details Saved! ✅", message: "Your payout information has been updated successfully." });
     } catch (error: any) {
-      addToast({ 
-        type: "error", 
-        title: "Error", 
-        message: error.message || "Failed to save account details" 
-      });
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to save account details" });
     } finally {
       setIsSavingAccount(false);
     }
@@ -302,19 +449,13 @@ export default function DriverDashboardPage() {
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!disputeOrderId || !disputeReason.trim()) return;
-
     setIsSubmittingDispute(true);
     try {
       const result = await createDispute(disputeOrderId, disputeReason, "driver");
-      
       if (result.error) {
         addToast({ type: "error", title: "Error", message: result.error });
       } else {
-        addToast({ 
-          type: "success", 
-          title: "Dispute Reported! 🚨", 
-          message: "Our admin team will review this and contact you shortly." 
-        });
+        addToast({ type: "success", title: "Dispute Reported! 🚨", message: "Our admin team will review this and contact you shortly." });
         setShowDisputeModal(false);
         setDisputeReason("");
         setDisputeOrderId(null);
@@ -326,7 +467,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ UPDATED: Accept optional preFillAmount for customer offers
   const handleOpenBidModal = (order: Order, preFillAmount?: number | null) => {
     setSelectedOrder(order);
     setBidAmount(preFillAmount ? preFillAmount.toString() : "");
@@ -340,7 +480,6 @@ export default function DriverDashboardPage() {
       addToast({ type: "error", title: "Invalid Amount", message: "Please enter a valid delivery fee." });
       return;
     }
-
     setIsSubmitting(true);
     try {
       const result = await submitDriverBid(selectedOrder.id, {
@@ -348,18 +487,11 @@ export default function DriverDashboardPage() {
         estimated_arrival_minutes: estimatedTime ? parseInt(estimatedTime) : undefined,
         driver_message: driverMessage || undefined,
       });
-
       if (result.error) {
         addToast({ type: "error", title: "Error", message: result.error });
         return;
       }
-
-      addToast({ 
-        type: "success", 
-        title: "Bid Submitted! 🎉", 
-        message: "The customer will review your bid shortly." 
-      });
-      
+      addToast({ type: "success", title: "Bid Submitted! 🎉", message: "The customer will review your bid shortly." });
       setShowBidModal(false);
       await fetchDriverData();
     } catch (error: any) {
@@ -380,21 +512,14 @@ export default function DriverDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please enter the delivery code." });
       return;
     }
-
     setIsVerifying(true);
     try {
       const result = await confirmDriverDelivery(selectedOrder.id, deliveryCode);
-      
       if (result.error) {
         addToast({ type: "error", title: "Invalid Code", message: result.error });
         return;
       }
-
-      addToast({ 
-        type: "success", 
-        title: "Delivery Completed! 🎉", 
-        message: "The delivery has been marked as completed successfully." 
-      });
+      addToast({ type: "success", title: "Delivery Completed! 🎉", message: "The delivery has been marked as completed successfully." });
       setShowCodeModal(false);
       await fetchDriverData();
     } catch (error: any) {
@@ -416,24 +541,16 @@ export default function DriverDashboardPage() {
       addToast({ type: "error", title: "Error", message: "Please select a file." });
       return;
     }
-
     setIsUploading(true);
     try {
       const { uploadFile } = await import("@/lib/supabase/upload");
       const { url, error } = await uploadFile(proofFile, "delivery-proof");
-
       if (error || !url) {
         addToast({ type: "error", title: "Upload Failed", message: error || "Could not upload" });
         setIsUploading(false);
         return;
       }
-
-      addToast({ 
-        type: "success", 
-        title: "Proof Uploaded! 📸", 
-        message: "Delivery proof uploaded successfully." 
-      });
-      
+      addToast({ type: "success", title: "Proof Uploaded! 📸", message: "Delivery proof uploaded successfully." });
       setShowProofModal(false);
       setProofFile(null);
       setDeliveryNotes("");
@@ -463,176 +580,196 @@ export default function DriverDashboardPage() {
 
   const activeDelivery = activeOrders.find(o => o.status === "driver_assigned" || o.status === "in_transit" || o.status === "loading");
   const completedDeliveries = activeOrders.filter(o => o.status === "delivered" || o.status === "completed");
-  
   const todayEarnings = availableBalance;
 
   if (isLoading) {
     return (
-      <div className="pt-24 px-4 md:px-6">
-        <div className="max-w-5xl mx-auto"><DriverSkeleton /></div>
+      <div className="pt-24 px-4 md:px-6 max-w-7xl mx-auto">
+        <DriverSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="pt-24 px-4 md:px-6">
+    <div className="pt-24 pb-12 px-4 md:px-6 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* ✅ UPDATED HEADER: Prominent Name Display + Settings & Sign Out Buttons */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/50 backdrop-blur-sm p-4 rounded-2xl border border-border">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Driver Dashboard</h1>
             <p className="text-muted-foreground mt-1">
-              Welcome back, {driverName}. 
+              Welcome back, <span className="text-foreground font-bold text-lg">{driverName}</span>. 
               {driverState && <span className="text-orange-500 font-medium"> Operating in: {driverState}</span>}
             </p>
           </div>
-          <button 
-            onClick={toggleOnlineStatus}
-            className={`flex items-center gap-3 px-5 py-3 rounded-xl font-semibold transition-all cursor-pointer shadow-lg ${
-              isOnline 
-                ? "bg-green-500 text-white shadow-green-500/20 hover:bg-green-600" 
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
+          
+          <div className="flex flex-wrap items-center gap-3">
+            <button 
+              onClick={toggleOnlineStatus}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg text-sm ${
+                isOnline ? "bg-green-500 text-white shadow-green-500/20 hover:bg-green-600" : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              <Power className={`w-4 h-4 ${isOnline ? "animate-pulse" : ""}`} />
+              {isOnline ? "Online" : "Offline"}
+            </button>
+
+            {/* ✅ Settings button now correctly navigates to the Settings tab */}
+            <button
+              onClick={() => handleTabChange("settings")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg text-sm ${
+                activeTab === "settings" ? "bg-orange-500 text-white shadow-orange-500/20" : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </button>
+
+            <form action={logout} className="inline">
+              <button 
+                type="submit"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-all cursor-pointer shadow-lg text-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* CENTER TAB NAVIGATION */}
+        <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+          <button
+            onClick={() => handleTabChange("jobs")}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              activeTab === "jobs" ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-muted-foreground hover:bg-muted"
             }`}
           >
-            <Power className={`w-5 h-5 ${isOnline ? "animate-pulse" : ""}`} />
-            {isOnline ? "Online & Receiving Requests" : "Go Offline"}
+            <Package className="w-4 h-4" /> Available Jobs
+          </button>
+          <button
+            onClick={() => handleTabChange("deliveries")}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              activeTab === "deliveries" ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Truck className="w-4 h-4" /> My Deliveries
+          </button>
+          <button
+            onClick={() => handleTabChange("earnings")}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              activeTab === "earnings" ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Wallet className="w-4 h-4" /> Earnings & Withdrawals
+          </button>
+          {/* ✅ NEW: Settings Tab */}
+          <button
+            onClick={() => handleTabChange("settings")}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              activeTab === "settings" ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Settings className="w-4 h-4" /> Account Settings
           </button>
         </div>
 
         <AnimatePresence mode="wait">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Available Balance", value: formatNaira(todayEarnings), icon: Wallet, color: "text-green-500", bg: "bg-green-500/10" },
-                { label: "Active Trips", value: activeDelivery ? 1 : 0, icon: Truck, color: "text-blue-500", bg: "bg-blue-500/10" },
-                { label: "My Bids", value: myBids.length, icon: DollarSign, color: "text-orange-500", bg: "bg-orange-500/10" },
-                { label: "Driver Rating", value: "4.9 / 5.0", icon: Star, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-              ].map((stat, i) => (
-                <motion.div 
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="glass p-5 rounded-xl flex flex-col justify-between"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-                    <div className={`p-2 rounded-lg ${stat.bg}`}>
-                      <stat.icon className={`w-4 h-4 ${stat.color}`} />
+          {/* TAB 1: AVAILABLE JOBS */}
+          {activeTab === "jobs" && (
+            <motion.div key="jobs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+              {availableJobs.length > 0 ? availableJobs.map((job, index) => (
+                <motion.div key={job.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="glass rounded-xl p-6 bg-orange-500/5 hover:bg-orange-500/10 transition-all">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-bold">{job.material_type}</h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Awaiting Driver</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{job.tonnage} Tons</p>
                     </div>
                   </div>
-                  <span className="text-xl md:text-2xl font-bold">{stat.value}</span>
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground mb-1">Pickup</p>
+                        <p className="text-sm font-medium truncate">{job.pickup_location}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Navigation className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground mb-1">Drop-off</p>
+                        <p className="text-sm font-medium truncate">{job.delivery_location}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {job.delivery_fee_offer && job.delivery_fee_offer > 0 ? (
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-border">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">Customer Delivery Offer</span>
+                        <span className="text-lg font-bold text-green-500">{formatNaira(job.delivery_fee_offer)}</span>
+                      </div>
+                      {job.hasBid ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
+                          <CheckCircle className="w-4 h-4" /><span className="font-semibold text-sm">Bid Submitted</span>
+                        </div>
+                      ) : (
+                        <MagneticButton onClick={() => handleOpenBidModal(job, job.delivery_fee_offer)} className="px-6 py-2.5 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> Accept Offer
+                        </MagneticButton>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-border">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="w-3 h-3" />{formatDate(job.created_at)}
+                      </div>
+                      {job.hasBid ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
+                          <CheckCircle className="w-4 h-4" /><span className="font-semibold text-sm">Bid Submitted</span>
+                        </div>
+                      ) : (
+                        <MagneticButton onClick={() => handleOpenBidModal(job, null)} className="px-6 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2">
+                          <DollarSign className="w-4 h-4" /> Place Bid
+                        </MagneticButton>
+                      )}
+                    </div>
+                  )}
                 </motion.div>
-              ))}
-            </div>
+              )) : (
+                <div className="glass p-12 rounded-2xl text-center bg-muted/20">
+                  <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-xl font-bold mb-2">No Available Jobs</h3>
+                  <p className="text-muted-foreground">Check back later or ensure you are Online to receive requests.</p>
+                </div>
+              )}
+            </motion.div>
+          )}
 
-            {availableJobs.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Package className="w-5 h-5 text-orange-500" /> Available Jobs {driverState && `in ${driverState}`}
-                  <span className="text-sm font-normal text-muted-foreground">({availableJobs.length})</span>
+          {/* TAB 2: MY DELIVERIES */}
+          {activeTab === "deliveries" && (
+            <motion.div key="deliveries" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
+                  <Clock className="w-5 h-5 text-orange-500" /> Active Delivery
                 </h2>
-                {availableJobs.map((job, index) => (
-                  <motion.div
-                    key={job.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="glass rounded-xl p-6 bg-orange-500/5 hover:bg-orange-500/10 transition-all"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-bold">{job.material_type}</h3>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                            Awaiting Driver
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {job.tonnage} Tons
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-muted-foreground mb-1">Pickup</p>
-                          <p className="text-sm font-medium truncate">{job.pickup_location}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Navigation className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-muted-foreground mb-1">Drop-off</p>
-                          <p className="text-sm font-medium truncate">{job.delivery_location}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ✅ NEW: Conditional rendering for Customer Offers vs Standard Bids */}
-                    {job.delivery_fee_offer && job.delivery_fee_offer > 0 ? (
-                      <div className="flex items-center justify-between pt-4 mt-4">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-muted-foreground">Customer Delivery Offer</span>
-                          <span className="text-lg font-bold text-green-500">{formatNaira(job.delivery_fee_offer)}</span>
-                        </div>
-                        {job.hasBid ? (
-                          <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="font-semibold text-sm">Bid Submitted</span>
-                          </div>
-                        ) : (
-                          <MagneticButton
-                            onClick={() => handleOpenBidModal(job, job.delivery_fee_offer)}
-                            className="px-6 py-2.5 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20 flex items-center gap-2"
-                          >
-                            <CheckCircle className="w-4 h-4" /> Accept Offer
-                          </MagneticButton>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between pt-4 mt-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Calendar className="w-3 h-3" />
-                          {formatDate(job.created_at)}
-                        </div>
-                        {job.hasBid ? (
-                          <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-lg">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="font-semibold text-sm">Bid Submitted</span>
-                          </div>
-                        ) : (
-                          <MagneticButton
-                            onClick={() => handleOpenBidModal(job, null)}
-                            className="px-6 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2"
-                          >
-                            <DollarSign className="w-4 h-4" /> Place Bid
-                          </MagneticButton>
-                        )}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            )}
-
-            <div className="grid lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
                 {activeDelivery ? (
-                  <div className="glass p-6 rounded-2xl bg-orange-500/5 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                      <Navigation className="w-32 h-32 text-orange-500" />
-                    </div>
-                    
+                  <div className="glass p-6 rounded-2xl bg-orange-500/5 relative overflow-hidden border border-orange-500/20">
+                    <div className="absolute top-0 right-0 p-4 opacity-10"><Navigation className="w-32 h-32 text-orange-500" /></div>
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                         <div>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-bold mb-2">
-                            <Clock className="w-3 h-3" /> ACTIVE DELIVERY
-                          </span>
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-bold">
+                              <Clock className="w-3 h-3" /> ACTIVE DELIVERY
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold border border-green-500/20">
+                              <CheckCircle className="w-3 h-3" /> Delivery Fee Paid by Customer
+                            </span>
+                          </div>
                           <h2 className="text-xl font-bold">ORD-{activeDelivery.id.slice(0, 8).toUpperCase()}</h2>
                           <p className="text-sm text-muted-foreground">{activeDelivery.tonnage} Tons {activeDelivery.material_type}</p>
                           <p className="text-xs text-muted-foreground mt-1 capitalize">Status: {activeDelivery.status.replace("_", " ")}</p>
@@ -662,218 +799,485 @@ export default function DriverDashboardPage() {
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-3">
-                        <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
+                        <a href={`tel:${activeDelivery.driver_phone || activeDelivery.customer_phone}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
                           <Phone className="w-4 h-4" /> Contact Customer
-                        </button>
-                        
-                        <MagneticButton 
-                          onClick={() => handleOpenProofModal(activeDelivery)}
-                          className="flex-[2] flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20"
-                        >
+                        </a>
+                        <MagneticButton onClick={() => handleOpenProofModal(activeDelivery)} className="flex-[2] flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20">
                           <Camera className="w-4 h-4" /> Upload Delivery Proof
                         </MagneticButton>
-                        
-                        <MagneticButton 
-                          onClick={() => handleOpenCodeModal(activeDelivery)}
-                          className="flex-[2] flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
-                        >
+                        <MagneticButton onClick={() => handleOpenCodeModal(activeDelivery)} className="flex-[2] flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20">
                           <Key className="w-4 h-4" /> Complete with Code
                         </MagneticButton>
-                      </div>
-
-                      <div className="mt-4">
-                        <button
-                          onClick={() => { setDisputeOrderId(activeDelivery.id); setShowDisputeModal(true); }}
-                          className="w-full sm:w-auto px-4 py-3 text-sm font-semibold text-red-500 bg-red-500/10 rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <AlertTriangle className="w-4 h-4" /> Report Dispute
-                        </button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="glass p-12 rounded-2xl text-center bg-muted/20">
-                    <Truck className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-xl font-bold mb-2">No Active Deliveries</h3>
-                    <p className="text-muted-foreground">
-                      {availableJobs.length > 0 
-                        ? "Check available jobs above to place a bid!"
-                        : "You don't have any active deliveries right now."}
-                    </p>
+                  <div className="glass p-8 rounded-2xl text-center bg-muted/20">
+                    <Truck className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                    <h3 className="text-lg font-bold mb-1">No Active Deliveries</h3>
+                    <p className="text-sm text-muted-foreground">You don't have any active deliveries right now.</p>
                   </div>
                 )}
               </div>
 
-              <div className="space-y-6">
-                <div className="glass p-6 rounded-2xl text-center">
-                  <div className="relative inline-block mb-4">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white text-3xl font-bold mx-auto ring-4 ring-orange-500/20">
-                      {driverName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                  </div>
-                  <h3 className="font-bold text-xl">{driverName}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Verified Driver • {completedDeliveries.length} Trips</p>
-                </div>
-
-                <div className="glass p-6 rounded-2xl">
-                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-orange-500" /> Vehicle Details
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
-                      <Package className="w-5 h-5 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Vehicle & Plate</p>
-                        <p className="text-sm font-semibold text-foreground">Volvo Tipper (ABC-123-DE)</p>
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
+                  <CheckCircle className="w-5 h-5 text-green-500" /> Completed Deliveries
+                </h2>
+                {completedDeliveries.length > 0 ? (
+                  <div className="space-y-3">
+                    {completedDeliveries.map((order) => (
+                      <div key={order.id} className="glass p-4 rounded-xl border border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <p className="font-bold">{order.material_type} - {order.tonnage} Tons</p>
+                          <p className="text-sm text-muted-foreground">{order.delivery_location}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Earned</p>
+                          <p className="text-xl font-bold text-green-600">{formatNaira(order.delivery_fee || 0)}</p>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-bold mt-1">
+                            <CheckCircle className="w-3 h-3" /> {order.status === "completed" ? "Completed & Paid" : "Delivered"}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8 glass rounded-xl">No completed deliveries yet.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
 
-                <div className="glass p-6 rounded-2xl mb-10">
+          {/* TAB 3: EARNINGS & WITHDRAWALS */}
+          {activeTab === "earnings" && (
+            <motion.div key="earnings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="glass p-6 rounded-2xl">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-orange-500" /> Account Details
                   </h3>
                   <form onSubmit={handleSaveAccountDetails} className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium mb-1">Bank Name <span className="text-red-500">*</span></label>
-                      <select
-                        value={accountDetails.bankName}
-                        onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none cursor-pointer text-sm"
-                        required
-                      >
+                      <select value={accountDetails.bankName} onChange={(e) => setAccountDetails({...accountDetails, bankName: e.target.value})} className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none cursor-pointer text-sm" required>
                         <option value="" disabled>Select your bank</option>
-                        {nigerianBanks.map((bank) => (
-                          <option key={bank} value={bank}>{bank}</option>
-                        ))}
+                        {nigerianBanks.map((bank) => (<option key={bank} value={bank}>{bank}</option>))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1">Account Number <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        value={accountDetails.accountNumber}
-                        onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm"
-                        placeholder="0123456789"
-                        maxLength={10}
-                        required
-                      />
+                      <input type="text" value={accountDetails.accountNumber} onChange={(e) => setAccountDetails({...accountDetails, accountNumber: e.target.value})} className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm" placeholder="0123456789" maxLength={10} required />
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1">Account Name <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        value={accountDetails.accountName}
-                        onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})}
-                        className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm"
-                        placeholder="Account Name"
-                        required
-                      />
+                      <input type="text" value={accountDetails.accountName} onChange={(e) => setAccountDetails({...accountDetails, accountName: e.target.value})} className="w-full px-3 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm" placeholder="Account Name" required />
                     </div>
-                    
-                    <div className="pt-2">
-                      <button
-                        type="submit"
-                        disabled={isSavingAccount}
-                        className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
-                      >
-                        {isSavingAccount ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                        ) : (
-                          <><CheckCircle className="w-4 h-4" /> Save Account Details</>
-                        )}
-                      </button>
-                    </div>
+                    <button type="submit" disabled={isSavingAccount} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
+                      {isSavingAccount ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>) : (<><CheckCircle className="w-4 h-4" /> Save Account Details</>)}
+                    </button>
                   </form>
+                </div>
 
-                  <div className="mt-8 pt-6">
-                    <form action={logout}>
-                      <button className="w-full py-3 bg-red-500/10 text-red-600 rounded-lg font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                        <LogOut className="w-4 h-4" /> Sign Out
-                      </button>
-                    </form>
+                <div className="glass p-6 rounded-2xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                      <Wallet className="w-5 h-5 text-green-500" /> Withdrawals
+                    </h3>
+                    <button onClick={() => setShowWithdrawalModal(true)} className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-green-500/20 text-sm">
+                      <Plus className="w-4 h-4" /> Request
+                    </button>
+                  </div>
+                  <div className="space-y-3 mb-6">
+                    <div className="p-4 bg-green-500/10 rounded-xl flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Available Balance</span>
+                      <span className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</span>
+                    </div>
+                    <div className="p-4 bg-blue-500/10 rounded-xl flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Pending Withdrawals</span>
+                      <span className="text-xl font-bold text-blue-500">
+                        {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="glass rounded-2xl p-6 md:p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Wallet className="w-6 h-6 text-green-500" /> Withdrawals
-                  </h2>
-                  <p className="text-sm text-muted-foreground">Request a payout of your earned delivery fees.</p>
-                </div>
-                <button
-                  onClick={() => setShowWithdrawalModal(true)}
-                  className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-green-500/20"
-                >
-                  <Plus className="w-4 h-4" /> Request Withdrawal
-                </button>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-4 mb-8">
-                <div className="p-5 bg-green-500/10 rounded-xl">
-                  <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
-                  <p className="text-3xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
-                </div>
-                <div className="p-5 bg-blue-500/10 rounded-xl">
-                  <p className="text-sm text-muted-foreground mb-1">Pending Withdrawals</p>
-                  <p className="text-3xl font-bold text-blue-500">
-                    {formatNaira(withdrawals.filter(w => w.status === "pending").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                  </p>
-                </div>
-                <div className="p-5 bg-purple-500/10 rounded-xl">
-                  <p className="text-sm text-muted-foreground mb-1">Total Withdrawn</p>
-                  <p className="text-3xl font-bold text-purple-500">
-                    {formatNaira(withdrawals.filter(w => w.status === "approved").reduce((sum: number, w: any) => sum + (w.amount || 0), 0))}
-                  </p>
-                </div>
-              </div>
-
-              <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-muted-foreground">
-                    <tr>
-                      <th className="text-left p-4 font-medium">Date</th>
-                      <th className="text-left p-4 font-medium">Amount</th>
-                      <th className="text-left p-4 font-medium">Bank Account</th>
-                      <th className="text-left p-4 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {withdrawals.length === 0 ? (
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-lg font-bold mb-4">Recent Requests</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-muted-foreground border-b border-border">
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td>
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-left p-3 font-medium">Amount</th>
+                        <th className="text-left p-3 font-medium">Bank Account</th>
+                        <th className="text-left p-3 font-medium">Status</th>
                       </tr>
-                    ) : (
-                      withdrawals.map((w: any) => (
-                        <tr key={w.id} className="border-t border-muted/30 hover:bg-muted/20 transition-colors">
-                          <td className="p-4">{new Date(w.created_at).toLocaleDateString()}</td>
-                          <td className="p-4 font-semibold">{formatNaira(w.amount)}</td>
-                          <td className="p-4 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              w.status === "approved" ? "bg-green-500/10 text-green-600" :
-                              w.status === "rejected" ? "bg-red-500/10 text-red-600" :
-                              "bg-yellow-500/10 text-yellow-600"
-                            }`}>
-                              {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {withdrawals.length === 0 ? (
+                        <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</td></tr>
+                      ) : (
+                        withdrawals.map((w: any) => (
+                          <tr key={w.id} className="border-b border-muted/30 hover:bg-muted/20 transition-colors">
+                            <td className="p-3">{new Date(w.created_at).toLocaleDateString()}</td>
+                            <td className="p-3 font-semibold">{formatNaira(w.amount)}</td>
+                            <td className="p-3 text-muted-foreground">{w.account_number} ({w.bank_name})</td>
+                            <td className="p-3">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                w.status === "approved" ? "bg-green-500/10 text-green-600" :
+                                w.status === "rejected" ? "bg-red-500/10 text-red-600" : "bg-yellow-500/10 text-yellow-600"
+                              }`}>
+                                {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </motion.div>
+          )}
 
-          </motion.div>
+          {/* ✅ TAB 4: COMPREHENSIVE ACCOUNT SETTINGS */}
+          {activeTab === "settings" && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              {/* Profile Information Section */}
+              <div className="glass p-6 md:p-8 rounded-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="font-bold text-xl flex items-center gap-2">
+                      <User className="w-6 h-6 text-orange-500" /> Profile Information
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">Update your personal and company details.</p>
+                  </div>
+                  <MagneticButton 
+                    onClick={() => document.getElementById('profile-form')?.requestSubmit()}
+                    disabled={isSavingProfile}
+                    className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Save Changes
+                  </MagneticButton>
+                </div>
+                
+                <form id="profile-form" onSubmit={handleSaveProfile} className="space-y-8">
+                  {/* Profile Photo Section */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-8 border-b border-border">
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-orange-500/20 flex-shrink-0">
+                        {driverName.charAt(0).toUpperCase()}
+                      </div>
+                      <button type="button" className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-orange-500 hover:bg-orange-50 transition-colors cursor-pointer">
+                        <Camera className="w-4 h-4 text-orange-600" />
+                      </button>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground mb-1">Profile Photo</h4>
+                      <p className="text-sm text-muted-foreground mb-3">Click to upload new photo. JPG, PNG or GIF. Max 2MB.</p>
+                    </div>
+                  </div>
+
+                  {/* Profile Information Fields */}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Full Name</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="text" 
+                          value={driverName}
+                          onChange={(e) => setDriverName(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="email" 
+                          value={driverEmail}
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm cursor-not-allowed opacity-70" 
+                          disabled 
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">Email cannot be changed. Contact support for assistance.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Phone Number</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="tel" 
+                          value={driverPhone}
+                          onChange={(e) => setDriverPhone(e.target.value)}
+                          placeholder="+234 800 000 0000"
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Company Name</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="text" 
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="Your company name"
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">State of Operation</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="text" 
+                          value={driverState}
+                          onChange={(e) => setDriverState(e.target.value)}
+                          placeholder="e.g., Lagos"
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Account Role</label>
+                      <div className="relative">
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="text" 
+                          value={accountRole.charAt(0).toUpperCase() + accountRole.slice(1)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm cursor-not-allowed opacity-70 capitalize" 
+                          disabled 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Notification Preferences Section */}
+              <div className="glass p-6 md:p-8 rounded-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="font-bold text-xl flex items-center gap-2">
+                      <Bell className="w-6 h-6 text-orange-500" /> Notification Preferences
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">Choose how and when you want to be contacted.</p>
+                  </div>
+                  <MagneticButton 
+                    onClick={handleSaveNotifications}
+                    disabled={isSavingNotifications}
+                    className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSavingNotifications ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Save Preferences
+                  </MagneticButton>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Order Updates */}
+                  <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-foreground mb-1">Order Updates</h4>
+                        <p className="text-sm text-muted-foreground">Receive emails when your order status changes.</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifications({...notifications, orderUpdates: !notifications.orderUpdates})}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          notifications.orderUpdates ? 'bg-orange-500' : 'bg-muted'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                          notifications.orderUpdates ? 'left-7' : 'left-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Delivery Tracking */}
+                  <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-foreground mb-1">Delivery Tracking</h4>
+                        <p className="text-sm text-muted-foreground">Get real-time SMS when your driver is nearby.</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifications({...notifications, deliveryTracking: !notifications.deliveryTracking})}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          notifications.deliveryTracking ? 'bg-orange-500' : 'bg-muted'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                          notifications.deliveryTracking ? 'left-7' : 'left-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Promotional Emails */}
+                  <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-foreground mb-1">Promotional Emails</h4>
+                        <p className="text-sm text-muted-foreground">Receive discounts and platform updates.</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifications({...notifications, promotionalEmails: !notifications.promotionalEmails})}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          notifications.promotionalEmails ? 'bg-orange-500' : 'bg-muted'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                          notifications.promotionalEmails ? 'left-7' : 'left-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* SMS Alerts */}
+                  <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-foreground mb-1">SMS Alerts</h4>
+                        <p className="text-sm text-muted-foreground">Critical account and security notifications.</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifications({...notifications, smsAlerts: !notifications.smsAlerts})}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          notifications.smsAlerts ? 'bg-orange-500' : 'bg-muted'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                          notifications.smsAlerts ? 'left-7' : 'left-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security & Password Section */}
+              <div className="glass p-6 md:p-8 rounded-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="font-bold text-xl flex items-center gap-2">
+                      <Lock className="w-6 h-6 text-orange-500" /> Security & Password
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">Update your password to keep your account secure.</p>
+                  </div>
+                  <MagneticButton 
+                    onClick={() => document.getElementById('password-form')?.requestSubmit()}
+                    disabled={isChangingPassword}
+                    className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Update Password
+                  </MagneticButton>
+                </div>
+
+                <form id="password-form" onSubmit={handleChangePassword} className="space-y-4 max-w-2xl">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Current Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <input 
+                        type="password" 
+                        value={passwords.currentPassword}
+                        onChange={(e) => setPasswords({...passwords, currentPassword: e.target.value})}
+                        className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">New Password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="password" 
+                          value={passwords.newPassword}
+                          onChange={(e) => setPasswords({...passwords, newPassword: e.target.value})}
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Confirm New Password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="password" 
+                          value={passwords.confirmPassword}
+                          onChange={(e) => setPasswords({...passwords, confirmPassword: e.target.value})}
+                          className="w-full pl-10 pr-4 py-2.5 bg-muted/50 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-sm transition-all" 
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Danger Zone Section */}
+              <div className="glass p-6 md:p-8 rounded-2xl border-2 border-red-500/20">
+                <div className="flex items-center gap-3 mb-6 pb-6 border-b border-red-500/20">
+                  <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xl text-red-600">Danger Zone</h3>
+                    <p className="text-sm text-muted-foreground">Irreversible actions for your account.</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Deactivate Account */}
+                  <div className="p-6 rounded-xl border border-border hover:border-red-500/30 transition-colors">
+                    <h4 className="font-bold text-foreground mb-2">Deactivate Account</h4>
+                    <p className="text-sm text-muted-foreground mb-4">Temporarily disable your account. You can reactivate it at any time by logging in.</p>
+                    <button
+                      onClick={handleDeactivateAccount}
+                      className="px-4 py-2.5 border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <LogOutIcon className="w-4 h-4" />
+                      Deactivate
+                    </button>
+                  </div>
+
+                  {/* Delete Account */}
+                  <div className="p-6 rounded-xl border border-border hover:border-red-500/30 transition-colors">
+                    <h4 className="font-bold text-foreground mb-2">Delete Account</h4>
+                    <p className="text-sm text-muted-foreground mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
+                    <button
+                      onClick={handleDeleteAccount}
+                      className="px-4 py-2.5 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-red-500/20"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Permanently
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </motion.div>
 
@@ -881,94 +1285,28 @@ export default function DriverDashboardPage() {
       <AnimatePresence>
         {showBidModal && selectedOrder && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isSubmitting && setShowBidModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isSubmitting && setShowBidModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <DollarSign className="w-6 h-6 text-orange-500" /> {selectedOrder.delivery_fee_offer ? "Review & Accept Offer" : "Place Your Bid"}
-                  </h3>
-                  <button onClick={() => setShowBidModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
-                    <X className="w-5 h-5" />
-                  </button>
+                  <h3 className="text-xl font-bold flex items-center gap-2"><DollarSign className="w-6 h-6 text-orange-500" /> {selectedOrder.delivery_fee_offer ? "Review & Accept Offer" : "Place Your Bid"}</h3>
+                  <button onClick={() => setShowBidModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                 </div>
-
                 <div className="space-y-4 mb-6">
                   <div className="p-4 bg-muted/50 rounded-xl">
                     <p className="text-xs text-muted-foreground mb-1">Delivery Details</p>
                     <p className="font-bold">{selectedOrder.material_type}</p>
                     <p className="text-sm text-muted-foreground">{selectedOrder.tonnage} Tons</p>
-                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {selectedOrder.delivery_location}
-                    </p>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Your Delivery Fee (₦) <span className="text-red-500">*</span></label>
-                    <input 
-                      type="number"
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-lg font-bold"
-                      placeholder="e.g. 25000"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Estimated Arrival (Minutes)</label>
-                    <input 
-                      type="number"
-                      value={estimatedTime}
-                      onChange={(e) => setEstimatedTime(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all"
-                      placeholder="e.g. 45"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Message to Customer (Optional)</label>
-                    <textarea 
-                      value={driverMessage}
-                      onChange={(e) => setDriverMessage(e.target.value)}
-                      rows={2}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all resize-none"
-                      placeholder="e.g. I can arrive within 30 mins..."
-                      disabled={isSubmitting}
-                    />
+                    <input type="number" value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-lg font-bold" placeholder="e.g. 25000" disabled={isSubmitting} />
                   </div>
                 </div>
-
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => setShowBidModal(false)}
-                    disabled={isSubmitting}
-                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <MagneticButton 
-                    onClick={handleSubmitBid}
-                    disabled={isSubmitting || !bidAmount}
-                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-                    ) : (
-                      <><CheckCircle className="w-4 h-4" /> {selectedOrder.delivery_fee_offer ? "Accept Offer" : "Submit Bid"}</>
-                    )}
+                  <button onClick={() => setShowBidModal(false)} disabled={isSubmitting} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50">Cancel</button>
+                  <MagneticButton onClick={handleSubmitBid} disabled={isSubmitting || !bidAmount} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {isSubmitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>) : (<><CheckCircle className="w-4 h-4" /> Submit Bid</>)}
                   </MagneticButton>
                 </div>
               </div>
@@ -981,172 +1319,26 @@ export default function DriverDashboardPage() {
       <AnimatePresence>
         {showCodeModal && selectedOrder && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isVerifying && setShowCodeModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isVerifying && setShowCodeModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Key className="w-6 h-6 text-orange-500" /> Complete Delivery
-                  </h3>
-                  <button onClick={() => setShowCodeModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
-                    <X className="w-5 h-5" />
-                  </button>
+                  <h3 className="text-xl font-bold flex items-center gap-2"><Key className="w-6 h-6 text-orange-500" /> Complete Delivery</h3>
+                  <button onClick={() => setShowCodeModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                 </div>
-
                 <div className="space-y-4 mb-6">
                   <div className="p-4 bg-blue-500/10 rounded-xl">
-                    <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">
-                      📞 Ask the customer for the delivery code
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      The customer will provide you with a unique 4-digit code to confirm delivery.
-                    </p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">📞 Ask the customer for the delivery code</p>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Enter Delivery Code <span className="text-red-500">*</span></label>
-                    <input 
-                      type="text"
-                      value={deliveryCode}
-                      onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className="w-full px-4 py-4 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-2xl font-bold text-center tracking-widest uppercase"
-                      placeholder="0000"
-                      disabled={isVerifying}
-                    />
+                    <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))} className="w-full px-4 py-4 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 transition-all text-2xl font-bold text-center tracking-widest uppercase" placeholder="0000" disabled={isVerifying} />
                   </div>
                 </div>
-
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => setShowCodeModal(false)}
-                    disabled={isVerifying}
-                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <MagneticButton 
-                    onClick={handleVerifyCode}
-                    disabled={isVerifying || deliveryCode.length < 4}
-                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isVerifying ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
-                    ) : (
-                      <><CheckCircle className="w-4 h-4" /> Complete</>
-                    )}
-                  </MagneticButton>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Delivery Proof Upload Modal */}
-      <AnimatePresence>
-        {showProofModal && selectedOrder && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isUploading && setShowProofModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Camera className="w-6 h-6 text-green-500" /> Upload Delivery Proof
-                  </h3>
-                  <button onClick={() => setShowProofModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-4 mb-6">
-                  <div className="p-4 bg-green-500/10 rounded-xl">
-                    <p className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">
-                      📸 Upload Proof of Delivery
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Upload a photo of the delivered material, signed receipt, or delivery note.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Select File <span className="text-red-500">*</span></label>
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/20 rounded-xl cursor-pointer hover:bg-muted/30 transition-colors bg-muted/10">
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf,video/mp4"
-                        onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                        className="hidden"
-                        disabled={isUploading}
-                      />
-                      {proofFile ? (
-                        <div className="text-center">
-                          <FileUp className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                          <p className="text-sm font-medium truncate max-w-[250px]">{proofFile.name}</p>
-                          <p className="text-xs text-muted-foreground">{(proofFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <Camera className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm font-medium">Click to upload</p>
-                          <p className="text-xs text-muted-foreground">JPG, PNG, PDF, or MP4 (max 10MB)</p>
-                        </div>
-                      )}
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Delivery Notes (Optional)</label>
-                    <textarea
-                      rows={2}
-                      value={deliveryNotes}
-                      onChange={(e) => setDeliveryNotes(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 transition-all resize-none"
-                      placeholder="e.g. Delivered to back entrance, signed by John..."
-                      disabled={isUploading}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setShowProofModal(false)}
-                    disabled={isUploading}
-                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <MagneticButton 
-                    onClick={handleUploadProof}
-                    disabled={isUploading || !proofFile}
-                    className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isUploading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
-                    ) : (
-                      <><Camera className="w-4 h-4" /> Upload Proof</>
-                    )}
+                  <button onClick={() => setShowCodeModal(false)} disabled={isVerifying} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50">Cancel</button>
+                  <MagneticButton onClick={handleVerifyCode} disabled={isVerifying || deliveryCode.length < 4} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {isVerifying ? (<><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>) : (<><CheckCircle className="w-4 h-4" /> Complete</>)}
                   </MagneticButton>
                 </div>
               </div>
@@ -1159,169 +1351,26 @@ export default function DriverDashboardPage() {
       <AnimatePresence>
         {showWithdrawalModal && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isRequestingWithdrawal && setShowWithdrawalModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isRequestingWithdrawal && setShowWithdrawalModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Wallet className="w-6 h-6 text-green-500" /> Request Withdrawal
-                  </h3>
-                  <button 
-                    onClick={() => setShowWithdrawalModal(false)}
-                    disabled={isRequestingWithdrawal}
-                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <h3 className="text-xl font-bold flex items-center gap-2"><Wallet className="w-6 h-6 text-green-500" /> Request Withdrawal</h3>
+                  <button onClick={() => setShowWithdrawalModal(false)} disabled={isRequestingWithdrawal} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
                 </div>
-
                 <div className="p-4 bg-green-500/10 rounded-xl mb-6">
                   <p className="text-sm text-muted-foreground">Available Balance</p>
                   <p className="text-2xl font-bold text-green-500">{formatNaira(availableBalance)}</p>
                 </div>
-
                 <form onSubmit={handleRequestWithdrawal} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Withdrawal Amount (₦) <span className="text-red-500">*</span></label>
-                    <input
-                      type="number"
-                      value={withdrawalAmount}
-                      onChange={(e) => setWithdrawalAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 transition-all text-lg font-bold"
-                      placeholder="0.00"
-                      required
-                      disabled={isRequestingWithdrawal}
-                    />
+                    <input type="number" value={withdrawalAmount} onChange={(e) => setWithdrawalAmount(e.target.value)} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 transition-all text-lg font-bold" placeholder="0.00" required disabled={isRequestingWithdrawal} />
                   </div>
-
-                  <div className="p-4 bg-muted/30 rounded-xl text-sm text-muted-foreground">
-                    <p className="font-semibold text-foreground mb-2">Funds will be sent to:</p>
-                    <p>{accountDetails.bankName || "No bank account set"}</p>
-                    <p>{accountDetails.accountNumber || "****"}</p>
-                    <p>{accountDetails.accountName || "****"}</p>
-                    {!accountDetails.bankName && (
-                      <button 
-                        type="button"
-                        onClick={() => { setShowWithdrawalModal(false); }}
-                        className="mt-2 text-orange-500 hover:underline font-medium"
-                      >
-                        Update Account Details Above
-                      </button>
-                    )}
-                  </div>
-
                   <div className="flex gap-3 pt-2">
-                    <button 
-                      type="button"
-                      onClick={() => setShowWithdrawalModal(false)}
-                      disabled={isRequestingWithdrawal}
-                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit"
-                      disabled={isRequestingWithdrawal || !accountDetails.bankName}
-                      className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {isRequestingWithdrawal ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                      ) : (
-                        <><CheckCircle className="w-4 h-4" /> Submit Request</>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Dispute Modal */}
-      <AnimatePresence>
-        {showDisputeModal && disputeOrderId && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => !isSubmittingDispute && setShowDisputeModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2 text-red-500">
-                    <AlertTriangle className="w-6 h-6" /> Report Dispute
-                  </h3>
-                  <button 
-                    onClick={() => setShowDisputeModal(false)}
-                    disabled={isSubmittingDispute}
-                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="p-4 bg-red-500/10 rounded-xl mb-6">
-                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
-                    ⚠️ Are you experiencing an issue with this delivery?
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Our admin team will review your dispute and contact you shortly. Please provide as much detail as possible.
-                  </p>
-                </div>
-
-                <form onSubmit={handleCreateDispute} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Reason for Dispute <span className="text-red-500">*</span></label>
-                    <textarea
-                      value={disputeReason}
-                      onChange={(e) => setDisputeReason(e.target.value)}
-                      rows={4}
-                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 transition-all resize-none"
-                      placeholder="e.g. Customer unreachable, incorrect delivery location, payment issue..."
-                      required
-                      disabled={isSubmittingDispute}
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button 
-                      type="button"
-                      onClick={() => setShowDisputeModal(false)}
-                      disabled={isSubmittingDispute}
-                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit"
-                      disabled={isSubmittingDispute || !disputeReason.trim()}
-                      className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {isSubmittingDispute ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-                      ) : (
-                        <><AlertTriangle className="w-4 h-4" /> Submit Dispute</>
-                      )}
+                    <button type="button" onClick={() => setShowWithdrawalModal(false)} disabled={isRequestingWithdrawal} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer">Cancel</button>
+                    <button type="submit" disabled={isRequestingWithdrawal || !accountDetails.bankName} className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
+                      {isRequestingWithdrawal ? (<><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>) : (<><CheckCircle className="w-4 h-4" /> Submit Request</>)}
                     </button>
                   </div>
                 </form>

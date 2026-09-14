@@ -524,7 +524,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
 }
 
 // ============================================
-// 💰 CUSTOMER CONFIRMS DELIVERY PAYMENT (NEW)
+// 💰 CUSTOMER CONFIRMS DELIVERY PAYMENT (UPDATED)
 // ============================================
 export async function confirmDeliveryPayment(orderId: string, proofFile?: File) {
   const supabase = await createClient();
@@ -536,7 +536,7 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
     // 1. Verify order belongs to this customer
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("customer_id, status, delivery_fee, driver_id")
+      .select("customer_id, status, delivery_fee, driver_id, material_type")
       .eq("id", orderId)
       .single();
 
@@ -571,9 +571,6 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
       .update({
         status: "driver_assigned", // ✅ NOW the driver is officially assigned
         updated_at: new Date().toISOString(),
-        // Note: If you add 'delivery_payment_confirmed' and 'delivery_payment_proof_url' columns to your 'orders' table, uncomment the lines below:
-        // delivery_payment_confirmed: true,
-        // delivery_payment_proof_url: proofUrl,
       })
       .eq("id", orderId);
 
@@ -587,6 +584,39 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
       changed_by: user.id,
       notes: "Customer confirmed delivery fee payment. Driver officially assigned.",
     });
+
+    // ✅ NEW: Notify the driver that the delivery fee is paid and they are officially assigned
+    if (resend && order.driver_id) {
+      try {
+        const { data: driverProfile } = await supabase
+          .from("profiles")
+          .select("email, full_name")
+          .eq("id", order.driver_id)
+          .single();
+
+        if (driverProfile) {
+          await resend.emails.send({
+            from: "EWA Logistics <onboarding@resend.dev>",
+            to: [driverProfile.email],
+            subject: `🚛 Delivery Fee Paid! You are officially assigned.`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #ea580c;">Delivery Fee Secured! 🎉</h2>
+                <p>Great news, ${driverProfile.full_name}! The customer has paid the delivery fee, and you are now officially assigned to this trip.</p>
+                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                  <p><strong>Delivery Fee Secured:</strong> ₦${order.delivery_fee?.toLocaleString()}</p>
+                  <p><strong>Material:</strong> ${order.material_type || 'Construction Material'}</p>
+                  <p><strong>Action Required:</strong> Please proceed to the pickup location and contact the customer upon arrival to get your 4-digit delivery code.</p>
+                </div>
+                <p>Drive safely and have a great trip!</p>
+              </div>
+            `,
+          });
+        }
+      } catch (emailError) {
+        console.error("⚠️ Failed to send driver assignment email:", emailError);
+      }
+    }
 
     return { success: true, message: "Delivery payment confirmed! Driver has been officially assigned." };
   } catch (error: any) {

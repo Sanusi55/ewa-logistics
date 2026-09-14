@@ -17,13 +17,26 @@ export default async function DashboardRootLayout({
     redirect("/login");
   }
 
-  // Fetch user profile from database
+  // Fetch user profile from database to get the role
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*")
+    .select("role")
     .eq("id", user.id)
     .single();
 
-  // Pass the user data to the client-side layout
+  const role = profile?.role || "customer";
+
+  // ✅ REMOVE SIDEBAR FOR DRIVERS:
+  // If the user is a driver, we skip the DashboardLayout (which contains the sidebar).
+  // This makes the middle tabs the only navigation and keeps everything perfectly centered!
+  if (role === "driver") {
+    return (
+      <main className="min-h-screen bg-background">
+        {children}
+      </main>
+    );
+  }
+
+  // For admin, supplier, and customer, keep the normal layout with the sidebar
   return <DashboardLayout user={profile || user}>{children}</DashboardLayout>;
 }
