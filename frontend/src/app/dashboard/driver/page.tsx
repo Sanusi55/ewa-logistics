@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react"; // ✅ ADDED useRef
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
@@ -8,7 +8,7 @@ import {
   CheckCircle, Clock, AlertCircle, Calendar, TrendingUp, Power,
   Package, Settings, ChevronRight, Loader2, DollarSign, X, Key,
   Camera, FileUp, Building2, Plus, AlertTriangle, LogOut, User,
-  Bell, Lock, Trash2, LogOut as LogOutIcon, Shield, Mail // ✅ ADDED Mail HERE
+  Bell, Lock, Trash2, LogOut as LogOutIcon, Shield, Mail
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/providers/toast-provider";
@@ -31,6 +31,7 @@ interface Order {
   driver_id: string | null;
   driver_name: string | null;
   driver_phone: string | null;
+  customer_phone: string | null; // ✅ ADDED THIS LINE TO FIX BUILD ERROR
   truck_plate_number: string | null;
   delivery_code: string | null;
   delivery_code_confirmed: boolean;
@@ -68,6 +69,10 @@ export default function DriverDashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToast();
+  
+  // ✅ ADDED REFS FOR FORM SUBMISSION
+  const profileFormRef = useRef<HTMLFormElement>(null);
+  const passwordFormRef = useRef<HTMLFormElement>(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
@@ -962,7 +967,7 @@ export default function DriverDashboardPage() {
                     <p className="text-sm text-muted-foreground mt-1">Update your personal and company details.</p>
                   </div>
                   <MagneticButton 
-                    onClick={() => document.getElementById('profile-form')?.requestSubmit()}
+                    onClick={() => profileFormRef.current?.requestSubmit()}
                     disabled={isSavingProfile}
                     className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -971,7 +976,8 @@ export default function DriverDashboardPage() {
                   </MagneticButton>
                 </div>
                 
-                <form id="profile-form" onSubmit={handleSaveProfile} className="space-y-8">
+                {/* ✅ ADDED ref={profileFormRef} */}
+                <form ref={profileFormRef} onSubmit={handleSaveProfile} className="space-y-8">
                   {/* Profile Photo Section */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-8 border-b border-border">
                     <div className="relative">
@@ -1182,7 +1188,7 @@ export default function DriverDashboardPage() {
                     <p className="text-sm text-muted-foreground mt-1">Update your password to keep your account secure.</p>
                   </div>
                   <MagneticButton 
-                    onClick={() => document.getElementById('password-form')?.requestSubmit()}
+                    onClick={() => passwordFormRef.current?.requestSubmit()}
                     disabled={isChangingPassword}
                     className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -1191,7 +1197,8 @@ export default function DriverDashboardPage() {
                   </MagneticButton>
                 </div>
 
-                <form id="password-form" onSubmit={handleChangePassword} className="space-y-4 max-w-2xl">
+                {/* ✅ ADDED ref={passwordFormRef} */}
+                <form ref={passwordFormRef} onSubmit={handleChangePassword} className="space-y-4 max-w-2xl">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Current Password</label>
                     <div className="relative">
