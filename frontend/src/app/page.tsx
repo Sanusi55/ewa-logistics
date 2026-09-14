@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useScroll, useTransform, useSpring } from "framer-motion";
+import { motion, useScroll, useSpring } from "framer-motion";
 import { 
   ArrowRight, ShieldCheck, TrendingUp, Truck, Package, MapPin, CreditCard, 
   CheckCircle, Star, Phone, Mail, ChevronDown, ChevronUp, Send, Globe, 
@@ -15,10 +15,17 @@ import MagneticButton from "@/components/magnetic-button";
 import { useToast } from "@/components/providers/toast-provider";
 import { submitContactForm } from "@/app/actions/contact";
 
-// --- Animated Counter Component ---
+// --- Optimized Animated Counter (lighter version) ---
 function AnimatedCounter({ end, duration = 2, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
   const [count, setCount] = useState(0);
+  
   useEffect(() => {
+    // Only animate on desktop to save mobile resources
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setCount(end);
+      return;
+    }
+    
     let startTime: number;
     let animationFrame: number;
     const step = (timestamp: number) => {
@@ -30,20 +37,25 @@ function AnimatedCounter({ end, duration = 2, suffix = "" }: { end: number; dura
     animationFrame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animationFrame);
   }, [end, duration]);
+  
   return <span>{count.toLocaleString()}{suffix}</span>;
 }
 
-// --- FAQ Item Component ---
+// --- FAQ Item Component (simplified animation) ---
 function FAQItem({ question, answer, isOpen, onClick }: { question: string; answer: string; isOpen: boolean; onClick: () => void }) {
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card/50 backdrop-blur-sm">
-      <button onClick={onClick} className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors cursor-pointer">
+      <button 
+        onClick={onClick} 
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors cursor-pointer"
+        aria-expanded={isOpen}
+      >
         <span className="font-medium">{question}</span>
-        {isOpen ? <ChevronUp className="w-5 h-5 text-orange-500" /> : <ChevronDown className="w-5 h-5" />}
+        {isOpen ? <ChevronUp className="w-5 h-5 text-orange-500 flex-shrink-0" /> : <ChevronDown className="w-5 h-5 flex-shrink-0" />}
       </button>
-      <motion.div initial={false} animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+      <div className={`overflow-hidden transition-all duration-200 ${isOpen ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
         <p className="px-4 pb-4 text-muted-foreground">{answer}</p>
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -64,14 +76,22 @@ export default function Home() {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { scrollYProgress } = useScroll();
-  const y = useTransform(scrollYProgress, [0, 1], [0, -50]);
+  const [isMobile, setIsMobile] = useState(false);
   
+  const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
     restDelta: 0.001
   });
+
+  // Detect mobile on mount
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const liveActivities = [
     { user: "Chioma A.", action: "ordered 5 tons of 1-Inch Granite", location: "Lekki, Lagos", time: "2 min ago" },
@@ -158,21 +178,27 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
       
-      {/* 📊 SCROLL PROGRESS BAR */}
-      <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-red-500 to-amber-500 origin-left z-[100] shadow-lg shadow-orange-500/50"
-        style={{ scaleX }}
-      />
+      {/* 📊 SCROLL PROGRESS BAR (disabled on mobile) */}
+      {!isMobile && (
+        <motion.div
+          className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-red-500 to-amber-500 origin-left z-[100] shadow-lg shadow-orange-500/50"
+          style={{ scaleX }}
+        />
+      )}
 
       <Navbar />
       
-      {/* 🔄 MARQUEE SECTION */}
+      {/* 🔄 MARQUEE SECTION (simplified animation on mobile) */}
       <div className="relative overflow-hidden bg-muted/30 border-b border-border py-2.5 z-20">
-        <motion.div className="flex whitespace-nowrap" animate={{ x: ["0%", "-50%"] }} transition={{ duration: 30, ease: "linear", repeat: Infinity }}>
+        <motion.div 
+          className="flex whitespace-nowrap" 
+          animate={!isMobile ? { x: ["0%", "-50%"] } : {}} 
+          transition={!isMobile ? { duration: 30, ease: "linear", repeat: Infinity } : {}}
+        >
           {[
-            { icon: Lock, text: "🔒 Escrow Protected" }, { icon: CheckCircle, text: "✅ Verified Partners" },
-            { icon: Truck, text: "🚚 Live GPS Tracking" }, { icon: Zap, text: "⚡ Fast Delivery" },
-            { icon: Award, text: "🏆 500+ Companies" }, { icon: ShieldCheck, text: "🛡️ Secure Shipping" },
+            { icon: Lock, text: " Escrow Protected" }, { icon: CheckCircle, text: "✅ Verified Partners" },
+            { icon: Truck, text: "🚚 Live GPS Tracking" }, { icon: Zap, text: " Fast Delivery" },
+            { icon: Award, text: "🏆 500+ Companies" }, { icon: ShieldCheck, text: "️ Secure Shipping" },
           ].map((item, i) => <MarqueeItem key={`f-${i}`} icon={item.icon} text={item.text} />)}
           {[
             { icon: Lock, text: "🔒 Escrow Protected" }, { icon: CheckCircle, text: "✅ Verified Partners" },
@@ -198,10 +224,15 @@ export default function Home() {
         </div>
         
         <div className="relative z-10 max-w-5xl mx-auto text-center w-full px-2">
-          <motion.div style={{ y }} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+          {/* ✅ Simplified animation for mobile */}
+          <motion.div 
+            initial={isMobile ? {} : { opacity: 0, y: 30 }} 
+            animate={isMobile ? {} : { opacity: 1, y: 0 }} 
+            transition={{ duration: 0.8 }}
+          >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }} 
-              animate={{ opacity: 1, scale: 1 }} 
+              initial={isMobile ? {} : { opacity: 0, scale: 0.9 }} 
+              animate={isMobile ? {} : { opacity: 1, scale: 1 }} 
               className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-xs md:text-sm font-medium mb-4 md:mb-6 backdrop-blur-md"
             >
               <span className="relative flex h-2 w-2">
@@ -214,8 +245,8 @@ export default function Home() {
             </motion.div>
 
             <motion.h1 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
+              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
               transition={{ delay: 0.2 }} 
               className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4 md:mb-6 text-white leading-tight"
             >
@@ -226,8 +257,8 @@ export default function Home() {
             </motion.h1>
             
             <motion.p 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
+              initial={isMobile ? {} : { opacity: 0 }} 
+              animate={isMobile ? {} : { opacity: 1 }} 
               transition={{ delay: 0.4 }} 
               className="text-base md:text-lg lg:text-xl text-gray-200 max-w-2xl mx-auto mb-8 md:mb-10 px-2"
             >
@@ -235,37 +266,36 @@ export default function Home() {
             </motion.p>
             
             <motion.div 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
+              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
               transition={{ delay: 0.6 }} 
               className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 md:mb-16"
             >
-              <MagneticButton 
-                as="a"
+              {/* ✅ Fixed: Use Link directly instead of MagneticButton for better mobile performance */}
+              <Link
                 href="/materials"
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-full shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all"
-                magneticStrength={0.4}
+                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-full shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all active:scale-95"
               >
                 Order Materials <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </MagneticButton>
+              </Link>
               
               <Link 
                 href="/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 border border-white/30 text-white font-semibold rounded-full hover:bg-white/10 backdrop-blur-sm transition-all"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 border border-white/30 text-white font-semibold rounded-full hover:bg-white/10 backdrop-blur-sm transition-all active:scale-95"
               >
                 Become a Partner
               </Link>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0}}
-              animate={{ opacity: 1 }}
+              initial={isMobile ? {} : { opacity: 0}}
+              animate={isMobile ? {} : { opacity: 1 }}
               transition={{ delay: 1.2 }}
               className="flex items-center justify-center gap-2 mb-8 md:mb-16"
             >
               <kbd className="hidden md:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-mono bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-gray-300">
                 <Keyboard className="w-3 h-3" />
-                <span>⌘</span>
+                <span></span>
                 <span>+</span>
                 <span>K</span>
               </kbd>
@@ -273,8 +303,8 @@ export default function Home() {
             </motion.div>
 
             <motion.div 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
+              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
               transition={{ delay: 0.8 }} 
               className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-3xl mx-auto w-full"
             >
@@ -297,54 +327,38 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
           <p className="text-sm font-medium text-muted-foreground mb-8 uppercase tracking-wider">Trusted by Customers, Suppliers, and Drivers</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
-            >
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
-                <ShoppingCart className="w-7 h-7" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Customers</h3>
-              <p className="text-sm text-muted-foreground text-center">Get reliable delivery of construction materials with secure payment protection</p>
-            </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
-            >
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
-                <Building2 className="w-7 h-7" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Suppliers</h3>
-              <p className="text-sm text-muted-foreground text-center">Grow your business with access to verified buyers and streamlined order management</p>
-            </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.3 }}
-              className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
-            >
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
-                <Truck className="w-7 h-7" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Drivers</h3>
-              <p className="text-sm text-muted-foreground text-center">Earn competitive income with flexible scheduling and guaranteed payments</p>
-            </motion.div>
+            {[
+              { icon: ShoppingCart, title: "Customers", desc: "Get reliable delivery of construction materials with secure payment protection" },
+              { icon: Building2, title: "Suppliers", desc: "Grow your business with access to verified buyers and streamlined order management" },
+              { icon: Truck, title: "Drivers", desc: "Earn competitive income with flexible scheduling and guaranteed payments" }
+            ].map((item, i) => (
+              <motion.div 
+                key={item.title}
+                initial={isMobile ? {} : { opacity: 0, y: 20 }}
+                whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
+              >
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-orange-500/20">
+                  <item.icon className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                <p className="text-sm text-muted-foreground text-center">{item.desc}</p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* 🛡️ TRUST BADGES SECTION */}
+      {/* ️ TRUST BADGES SECTION */}
       <section className="py-16 md:py-20 px-4 md:px-6 max-w-7xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
+        <motion.div 
+          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
+          viewport={{ once: true }} 
+          className="text-center mb-12"
+        >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose EWA Logistics?</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">Built for reliability, security, and speed in the construction industry.</p>
         </motion.div>
@@ -357,8 +371,8 @@ export default function Home() {
           ].map((badge, i) => (
             <motion.div 
               key={badge.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={isMobile ? {} : { opacity: 0, y: 20 }}
+              whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
               className="glass p-6 rounded-2xl border border-border hover:border-orange-500/30 transition-all group"
@@ -375,7 +389,12 @@ export default function Home() {
 
       {/* 🔄 HOW EWA WORKS */}
       <section id="how-it-works" className="py-16 md:py-20 px-4 md:px-6 max-w-6xl mx-auto bg-muted/20 rounded-3xl my-8 md:my-10">
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
+        <motion.div 
+          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
+          viewport={{ once: true }} 
+          className="text-center mb-12"
+        >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">How EWA Works</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">From order to delivery in 5 simple steps. Transparent, secure, and efficient.</p>
         </motion.div>
@@ -383,8 +402,8 @@ export default function Home() {
           {steps.map((step, i) => (
             <motion.div 
               key={i} 
-              initial={{ opacity: 0, y: 20 }} 
-              whileInView={{ opacity: 1, y: 0 }} 
+              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+              whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
               viewport={{ once: true }} 
               transition={{ delay: i * 0.1 }} 
               className="glass p-6 rounded-2xl text-center relative border border-border/50"
@@ -404,8 +423,8 @@ export default function Home() {
       <section id="impact" className="py-16 md:py-24 px-4 md:px-6 bg-muted/10">
         <div className="max-w-7xl mx-auto">
           <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
+            initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+            whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
             viewport={{ once: true }} 
             className="text-center mb-12 md:mb-16"
           >
@@ -424,8 +443,8 @@ export default function Home() {
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={isMobile ? {} : { opacity: 0, y: 20 }}
+                whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
                 className="glass p-6 md:p-8 rounded-2xl border border-border/50 text-center hover:border-orange-500/30 transition-all group"
@@ -445,7 +464,12 @@ export default function Home() {
 
       {/* ❓ FAQ */}
       <section id="faq" className="py-16 md:py-20 px-4 md:px-6 max-w-3xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
+        <motion.div 
+          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
+          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
+          viewport={{ once: true }} 
+          className="text-center mb-12"
+        >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
           <p className="text-muted-foreground">Everything you need to know about using EWA Logistics.</p>
         </motion.div>
@@ -459,11 +483,14 @@ export default function Home() {
       {/* 📞 CONTACT - WITH DATABASE INTEGRATION */}
       <section id="contact" className="py-16 md:py-20 px-4 md:px-6 bg-muted/20">
         <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8 md:gap-12">
-          <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+          <motion.div 
+            initial={isMobile ? {} : { opacity: 0, x: -20 }} 
+            whileInView={isMobile ? {} : { opacity: 1, x: 0 }} 
+            viewport={{ once: true }}
+          >
             <h2 className="text-3xl font-bold mb-4">Get in Touch</h2>
             <p className="text-muted-foreground mb-6">Have questions? We're here to help 24/7.</p>
             
-            {/* ✅ UPDATED: Contact Info for Flutterwave Compliance */}
             <div className="space-y-4 mb-8">
               <a href="tel:08161305942" className="flex items-center gap-3 hover:text-orange-500 transition-colors cursor-pointer">
                 <Phone className="w-5 h-5 text-orange-500 flex-shrink-0" />
@@ -507,8 +534,8 @@ export default function Home() {
           </motion.div>
           
           <motion.form 
-            initial={{ opacity: 0, x: 20 }} 
-            whileInView={{ opacity: 1, x: 0 }} 
+            initial={isMobile ? {} : { opacity: 0, x: 20 }} 
+            whileInView={isMobile ? {} : { opacity: 1, x: 0 }} 
             viewport={{ once: true }} 
             onSubmit={handleFormSubmit} 
             className="glass p-6 rounded-2xl space-y-4 border border-border"
@@ -552,7 +579,7 @@ export default function Home() {
             <button 
               type="submit" 
               disabled={formSubmitted || isSubmitting} 
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-orange-500/20"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-70 cursor-pointer shadow-lg shadow-orange-500/20 active:scale-95"
             >
               {isSubmitting ? (
                 <>
