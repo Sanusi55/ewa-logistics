@@ -11,37 +11,46 @@ export async function POST(req: NextRequest) {
   try {
     console.log("🔔 [WEBHOOK] Request received!");
     
-    // 1. Get headers and body
     const verifHash = req.headers.get("verif-hash");
     console.log("🔑 [WEBHOOK] Received verif-hash:", verifHash);
     console.log("🔑 [WEBHOOK] Expected secret hash:", process.env.FLUTTERWAVE_SECRET_HASH);
 
     const event = await req.json();
-    console.log("📦 [WEBHOOK] Event payload:", JSON.stringify(event, null, 2));
+    
+    // Log the exact keys to see the structure
+    console.log("📦 [WEBHOOK] Payload keys:", Object.keys(event));
+    console.log("📦 [WEBHOOK] Full event payload:", JSON.stringify(event, null, 2));
 
-    // 2. Verify hash
+    // Verify hash
     const secretHash = process.env.FLUTTERWAVE_SECRET_HASH;
     if (secretHash && verifHash !== secretHash) {
-      console.error("❌ [WEBHOOK] Invalid Flutterwave signature. Possible spoofing attempt.");
+      console.error("❌ [WEBHOOK] Invalid Flutterwave signature.");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    // 3. Handle successful payment
-    console.log("🔍 [WEBHOOK] Checking event type:", event.event, "and status:", event.data?.status);
+    // ✅ ROBUST EXTRACTION: Handle both nested and flat payload structures
+    const eventType = event.event || event.type;
+    const payloadData = event.data || event; // Fallback to root if 'data' is missing
+    const transactionStatus = payloadData.status;
+    const txRef = payloadData.tx_ref || payloadData.txRef;
+    const transactionId = payloadData.id;
     
-    if (event.event === "charge.completed" && event.data?.status === "successful") {
-      const txRef = event.data.tx_ref;
-      const transactionId = event.data.id;
+    console.log("🔍 [WEBHOOK] Extracted - Event:", eventType, "Status:", transactionStatus, "TxRef:", txRef, "TxId:", transactionId);
+
+    if (
+      (eventType === "charge.completed" || eventType === "charge") && 
+      transactionStatus === "successful"
+    ) {
       const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
 
-      console.log("💳 [WEBHOOK] Payment successful! TxRef:", txRef, "Transaction ID:", transactionId);
-
       if (!txRef || !transactionId || !secretKey) {
-        console.error("❌ [WEBHOOK] Missing required data in webhook payload or environment variables.");
+        console.error("❌ [WEBHOOK] Missing required data:", { txRef, transactionId, hasSecretKey: !!secretKey });
         return NextResponse.json({ error: "Missing data" }, { status: 400 });
       }
 
-      // 4. Verify with Flutterwave API
+      console.log("💳 [WEBHOOK] Payment successful! TxRef:", txRef, "Transaction ID:", transactionId);
+
+      // Verify with Flutterwave API
       console.log("🔄 [WEBHOOK] Verifying transaction with Flutterwave API...");
       const verifyResponse = await fetch(
         `https://api.flutterwave.com/v3/transactions/${transactionId}/verify`,
@@ -59,12 +68,23 @@ export async function POST(req: NextRequest) {
 
       if (
         verifyData.status === "success" && 
-        verifyData.data?.status === "successful" && 
-        verifyData.data.tx_ref === txRef
+        verifyData.data?.status === "successful"
       ) {
         console.log("🔍 [WEBHOOK] Attempting to update order with payment_reference:", txRef);
         
-        // 5. Update the order in the database (Added .select() to see what was updated)
+        // First, let's see what orders exist with this reference
+        const { data: existingOrders, error: fetchError } = await supabaseAdmin
+          .from("orders")
+          .select("*")
+          .eq("payment_reference", txRef);
+
+        if (fetchError) {
+          console.error("❌ [WEBHOOK] Error fetching order:", fetchError);
+        } else {
+          console.log("🔎 [WEBHOOK] Found orders with this reference:", existingOrders);
+        }
+
+        // Update the order
         const { data: updateData, error } = await supabaseAdmin
           .from("orders")
           .update({ 
@@ -83,13 +103,14 @@ export async function POST(req: NextRequest) {
         if (updateData && updateData.length > 0) {
           console.log(`✅ [WEBHOOK] SUCCESS: Order updated!`, updateData);
         } else {
-          console.error(`⚠️ [WEBHOOK] WARNING: No order found with payment_reference = ${txRef}. Check if the frontend saved the tx_ref to the database!`);
+          console.error(`⚠️ [WEBHOOK] WARNING: No order found with payment_reference = ${txRef}`);
+          console.log("💡 [WEBHOOK] HINT: Check if the frontend created the order with this exact payment_reference in Supabase");
         }
       } else {
-        console.error("❌ [WEBHOOK] Flutterwave API verification failed for tx_ref:", txRef, verifyData);
+        console.error("❌ [WEBHOOK] Flutterwave API verification failed");
       }
     } else {
-      console.log("⚠️ [WEBHOOK] Event ignored. Not a successful charge completion.");
+      console.log("⚠️ [WEBHOOK] Event ignored. Type:", eventType, "Status:", transactionStatus);
     }
 
     // Always return 200 to Flutterwave so they stop retrying
