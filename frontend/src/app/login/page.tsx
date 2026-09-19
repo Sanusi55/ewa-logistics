@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, ArrowRight, Truck, AlertCircle, Loader2 } from "lucide-react";
+import { Mail, Lock, ArrowRight, Truck, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(formData: FormData) {
     setIsLoading(true);
@@ -68,24 +69,41 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium">Password</label>
+              {/* ✅ FORGOT PASSWORD LINK */}
+              <Link 
+                href="/forgot-password" 
+                className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors hover:underline cursor-pointer"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+            
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <input 
                 name="password"
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 required
                 autoComplete="current-password"
-                className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                className="w-full pl-10 pr-12 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                 placeholder="••••••••"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
             
-            {/* ✅ WORKING ALTERNATIVE: Links directly to the working /signup page */}
             <div className="mt-2 text-right">
               <Link 
                 href="/signup" 
-                className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors hover:underline"
+                className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors hover:underline cursor-pointer"
               >
                 Need an account? Sign up
               </Link>
@@ -107,9 +125,9 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Already have an account?{" "}
-          <Link href="/login" className="text-orange-500 hover:text-orange-600 font-medium transition-colors">
-            Sign in here
+          Don't have an account?{" "}
+          <Link href="/signup" className="text-orange-500 hover:text-orange-600 font-medium transition-colors cursor-pointer">
+            Sign up here
           </Link>
         </p>
       </motion.div>

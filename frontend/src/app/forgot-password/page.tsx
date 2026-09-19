@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, ArrowRight, Truck, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { forgotPassword } from "@/app/actions/auth";
+import { resetPassword } from "@/app/actions/auth";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -26,9 +26,13 @@ export default function ForgotPasswordPage() {
     formData.append("email", email);
     
     try {
-      const result = await forgotPassword(formData);
-      if (result?.error) setError(result.error);
-      else if (result?.success) setSuccess(result.message || "Check your email for a reset link.");
+      const result = await resetPassword(formData);
+      
+      if (result?.error) {
+        setError(result.error);
+      } else if (result?.success) {
+        setSuccess("Password reset link sent! Please check your email inbox and spam folder.");
+      }
     } catch {
       setError("An unexpected error occurred.");
     } finally {
@@ -38,7 +42,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md glass rounded-2xl border border-border p-8 shadow-2xl">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="w-full max-w-md glass rounded-2xl border border-border p-8 shadow-2xl"
+      >
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
             <Truck className="w-8 h-8 text-white" />
@@ -66,19 +74,34 @@ export default function ForgotPasswordPage() {
             <div>
               <label className="block text-sm font-medium mb-2">Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all" placeholder="you@example.com" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                <input 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  required 
+                  className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all" 
+                  placeholder="you@example.com" 
+                />
               </div>
             </div>
 
-            <button type="submit" disabled={isLoading} className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-orange-500/20">
-              {isLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Sending...</> : <>Send Reset Link <ArrowRight className="w-4 h-4" /></>}
+            <button 
+              type="submit" 
+              disabled={isLoading} 
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-orange-500/20"
+            >
+              {isLoading ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> Sending...</>
+              ) : (
+                <>Send Reset Link <ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
           </form>
         )}
 
         <p className="text-center text-sm text-muted-foreground mt-8">
-          <Link href="/login" className="text-orange-500 hover:text-orange-600 font-medium transition-colors">
+          <Link href="/login" className="text-orange-500 hover:text-orange-600 font-medium transition-colors inline-flex items-center gap-1 cursor-pointer">
             ← Back to Login
           </Link>
         </p>

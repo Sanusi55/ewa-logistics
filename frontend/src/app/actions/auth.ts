@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { TOTP, Secret } from "otpauth";
 
 // ============================================
-// 🔐 REGULAR LOGIN (Customer/Supplier/Driver/Fleet)
+//  REGULAR LOGIN (Customer/Supplier/Driver/Fleet)
 // ============================================
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -28,7 +28,7 @@ export async function login(formData: FormData) {
       .eq("id", authData.user.id)
       .maybeSingle();
 
-    // 🚫 STRICTLY BLOCK ADMINS FROM GENERAL LOGIN
+    //  STRICTLY BLOCK ADMINS FROM GENERAL LOGIN
     if (profile?.role === "admin") {
       await supabase.auth.signOut(); // Sign them out immediately for security
       return { error: "Admins must use the dedicated Admin Portal at /admin/login" };
@@ -73,7 +73,7 @@ export async function signup(formData: FormData) {
 }
 
 // ============================================
-// 🚪 LOGOUT (Sign Out)
+//  LOGOUT (Sign Out)
 // ============================================
 export async function logout() {
   const supabase = await createClient();
@@ -221,62 +221,6 @@ export async function verifyAdmin2FA(otpCode: string) {
 }
 
 // ============================================
-// 🔑 FORGOT PASSWORD (Send Reset Email)
-// ============================================
-export async function forgotPassword(formData: FormData) {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
-
-  if (!email) {
-    return { error: "Please enter your email address." };
-  }
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/update-password`,
-  });
-
-  if (error) {
-    console.error("Forgot password error:", error);
-    return { success: true, message: "If an account with that email exists, we have sent a password reset link." };
-  }
-
-  return { success: true, message: "Password reset link sent! Please check your email inbox and spam folder." };
-}
-
-// ============================================
-// 🔄 RESET PASSWORD (Update Password after clicking email link)
-// ============================================
-export async function resetPassword(formData: FormData) {
-  const supabase = await createClient();
-  
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-
-  if (!password || !confirmPassword) {
-    return { error: "Please fill in all fields." };
-  }
-
-  if (password !== confirmPassword) {
-    return { error: "Passwords do not match." };
-  }
-
-  if (password.length < 6) {
-    return { error: "Password must be at least 6 characters long." };
-  }
-
-  const { error } = await supabase.auth.updateUser({
-    password: password,
-  });
-
-  if (error) {
-    console.error("Reset password error:", error);
-    return { error: error.message || "Failed to update password. The link may have expired." };
-  }
-
-  return { success: true, message: "Password updated successfully! Redirecting to login..." };
-}
-
-// ============================================
 // 🔓 UNLOCK ADMIN SESSION (Verify Password + 2FA to unlock screen)
 // ============================================
 export async function unlockAdminSession(formData: FormData) {
@@ -323,6 +267,61 @@ export async function unlockAdminSession(formData: FormData) {
   const delta = totp.validate({ token: otpCode, window: 1 });
   if (delta === null) {
     return { error: "Invalid 2FA code." };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// 🔑 FORGOT PASSWORD (Send Reset Email)
+// ============================================
+export async function resetPassword(formData: FormData) {
+  const supabase = await createClient();
+  const email = formData.get("email") as string;
+
+  if (!email) {
+    return { error: "Email is required" };
+  }
+
+  // ✅ Uses NEXT_PUBLIC_APP_URL to match your .env.local
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/update-password`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    console.error("Reset password error:", error);
+    return { error: "Failed to send reset email. Please try again." };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// 🔄 UPDATE PASSWORD (After clicking email link)
+// ============================================
+export async function updatePassword(formData: FormData) {
+  const supabase = await createClient();
+  
+  const newPassword = formData.get("newPassword") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (newPassword !== confirmPassword) {
+    return { error: "Passwords do not match" };
+  }
+
+  if (newPassword.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    console.error("Update password error:", error);
+    return { error: "Failed to update password. Please try again." };
   }
 
   return { success: true };

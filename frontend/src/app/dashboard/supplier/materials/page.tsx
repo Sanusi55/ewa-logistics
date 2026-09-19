@@ -20,7 +20,7 @@ interface Material {
   unit: string;
   image_url: string;
   is_active: boolean;
-  status: "pending" | "approved" | "rejected"; // ✅ UPDATED: Matches database column name
+  status: "pending" | "approved" | "rejected";
   created_at: string;
 }
 
@@ -33,7 +33,6 @@ export default function SupplierMaterialsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // ✅ UPDATED: Filter by status instead of active/inactive
   const [filterStatus, setFilterStatus] = useState<"all" | "approved" | "pending" | "rejected">("all");
   
   const [isUploading, setIsUploading] = useState(false);
@@ -69,7 +68,6 @@ export default function SupplierMaterialsPage() {
       .order("created_at", { ascending: false });
 
     if (data) {
-      // ✅ Ensure status has a fallback for older records
       const formattedData = data.map((m: any) => ({
         ...m,
         status: m.status || "pending"
@@ -188,7 +186,7 @@ export default function SupplierMaterialsPage() {
         unit: formData.unit,
         image_url: imageUrl,
         is_active: true,
-        status: "pending", // ✅ NEW: All new materials require admin approval
+        status: "pending",
       });
 
     if (!error) {
@@ -223,7 +221,6 @@ export default function SupplierMaterialsPage() {
         price_per_ton: parseFloat(formData.price_per_ton),
         unit: formData.unit,
         image_url: imageUrl,
-        // ✅ If edited, reset to pending so admin can review the changes
         status: "pending", 
       })
       .eq("id", selectedMaterial.id);
@@ -273,7 +270,6 @@ export default function SupplierMaterialsPage() {
     }
   };
 
-  // ✅ UPDATED: Filter logic for status
   const filteredMaterials = materials.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           m.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -309,7 +305,6 @@ export default function SupplierMaterialsPage() {
           </button>
         </div>
 
-        {/* ✅ UPDATED: Stats now show Status breakdown */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Materials", value: materials.length, icon: Package, color: "text-orange-500", bg: "bg-orange-500/10" },
@@ -346,7 +341,6 @@ export default function SupplierMaterialsPage() {
               className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm"
             />
           </div>
-          {/* ✅ UPDATED: Filter buttons for status */}
           <div className="flex gap-2">
             {["all", "approved", "pending", "rejected"].map((filter) => (
               <button
@@ -391,7 +385,6 @@ export default function SupplierMaterialsPage() {
                     </div>
                   )}
                   
-                  {/* ✅ NEW: Status Badge */}
                   <div className="absolute top-3 right-3">
                     {material.status === "approved" && (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white flex items-center gap-1 shadow-sm">
@@ -550,6 +543,7 @@ export default function SupplierMaterialsPage() {
                         <option value="kg">Kilograms</option>
                         <option value="bags">Bags</option>
                         <option value="trips">Trips</option>
+                        <option value="pieces">Pieces</option> {/* ✅ ADDED PIECES HERE */}
                       </select>
                     </div>
                   </div>
@@ -689,6 +683,7 @@ export default function SupplierMaterialsPage() {
                         <option value="kg">Kilograms</option>
                         <option value="bags">Bags</option>
                         <option value="trips">Trips</option>
+                        <option value="pieces">Pieces</option> {/* ✅ ADDED PIECES HERE */}
                       </select>
                     </div>
                   </div>

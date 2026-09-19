@@ -45,6 +45,7 @@ export default function MaterialsPage() {
     state: "all",
     sortBy: "newest" 
   });
+  const [shuffleSeed, setShuffleSeed] = useState(0); // ✅ NEW: Trigger shuffle
 
   useEffect(() => {
     async function fetchMaterials() {
@@ -77,18 +78,10 @@ export default function MaterialsPage() {
     }
     fetchMaterials();
 
-    // ✅ Fluctuating Display: Shuffle materials every 10 minutes (600,000 ms)
-    // This ensures newly registered suppliers get visibility over time.
+    // ✅ UPDATED: Shuffle every 3 minutes by updating the seed
     const shuffleInterval = setInterval(() => {
-      setMaterials(prev => {
-        const shuffled = [...prev];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-      });
-    }, 10 * 60 * 1000); // 10 minutes
+      setShuffleSeed(prev => prev + 1);
+    }, 3 * 60 * 1000); // 3 minutes
 
     return () => clearInterval(shuffleInterval);
   }, []);
@@ -101,6 +94,16 @@ export default function MaterialsPage() {
       setWishlist([...wishlist, id]);
       addToast({ type: "success", title: "Added to wishlist", message: `${name} saved for later!` });
     }
+  };
+
+  // ✅ Fisher-Yates shuffle function
+  const shuffleArray = (array: Material[]) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   };
 
   const filteredMaterials = useMemo(() => {
@@ -124,24 +127,21 @@ export default function MaterialsPage() {
       return matchesSearch && matchesCategory && matchesPrice && matchesState;
     });
 
-    // Sorting
+    // ✅ Apply shuffle if seed changed (every 3 minutes)
+    if (shuffleSeed > 0 && filters.sortBy === "newest") {
+      result = shuffleArray(result);
+    }
+
+    // Sorting (only if not shuffling)
     if (filters.sortBy === "price-low") {
       result.sort((a, b) => a.price_per_ton - b.price_per_ton);
     } else if (filters.sortBy === "price-high") {
       result.sort((a, b) => b.price_per_ton - a.price_per_ton);
-    } else if (filters.sortBy === "newest") {
-      result.sort((a, b) => {
-        const dateDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        if (dateDiff === 0) {
-          // If created at the same time, use the 10-minute shuffled order for fairness
-          return materials.indexOf(a) - materials.indexOf(b);
-        }
-        return dateDiff;
-      });
     }
+    // Note: "newest" is handled by the shuffle above
 
     return result;
-  }, [searchQuery, filters, materials, suppliers]);
+  }, [searchQuery, filters, materials, suppliers, shuffleSeed]); // ✅ Added shuffleSeed to dependencies
 
   const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -275,7 +275,7 @@ export default function MaterialsPage() {
               onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
               className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 text-sm"
             >
-              <option value="newest">Newest First</option>
+              <option value="newest">Rotate Every 3 Min</option>
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
             </select>
