@@ -701,9 +701,20 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       .eq("id", orderId)
       .single();
 
-    if (orderError || !order) return { error: "Order not found" };
-    if (order.driver_id !== user.id) return { error: "You are not the assigned driver for this order" };
-    if (order.delivery_code !== deliveryCode) return { error: "Invalid delivery code. Please ask the customer for the correct 4-digit code." };
+    if (orderError || !order) {
+      console.error("❌ Order fetch error:", orderError);
+      return { error: "Order not found" };
+    }
+    
+    // ✅ FIX 1: Ensure driver_id actually matches the logged-in user
+    if (order.driver_id !== user.id) {
+      return { error: "You are not the assigned driver for this order." };
+    }
+
+    // ✅ FIX 2: Type-safe comparison (handles integer vs string mismatches)
+    if (String(order.delivery_code).trim() !== String(deliveryCode).trim()) {
+      return { error: "Invalid delivery code. Please ask the customer for the correct 4-digit code." };
+    }
 
     let evidenceUrl = null;
 
@@ -735,7 +746,10 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       })
       .eq("id", orderId);
 
-    if (updateError) return { error: "Failed to update delivery status" };
+    if (updateError) {
+      console.error("❌ RLS/Update error:", updateError);
+      return { error: "Failed to update delivery status. Please ensure you are the assigned driver." };
+    }
 
     if (evidenceUrl) {
       await supabase.from("delivery_evidence").insert({
