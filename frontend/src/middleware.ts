@@ -47,6 +47,8 @@ export async function middleware(request: NextRequest) {
     "/refund-policy",
     "/payment/success", 
     "/payment/cancel",
+    "/forgot-password",   // ✅ ADDED: Allow public access to forgot password
+    "/update-password",   // ✅ ADDED: Allow public access to password reset link
   ];
   
   const isPublicRoute = publicRoutes.some(route => pathname === route) || pathname.startsWith("/blog");
@@ -89,8 +91,6 @@ export async function middleware(request: NextRequest) {
 
   const userRole = profile?.role || "customer";
   const safeRole = ["admin", "customer", "supplier", "driver"].includes(userRole) ? userRole : "customer";
-
-  console.log(`🔍 [MIDDLEWARE CHECK] Path: ${pathname} | DB Role: "${userRole}" | Safe Role Used: "${safeRole}"`);
 
   // 4. STRICT ADMIN ROUTES PROTECTION
   if (pathname.startsWith("/admin")) {
