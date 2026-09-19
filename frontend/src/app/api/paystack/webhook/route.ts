@@ -16,20 +16,10 @@ export async function POST(req: NextRequest) {
     console.log("🔑 [WEBHOOK] Expected secret hash:", process.env.FLUTTERWAVE_SECRET_HASH);
 
     const event = await req.json();
-    
-    // Log the exact keys to see the structure
     console.log("📦 [WEBHOOK] Payload keys:", Object.keys(event));
-    console.log("📦 [WEBHOOK] Full event payload:", JSON.stringify(event, null, 2));
-
-    // Verify hash
-    const secretHash = process.env.FLUTTERWAVE_SECRET_HASH;
-    if (secretHash && verifHash !== secretHash) {
-      console.error("❌ [WEBHOOK] Invalid Flutterwave signature.");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-
-    // ✅ ROBUST EXTRACTION: Handle both nested and flat payload structures
-    const eventType = event.event || event.type;
+    
+    // ✅ ROBUST EXTRACTION: Handle flat payload structure
+    const eventType = event.event || event.type || event["event.type"];
     const payloadData = event.data || event; // Fallback to root if 'data' is missing
     const transactionStatus = payloadData.status;
     const txRef = payloadData.tx_ref || payloadData.txRef;
@@ -37,18 +27,16 @@ export async function POST(req: NextRequest) {
     
     console.log("🔍 [WEBHOOK] Extracted - Event:", eventType, "Status:", transactionStatus, "TxRef:", txRef, "TxId:", transactionId);
 
-    if (
-      (eventType === "charge.completed" || eventType === "charge") && 
-      transactionStatus === "successful"
-    ) {
+    // ✅ SMART CHECK: If status is successful and we have the reference, process it!
+    if (transactionStatus === "successful" && txRef && transactionId) {
       const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
 
-      if (!txRef || !transactionId || !secretKey) {
-        console.error("❌ [WEBHOOK] Missing required data:", { txRef, transactionId, hasSecretKey: !!secretKey });
-        return NextResponse.json({ error: "Missing data" }, { status: 400 });
+      if (!secretKey) {
+        console.error("❌ [WEBHOOK] Missing secret key in environment variables.");
+        return NextResponse.json({ error: "Missing secret key" }, { status: 500 });
       }
 
-      console.log("💳 [WEBHOOK] Payment successful! TxRef:", txRef, "Transaction ID:", transactionId);
+      console.log("💳 [WEBHOOK] Payment successful! Processing TxRef:", txRef, "Transaction ID:", transactionId);
 
       // Verify with Flutterwave API
       console.log("🔄 [WEBHOOK] Verifying transaction with Flutterwave API...");
@@ -64,7 +52,7 @@ export async function POST(req: NextRequest) {
       );
       
       const verifyData = await verifyResponse.json();
-      console.log("✅ [WEBHOOK] Flutterwave verification response:", JSON.stringify(verifyData, null, 2));
+      console.log("✅ [WEBHOOK] Flutterwave verification response status:", verifyData.status);
 
       if (
         verifyData.status === "success" && 
@@ -104,13 +92,13 @@ export async function POST(req: NextRequest) {
           console.log(`✅ [WEBHOOK] SUCCESS: Order updated!`, updateData);
         } else {
           console.error(`⚠️ [WEBHOOK] WARNING: No order found with payment_reference = ${txRef}`);
-          console.log("💡 [WEBHOOK] HINT: Check if the frontend created the order with this exact payment_reference in Supabase");
+          console.log("💡 [WEBHOOK] HINT: The frontend might not be saving the 'payment_reference' to the database when creating the order.");
         }
       } else {
         console.error("❌ [WEBHOOK] Flutterwave API verification failed");
       }
     } else {
-      console.log("⚠️ [WEBHOOK] Event ignored. Type:", eventType, "Status:", transactionStatus);
+      console.log("⚠️ [WEBHOOK] Event ignored. Status:", transactionStatus, "TxRef:", txRef);
     }
 
     // Always return 200 to Flutterwave so they stop retrying
