@@ -686,7 +686,7 @@ export async function supplierUseOwnDriver(orderId: string, driverData: {
 }
 
 // ============================================
-// ✅ CONFIRM DELIVERY BY DRIVER (WITH CODE & EVIDENCE)
+// ✅ CONFIRM DELIVERY BY DRIVER (WITH CODE & EVIDENCE + PENDING EARNINGS)
 // ============================================
 export async function confirmDriverDelivery(orderId: string, deliveryCode: string, evidenceFile?: File) {
   const supabase = await createClient();
@@ -695,9 +695,10 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
+    // ✅ Fetch ALL necessary fields including delivery_fee and driver_commission
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("delivery_code, driver_id, status, customer_id")
+      .select("delivery_code, driver_id, status, customer_id, delivery_fee, driver_commission")
       .eq("id", orderId)
       .single();
 
@@ -706,12 +707,19 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       return { error: "Order not found" };
     }
     
-    // ✅ FIX 1: Ensure driver_id actually matches the logged-in user
+    console.log("📊 Order Data:", { 
+      delivery_fee: order.delivery_fee, 
+      driver_commission: order.driver_commission,
+      driver_id: order.driver_id,
+      user_id: user.id
+    });
+
+    // ✅ Check if driver matches
     if (order.driver_id !== user.id) {
       return { error: "You are not the assigned driver for this order." };
     }
 
-    // ✅ FIX 2: Type-safe comparison (handles integer vs string mismatches)
+    // ✅ Type-safe code comparison
     if (String(order.delivery_code).trim() !== String(deliveryCode).trim()) {
       return { error: "Invalid delivery code. Please ask the customer for the correct 4-digit code." };
     }
@@ -736,6 +744,7 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       }
     }
 
+    // ✅ Update order status
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -751,6 +760,35 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       return { error: "Failed to update delivery status. Please ensure you are the assigned driver." };
     }
 
+    // ✅ CALCULATE AND INSERT EARNINGS
+    const gross_driver_amount = Number(order.delivery_fee) || 0;
+    const driver_commission = Number(order.driver_commission) || 0;
+    const net_driver_payout = Math.max(0, gross_driver_amount - driver_commission);
+
+    console.log("💰 Calculating earnings:", {
+      gross: gross_driver_amount,
+      commission: driver_commission,
+      net: net_driver_payout
+    });
+
+    if (net_driver_payout > 0 && order.driver_id) {
+      const { error: earningsError } = await supabase.from("driver_earnings").insert({
+        user_id: order.driver_id,
+        order_id: orderId,
+        amount: net_driver_payout,
+        status: "pending", // Shows in "Pending Balance" until customer confirms
+      });
+
+      if (earningsError) {
+        console.error("❌ Failed to insert driver earnings:", earningsError);
+      } else {
+        console.log("✅ Driver earnings inserted successfully:", net_driver_payout);
+      }
+    } else {
+      console.warn("⚠️ No earnings to insert:", { net_driver_payout, driver_id: order.driver_id });
+    }
+
+    // ✅ Insert evidence if exists
     if (evidenceUrl) {
       await supabase.from("delivery_evidence").insert({
         order_id: orderId,
@@ -762,15 +800,16 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       });
     }
 
+    // ✅ Record status history
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: order.status,
       new_status: "delivered",
       changed_by: user.id,
-      notes: "Delivery confirmed by driver with code",
+      notes: "Delivery confirmed by driver with code. Earnings marked as pending.",
     });
 
-    return { success: true, message: "Delivery confirmed successfully! Payment will be released." };
+    return { success: true, message: "Delivery confirmed successfully! Payment is now pending customer approval." };
   } catch (error: any) {
     console.error("❌ Confirm delivery exception:", error);
     return { error: error.message || "An unexpected error occurred" };
@@ -902,7 +941,7 @@ export async function confirmCustomerDelivery(orderId: string) {
         user_id: order.driver_id,
         order_id: orderId,
         amount: net_driver_payout,
-        status: "available",
+        status: "available", // Changes from "pending" to "available"
       });
     }
 
@@ -911,7 +950,7 @@ export async function confirmCustomerDelivery(orderId: string) {
       old_status: order.status,
       new_status: "completed",
       changed_by: user.id,
-      notes: "Delivery confirmed by customer. Escrow released and commissions auto-deducted.",
+      notes: "Delivery confirmed by customer. Escrow released and earnings credited.",
     });
 
     return { success: true, message: "Delivery confirmed successfully! Escrow released and earnings credited." };
