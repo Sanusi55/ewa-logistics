@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, ArrowRight, CheckCircle, AlertCircle, MapPin, 
   CreditCard, Building2, Smartphone, Truck, Package, 
-  ShieldCheck, X, Loader2, ChevronRight, ChevronDown // ✅ Added ChevronDown
+  ShieldCheck, X, Loader2, ChevronRight, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,7 +15,6 @@ import { getMaterialById } from "@/app/actions/materials";
 import { initializeSecurePayment } from "@/app/actions/paystack"; 
 import { createClient } from "@/lib/supabase/client";
 
-// ✅ Array of all Nigerian states for the dropdown
 const nigerianStates = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
   "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT (Abuja)", "Gombe",
@@ -35,6 +34,9 @@ function OrderPageContent() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [material, setMaterial] = useState<any>(null);
   const [supplierName, setSupplierName] = useState<string>("");
+  
+  // ✅ NEW: State to hold the supplier's exact warehouse address
+  const [supplierWarehouseAddress, setSupplierWarehouseAddress] = useState<string>("Supplier Warehouse");
   const [isLoadingMaterial, setIsLoadingMaterial] = useState(true);
   
   const [formData, setFormData] = useState({
@@ -43,7 +45,7 @@ function OrderPageContent() {
     address: "",
     city: "",
     state: "",
-    quantity: 0, // ✅ CHANGED: Default quantity is now 0
+    quantity: 0,
     paymentMethod: "card",
     promoCode: "",
     useCustomOffer: false,
@@ -59,13 +61,16 @@ function OrderPageContent() {
           setMaterial(data);
           if (data.supplier_id) {
             const supabase = createClient();
+            // ✅ UPDATED: Fetch both full_name and warehouse_address
             const { data: profile } = await supabase
               .from("profiles")
-              .select("full_name")
+              .select("full_name, warehouse_address")
               .eq("id", data.supplier_id)
               .single();
-            if (profile?.full_name) {
-              setSupplierName(profile.full_name);
+            
+            if (profile) {
+              if (profile.full_name) setSupplierName(profile.full_name);
+              if (profile.warehouse_address) setSupplierWarehouseAddress(profile.warehouse_address);
             }
           }
         }
@@ -119,7 +124,8 @@ function OrderPageContent() {
     const orderData = {
       material_type: material?.name || "Construction Material",
       tonnage: formData.quantity,
-      pickup_location: "Supplier Warehouse", 
+      // ✅ UPDATED: Use the dynamic warehouse address instead of hardcoded text
+      pickup_location: supplierWarehouseAddress || "Supplier Warehouse", 
       delivery_location: `${formData.city}, ${formData.state}`,
       delivery_address: formData.address,
       customer_notes: `Phone: ${formData.phone}${formData.promoCode ? ` | Promo: ${formData.promoCode}` : ''}${formData.useCustomOffer ? ` | Delivery Offer: ₦${formData.customDeliveryOffer}` : ''}`,
@@ -261,7 +267,6 @@ function OrderPageContent() {
                       </div>
                     </div>
 
-                    {/* ✅ FIXED: Added a clear dropdown arrow icon so customers know it's clickable */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5">State <span className="text-red-500">*</span></label>
                       <div className="relative">
@@ -391,7 +396,6 @@ function OrderPageContent() {
                       </div>
                     </div>
                     
-                    {/* ✅ FIXED: Quantity now defaults to 0, forcing the customer to type it */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Quantity ({material.unit}) <span className="text-red-500">*</span></label>
                       <input 

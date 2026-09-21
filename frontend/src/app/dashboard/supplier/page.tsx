@@ -11,7 +11,8 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence } from "@/app/actions/orders";
+// ✅ UPDATED: Added supplierUseOwnDriver to imports
+import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence, supplierUseOwnDriver } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
 import { useToast } from "@/components/providers/toast-provider";
@@ -43,22 +44,32 @@ export default function SupplierDashboardPage() {
   const [evidenceNotes, setEvidenceNotes] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
+  // ✅ NEW: Provide Own Driver State
+  const [showOwnDriverModal, setShowOwnDriverModal] = useState(false);
+  const [ownDriverOrder, setOwnDriverOrder] = useState<any>(null);
+  const [ownDriverData, setOwnDriverData] = useState({
+    driver_name: "",
+    driver_phone: "",
+    truck_plate_number: "",
+  });
+  const [isAssigningOwnDriver, setIsAssigningOwnDriver] = useState(false);
+
   // Account Details State
   const [accountDetails, setAccountDetails] = useState({
     bankName: "",
     accountNumber: "",
     accountName: "",
   });
+  
+  const [warehouseAddress, setWarehouseAddress] = useState("");
   const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-  // ✅ NEW: Withdrawal & Earnings State
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [availableBalance, setAvailableBalance] = useState(0);
 
-  // ✅ NEW: Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
@@ -79,6 +90,7 @@ export default function SupplierDashboardPage() {
     loadAccountDetails();
     loadWithdrawals();
     loadEarnings();
+    loadWarehouseAddress();
   }, []);
 
   const loadOrders = async () => {
@@ -130,6 +142,21 @@ export default function SupplierDashboardPage() {
     }
   };
 
+  const loadWarehouseAddress = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("warehouse_address")
+      .eq("id", user.id)
+      .single();
+
+    if (data && !error) {
+      setWarehouseAddress(data.warehouse_address || "");
+    }
+  };
+
   const loadWithdrawals = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -166,7 +193,7 @@ export default function SupplierDashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
+      const { error: bankError } = await supabase
         .from("supplier_profiles")
         .upsert({
           user_id: user.id,
@@ -176,18 +203,28 @@ export default function SupplierDashboardPage() {
           updated_at: new Date().toISOString(),
         });
 
-      if (error) throw error;
+      if (bankError) throw bankError;
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          warehouse_address: warehouseAddress,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (profileError) throw profileError;
 
       addToast({ 
         type: "success", 
-        title: "Account Details Saved! ✅", 
-        message: "Your payout information has been updated successfully." 
+        title: "Details Saved! ✅", 
+        message: "Your account and warehouse details have been updated successfully." 
       });
     } catch (error: any) {
       addToast({ 
         type: "error", 
         title: "Error", 
-        message: error.message || "Failed to save account details" 
+        message: error.message || "Failed to save details" 
       });
     } finally {
       setIsSavingAccount(false);
@@ -305,6 +342,35 @@ export default function SupplierDashboardPage() {
     }
   };
 
+  // ✅ NEW: Handle Opening Own Driver Modal
+  const handleOpenOwnDriverModal = (order: any) => {
+    setOwnDriverOrder(order);
+    setOwnDriverData({ driver_name: "", driver_phone: "", truck_plate_number: "" });
+    setShowOwnDriverModal(true);
+  };
+
+  // ✅ NEW: Handle Assigning Own Driver
+  const handleAssignOwnDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownDriverOrder) return;
+    
+    setIsAssigningOwnDriver(true);
+    try {
+      const result = await supplierUseOwnDriver(ownDriverOrder.id, ownDriverData);
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ type: "success", title: "Driver Assigned! 🚛", message: "Your own driver has been successfully assigned to this order." });
+        setShowOwnDriverModal(false);
+        await loadOrders();
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to assign driver" });
+    } finally {
+      setIsAssigningOwnDriver(false);
+    }
+  };
+
   const handleViewTracking = (order: any) => {
     setTrackingOrder(order);
     setShowTrackingModal(true);
@@ -348,7 +414,14 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ UPDATED: Removed borders from status colors for a cleaner look
+  // ✅ NEW: Helper to check if 20 minutes have passed since supplier acceptance
+  const isPast20Minutes = (order: any) => {
+    const startTime = order.supplier_accepted_at || order.created_at;
+    if (!startTime) return false;
+    const twentyMinutesAgo = new Date().getTime() - 20 * 60 * 1000;
+    return new Date(startTime).getTime() < twentyMinutesAgo;
+  };
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600",
@@ -431,7 +504,7 @@ export default function SupplierDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Stats Cards (Plain, no borders) */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-5 rounded-xl">
             <div className="flex items-center justify-between mb-3">
@@ -589,7 +662,6 @@ export default function SupplierDashboardPage() {
                           <h3 className="text-xl font-bold">{order.material_type}</h3>
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
                           
-                          {/* Report Dispute Button */}
                           {order.status !== "cancelled" && order.status !== "pending_supplier_acceptance" && (
                             <button
                               onClick={() => { setDisputeOrderId(order.id); setShowDisputeModal(true); }}
@@ -625,6 +697,14 @@ export default function SupplierDashboardPage() {
                           <CheckCircle className="w-4 h-4" /> Accept Order
                         </MagneticButton>
                       )}
+                      
+                      {/* ✅ NEW: Provide Own Driver Button (shows after 20 mins of driver_searching) */}
+                      {order.status === "driver_searching" && isPast20Minutes(order) && (
+                        <MagneticButton onClick={() => handleOpenOwnDriverModal(order)} className="px-6 py-2.5 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors flex items-center gap-2">
+                          <Truck className="w-4 h-4" /> Provide Your Own Driver
+                        </MagneticButton>
+                      )}
+
                       {(order.status === "delivered" || order.status === "completed") && (
                         <MagneticButton onClick={() => handleOpenEvidenceModal(order)} className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2">
                           <Upload className="w-4 h-4" /> Upload Evidence
@@ -763,12 +843,36 @@ export default function SupplierDashboardPage() {
                   <Building2 className="w-6 h-6 text-orange-500" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold">Account Details</h2>
-                  <p className="text-sm text-muted-foreground">Add your bank account information to receive payouts for completed orders.</p>
+                  <h2 className="text-2xl font-bold">Account & Warehouse Details</h2>
+                  <p className="text-sm text-muted-foreground">Add your bank account information and warehouse address to receive payouts and set pickup locations.</p>
                 </div>
               </div>
 
               <form onSubmit={handleSaveAccountDetails} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    <MapPin className="w-4 h-4 inline mr-1" />
+                    Warehouse/Business Address <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={warehouseAddress}
+                    onChange={(e) => setWarehouseAddress(e.target.value)}
+                    className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 resize-none"
+                    placeholder="e.g., 123 Industrial Layout, Ikeja, Lagos"
+                    rows={3}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This address will be used as the pickup location for all your orders.
+                  </p>
+                </div>
+
+                <div className="border-t border-border pt-6">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-green-500" /> Bank Account Details
+                  </h3>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Bank Name <span className="text-red-500">*</span></label>
                   <select
@@ -818,14 +922,13 @@ export default function SupplierDashboardPage() {
                     {isSavingAccount ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                     ) : (
-                      <><CheckCircle className="w-4 h-4" /> Save Account Details</>
+                      <><CheckCircle className="w-4 h-4" /> Save Details</>
                     )}
                   </button>
                 </div>
               </form>
 
-              {/* Sign Out Button */}
-              <div className="mt-8 pt-6">
+              <div className="mt-8 pt-6 border-t border-border">
                 <form action={logout}>
                   <button className="w-full py-3 bg-red-500/10 text-red-600 rounded-xl font-bold hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
                     <LogOut className="w-4 h-4" /> Sign Out
@@ -856,7 +959,7 @@ export default function SupplierDashboardPage() {
                     <p className="text-xs text-muted-foreground mt-1">This is the price for the material. Delivery fee will be added separately.</p>
                   </div>
                   <div className="p-4 bg-blue-500/10 rounded-xl">
-                    <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 30 minutes.</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 20 minutes. If none accept, you can provide your own driver.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -865,6 +968,111 @@ export default function SupplierDashboardPage() {
                     {acceptingOrderId === selectedOrder.id ? (<><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>) : (<><CheckCircle className="w-4 h-4" /> Accept Order</>)}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Provide Own Driver Modal */}
+      <AnimatePresence>
+        {showOwnDriverModal && ownDriverOrder && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => !isAssigningOwnDriver && setShowOwnDriverModal(false)} 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Truck className="w-6 h-6 text-purple-500" /> Provide Your Own Driver
+                  </h3>
+                  <button 
+                    onClick={() => setShowOwnDriverModal(false)} 
+                    disabled={isAssigningOwnDriver} 
+                    className="p-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                  <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
+                  <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} Tons • {ownDriverOrder.delivery_location}</p>
+                  <p className="text-xs text-orange-500 mt-2 font-medium">
+                    ⏱️ No EWA drivers accepted within 20 minutes. You can now assign your own driver.
+                  </p>
+                </div>
+
+                <form onSubmit={handleAssignOwnDriver} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Driver Name <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={ownDriverData.driver_name}
+                      onChange={(e) => setOwnDriverData({...ownDriverData, driver_name: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20"
+                      placeholder="e.g. John Doe"
+                      required
+                      disabled={isAssigningOwnDriver}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Driver Phone Number <span className="text-red-500">*</span></label>
+                    <input
+                      type="tel"
+                      value={ownDriverData.driver_phone}
+                      onChange={(e) => setOwnDriverData({...ownDriverData, driver_phone: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20"
+                      placeholder="+234 800 000 0000"
+                      required
+                      disabled={isAssigningOwnDriver}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Truck Plate Number <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={ownDriverData.truck_plate_number}
+                      onChange={(e) => setOwnDriverData({...ownDriverData, truck_plate_number: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 uppercase"
+                      placeholder="e.g. ABC-123-DE"
+                      required
+                      disabled={isAssigningOwnDriver}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowOwnDriverModal(false)}
+                      disabled={isAssigningOwnDriver}
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isAssigningOwnDriver}
+                      className="flex-1 py-3 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isAssigningOwnDriver ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Assigning...</>
+                      ) : (
+                        <><CheckCircle className="w-4 h-4" /> Assign Driver</>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           </>

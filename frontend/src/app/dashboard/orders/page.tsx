@@ -11,7 +11,6 @@ import {
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
-// ✅ FIXED: Import confirmCustomerDelivery instead of confirmDeliveryManually
 import { getUserOrders, customerAcceptBid, confirmCustomerDelivery } from "@/app/actions/orders";
 
 interface Order {
@@ -20,6 +19,7 @@ interface Order {
   status: string;
   delivery_address: string;
   delivery_location: string;
+  pickup_location: string; // ✅ ADDED: To display exact pickup location
   created_at: string;
   material_type: string;
   tonnage: number;
@@ -115,7 +115,6 @@ export default function OrdersPage() {
     setShowConfirmModal(true);
   };
 
-  // ✅ FIXED: Use confirmCustomerDelivery
   const handleConfirmDelivery = async () => {
     if (!orderToConfirm) return;
     setIsConfirming(true);
@@ -137,7 +136,7 @@ export default function OrdersPage() {
     const matchesSearch = 
       orderShortId.toLowerCase().includes(searchQuery.toLowerCase()) || 
       (order.delivery_location && order.delivery_location.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (order.delivery_address && order.delivery_address.toLowerCase().includes(searchQuery.toLowerCase()));
+      (order.pickup_location && order.pickup_location.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -265,9 +264,20 @@ export default function OrdersPage() {
                         <p className="text-sm font-medium text-foreground truncate">
                           {order.material_type || "Material Order"} ({order.tonnage} tons)
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(order.created_at)}</span>
-                          <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {order.delivery_location}</span>
+                        
+                        {/* ✅ UPDATED: Shows both Pickup and Dropoff locations clearly */}
+                        <div className="flex flex-col gap-1 mt-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3 text-orange-500 flex-shrink-0" /> 
+                            <span className="font-medium text-foreground">Pickup:</span> {order.pickup_location || "Supplier Warehouse"}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" /> 
+                            <span className="font-medium text-foreground">Dropoff:</span> {order.delivery_location}
+                          </span>
+                          <span className="flex items-center gap-1.5 mt-1">
+                            <Calendar className="w-3 h-3 flex-shrink-0" /> {formatDate(order.created_at)}
+                          </span>
                         </div>
                         
                         {order.driver_name && (

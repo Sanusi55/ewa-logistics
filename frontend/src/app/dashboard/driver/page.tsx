@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react"; // ✅ ADDED useRef
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
@@ -31,7 +31,8 @@ interface Order {
   driver_id: string | null;
   driver_name: string | null;
   driver_phone: string | null;
-  customer_phone: string | null; // ✅ ADDED THIS LINE TO FIX BUILD ERROR
+  customer_phone: string | null;
+  supplier?: { phone: string | null; warehouse_address: string | null } | null; // ✅ UPDATED: Include warehouse_address
   truck_plate_number: string | null;
   delivery_code: string | null;
   delivery_code_confirmed: boolean;
@@ -70,7 +71,6 @@ export default function DriverDashboardPage() {
   const searchParams = useSearchParams();
   const { addToast } = useToast();
   
-  // ✅ ADDED REFS FOR FORM SUBMISSION
   const profileFormRef = useRef<HTMLFormElement>(null);
   const passwordFormRef = useRef<HTMLFormElement>(null);
   
@@ -80,7 +80,6 @@ export default function DriverDashboardPage() {
   const [myBids, setMyBids] = useState<DriverBid[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   
-  // ✅ Profile State
   const [driverName, setDriverName] = useState("Driver");
   const [driverEmail, setDriverEmail] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
@@ -88,7 +87,6 @@ export default function DriverDashboardPage() {
   const [companyName, setCompanyName] = useState("");
   const [accountRole, setAccountRole] = useState("driver");
   
-  // ✅ Notification Preferences State
   const [notifications, setNotifications] = useState({
     orderUpdates: true,
     deliveryTracking: true,
@@ -96,7 +94,6 @@ export default function DriverDashboardPage() {
     smsAlerts: true,
   });
   
-  // ✅ Password Change State
   const [passwords, setPasswords] = useState({
     currentPassword: "",
     newPassword: "",
@@ -104,7 +101,6 @@ export default function DriverDashboardPage() {
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
-  // ✅ UPDATED: Added "settings" to the tab types
   const urlTab = searchParams.get("tab") as "jobs" | "deliveries" | "earnings" | "settings" | null;
   const [activeTab, setActiveTab] = useState<"jobs" | "deliveries" | "earnings" | "settings">(
     urlTab && ["jobs", "deliveries", "earnings", "settings"].includes(urlTab) ? urlTab : "jobs"
@@ -178,7 +174,6 @@ export default function DriverDashboardPage() {
       return;
     }
 
-    // ✅ Fetch profile data including email and phone
     const { data: profile } = await supabase
       .from("profiles")
       .select("full_name, state, email, phone, company_name")
@@ -200,9 +195,13 @@ export default function DriverDashboardPage() {
     const { data: bidsData } = await supabase.from("driver_bids").select("*").eq("driver_id", user.id).order("created_at", { ascending: false });
     if (bidsData) setMyBids(bidsData);
 
+    // ✅ UPDATED: Fetch both supplier phone AND warehouse_address
     const { data: ordersData } = await supabase
       .from("orders")
-      .select("*")
+      .select(`
+        *,
+        supplier:profiles!supplier_id(phone, warehouse_address)
+      `)
       .eq("driver_id", user.id)
       .in("status", ["driver_assigned", "loading", "in_transit", "delivered", "completed"])
       .order("created_at", { ascending: false });
@@ -211,7 +210,6 @@ export default function DriverDashboardPage() {
     setIsLoading(false);
   }
 
-  // ✅ NEW: Save Profile Information
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingProfile(true);
@@ -238,7 +236,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Save Notification Preferences
   const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingNotifications(true);
@@ -263,7 +260,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Change Password
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsChangingPassword(true);
@@ -296,7 +292,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Deactivate Account
   const handleDeactivateAccount = async () => {
     if (!confirm("Are you sure you want to deactivate your account? You can reactivate it anytime by logging in.")) {
       return;
@@ -324,7 +319,6 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // ✅ NEW: Delete Account
   const handleDeleteAccount = async () => {
     if (!confirm("⚠️ WARNING: This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?")) {
       return;
@@ -338,7 +332,6 @@ export default function DriverDashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      // Note: Actual deletion would require admin approval or soft delete
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -599,7 +592,6 @@ export default function DriverDashboardPage() {
     <div className="pt-24 pb-12 px-4 md:px-6 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
         
-        {/* ✅ UPDATED HEADER: Prominent Name Display + Settings & Sign Out Buttons */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/50 backdrop-blur-sm p-4 rounded-2xl border border-border">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Driver Dashboard</h1>
@@ -620,7 +612,6 @@ export default function DriverDashboardPage() {
               {isOnline ? "Online" : "Offline"}
             </button>
 
-            {/* ✅ Settings button now correctly navigates to the Settings tab */}
             <button
               onClick={() => handleTabChange("settings")}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg text-sm ${
@@ -643,7 +634,6 @@ export default function DriverDashboardPage() {
           </div>
         </div>
 
-        {/* CENTER TAB NAVIGATION */}
         <div className="flex flex-wrap gap-2 border-b border-border pb-2">
           <button
             onClick={() => handleTabChange("jobs")}
@@ -669,7 +659,6 @@ export default function DriverDashboardPage() {
           >
             <Wallet className="w-4 h-4" /> Earnings & Withdrawals
           </button>
-          {/* ✅ NEW: Settings Tab */}
           <button
             onClick={() => handleTabChange("settings")}
             className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
@@ -681,7 +670,6 @@ export default function DriverDashboardPage() {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* TAB 1: AVAILABLE JOBS */}
           {activeTab === "jobs" && (
             <motion.div key="jobs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
               {availableJobs.length > 0 ? availableJobs.map((job, index) => (
@@ -754,7 +742,6 @@ export default function DriverDashboardPage() {
             </motion.div>
           )}
 
-          {/* TAB 2: MY DELIVERIES */}
           {activeTab === "deliveries" && (
             <motion.div key="deliveries" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
               <div>
@@ -794,7 +781,10 @@ export default function DriverDashboardPage() {
                         <div className="flex-1 space-y-6">
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Pickup</p>
-                            <p className="text-sm font-semibold text-foreground">{activeDelivery.pickup_location}</p>
+                            {/* ✅ UPDATED: Now shows the supplier's exact warehouse address */}
+                            <p className="text-sm font-semibold text-foreground">
+                              {activeDelivery.pickup_location || "Supplier Warehouse"}
+                            </p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Dropoff</p>
@@ -804,8 +794,8 @@ export default function DriverDashboardPage() {
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-3">
-                        <a href={`tel:${activeDelivery.driver_phone || activeDelivery.customer_phone}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
-                          <Phone className="w-4 h-4" /> Contact Customer
+                        <a href={`tel:${activeDelivery.supplier?.phone || activeDelivery.customer_phone}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
+                          <Phone className="w-4 h-4" /> Contact Supplier
                         </a>
                         <MagneticButton onClick={() => handleOpenProofModal(activeDelivery)} className="flex-[2] flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20">
                           <Camera className="w-4 h-4" /> Upload Delivery Proof
@@ -855,7 +845,6 @@ export default function DriverDashboardPage() {
             </motion.div>
           )}
 
-          {/* TAB 3: EARNINGS & WITHDRAWALS */}
           {activeTab === "earnings" && (
             <motion.div key="earnings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
@@ -948,7 +937,6 @@ export default function DriverDashboardPage() {
             </motion.div>
           )}
 
-          {/* ✅ TAB 4: COMPREHENSIVE ACCOUNT SETTINGS */}
           {activeTab === "settings" && (
             <motion.div
               key="settings"
@@ -957,7 +945,6 @@ export default function DriverDashboardPage() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
-              {/* Profile Information Section */}
               <div className="glass p-6 md:p-8 rounded-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -976,9 +963,7 @@ export default function DriverDashboardPage() {
                   </MagneticButton>
                 </div>
                 
-                {/* ✅ ADDED ref={profileFormRef} */}
                 <form ref={profileFormRef} onSubmit={handleSaveProfile} className="space-y-8">
-                  {/* Profile Photo Section */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-8 border-b border-border">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-orange-500/20 flex-shrink-0">
@@ -994,7 +979,6 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Profile Information Fields */}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Full Name</label>
@@ -1076,7 +1060,6 @@ export default function DriverDashboardPage() {
                 </form>
               </div>
 
-              {/* Notification Preferences Section */}
               <div className="glass p-6 md:p-8 rounded-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -1096,7 +1079,6 @@ export default function DriverDashboardPage() {
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
-                  {/* Order Updates */}
                   <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1116,7 +1098,6 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Delivery Tracking */}
                   <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1136,7 +1117,6 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Promotional Emails */}
                   <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1156,7 +1136,6 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
 
-                  {/* SMS Alerts */}
                   <div className="p-4 rounded-xl border border-border hover:border-orange-500/30 transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1178,7 +1157,6 @@ export default function DriverDashboardPage() {
                 </div>
               </div>
 
-              {/* Security & Password Section */}
               <div className="glass p-6 md:p-8 rounded-2xl">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -1197,7 +1175,6 @@ export default function DriverDashboardPage() {
                   </MagneticButton>
                 </div>
 
-                {/* ✅ ADDED ref={passwordFormRef} */}
                 <form ref={passwordFormRef} onSubmit={handleChangePassword} className="space-y-4 max-w-2xl">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Current Password</label>
@@ -1243,7 +1220,6 @@ export default function DriverDashboardPage() {
                 </form>
               </div>
 
-              {/* Danger Zone Section */}
               <div className="glass p-6 md:p-8 rounded-2xl border-2 border-red-500/20">
                 <div className="flex items-center gap-3 mb-6 pb-6 border-b border-red-500/20">
                   <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -1256,7 +1232,6 @@ export default function DriverDashboardPage() {
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* Deactivate Account */}
                   <div className="p-6 rounded-xl border border-border hover:border-red-500/30 transition-colors">
                     <h4 className="font-bold text-foreground mb-2">Deactivate Account</h4>
                     <p className="text-sm text-muted-foreground mb-4">Temporarily disable your account. You can reactivate it at any time by logging in.</p>
@@ -1269,7 +1244,6 @@ export default function DriverDashboardPage() {
                     </button>
                   </div>
 
-                  {/* Delete Account */}
                   <div className="p-6 rounded-xl border border-border hover:border-red-500/30 transition-colors">
                     <h4 className="font-bold text-foreground mb-2">Delete Account</h4>
                     <p className="text-sm text-muted-foreground mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>

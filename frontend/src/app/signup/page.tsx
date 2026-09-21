@@ -78,6 +78,7 @@ export default function SignupPage() {
     rcNumber: "",
     fleetSize: "",
     truckDetails: "",
+    warehouseAddress: "", // ✅ NEW: Warehouse/Business Address for suppliers
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -118,6 +119,9 @@ export default function SignupPage() {
     
     if (selectedRole === "supplier" && !formData.companyName.trim()) {
       newErrors.companyName = "Company name is required for suppliers";
+    }
+    if (selectedRole === "supplier" && !formData.warehouseAddress.trim()) {
+      newErrors.warehouseAddress = "Warehouse/Business address is required for suppliers";
     }
     if (selectedRole === "driver" && !formData.truckDetails.trim()) {
       newErrors.truckDetails = "Truck details are required for individual drivers";
@@ -171,6 +175,7 @@ export default function SignupPage() {
             rc_number: formData.rcNumber,
             fleet_size: formData.fleetSize,
             truck_details: formData.truckDetails,
+            warehouse_address: formData.warehouseAddress, // ✅ Save warehouse address
           },
         },
       });
@@ -198,6 +203,7 @@ export default function SignupPage() {
           rc_number: selectedRole === "fleet_company" ? formData.rcNumber : null,
           fleet_size: selectedRole === "fleet_company" ? formData.fleetSize : null,
           truck_details: selectedRole === "driver" ? formData.truckDetails : null,
+          warehouse_address: selectedRole === "supplier" ? formData.warehouseAddress : null, // ✅ Save warehouse address
           updated_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
         };
@@ -231,7 +237,7 @@ export default function SignupPage() {
 
       addToast({ 
         type: "success", 
-        title: "Account Created! 🎉", 
+        title: "Account Created! ", 
         message: `Welcome to EWA Logistics! Your ${selectedRole.replace('_', ' ')} account has been created. Please login to continue.` 
       });
 
@@ -388,6 +394,27 @@ export default function SignupPage() {
                         placeholder="e.g. ABC Logistics Ltd"
                       />
                       {errors.companyName && <p className="text-xs text-red-500 mt-1">{errors.companyName}</p>}
+                    </div>
+                  )}
+
+                  {/* ✅ NEW: Warehouse/Business Address Field (Only for Suppliers) */}
+                  {selectedRole === "supplier" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">
+                        <MapPin className="w-4 h-4 inline mr-1" />
+                        Warehouse/Business Address <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={formData.warehouseAddress}
+                        onChange={(e) => setFormData({...formData, warehouseAddress: e.target.value})}
+                        className={`w-full px-4 py-3 bg-muted/50 border rounded-xl outline-none focus:ring-2 transition-all resize-none ${errors.warehouseAddress ? "border-red-500 focus:ring-red-500/20" : "border-border focus:ring-orange-500/20 focus:border-orange-500"}`}
+                        placeholder="Enter your complete warehouse or business address (e.g., 123 Industrial Layout, Ikeja, Lagos)"
+                        rows={3}
+                      />
+                      {errors.warehouseAddress && <p className="text-xs text-red-500 mt-1">{errors.warehouseAddress}</p>}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This address will be used as the pickup location for all your orders
+                      </p>
                     </div>
                   )}
 

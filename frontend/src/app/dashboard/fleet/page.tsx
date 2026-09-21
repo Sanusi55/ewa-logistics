@@ -86,7 +86,6 @@ export default function FleetDashboardPage() {
   // Modals
   const [showBidModal, setShowBidModal] = useState(false);
   const [showAddTruckModal, setShowAddTruckModal] = useState(false);
-  const [showAddDriverModal, setShowAddDriverModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -95,7 +94,6 @@ export default function FleetDashboardPage() {
   const [estimatedTime, setEstimatedTime] = useState("");
   
   const [newTruck, setNewTruck] = useState({ truck_name: "", plate_number: "", capacity_tons: "" });
-  const [newDriver, setNewDriver] = useState({ full_name: "", phone: "", license_number: "" });
   
   // ✅ NEW: Withdrawal & Bank Details States
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
@@ -150,7 +148,6 @@ export default function FleetDashboardPage() {
     if (!jobsResult.error) setAvailableJobs(jobsResult.jobs || []);
 
     // 5. Fetch Active/Completed Deliveries & Calculate Real Earnings
-    // ✅ FIXED: Added all missing fields (pickup_location, delivery_address, driver_id, fleet_company_id, delivery_fee_offer) to satisfy the Order interface
     const { data: ordersData } = await supabase
       .from("orders")
       .select("id, material_type, tonnage, pickup_location, delivery_location, delivery_address, status, delivery_fee, delivery_fee_offer, driver_id, fleet_company_id, truck_id, created_at")
@@ -238,30 +235,6 @@ export default function FleetDashboardPage() {
       addToast({ type: "success", title: "Success", message: "Truck added successfully!" });
       setShowAddTruckModal(false);
       setNewTruck({ truck_name: "", plate_number: "", capacity_tons: "" });
-      fetchFleetData();
-    }
-    setIsSubmitting(false);
-  };
-
-  const handleAddDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { error } = await supabase.from("fleet_drivers").insert({
-      company_id: user?.id,
-      full_name: newDriver.full_name,
-      phone: newDriver.phone,
-      license_number: newDriver.license_number,
-      status: "active"
-    });
-
-    if (error) {
-      addToast({ type: "error", title: "Error", message: error.message });
-    } else {
-      addToast({ type: "success", title: "Success", message: "Driver added successfully!" });
-      setShowAddDriverModal(false);
-      setNewDriver({ full_name: "", phone: "", license_number: "" });
       fetchFleetData();
     }
     setIsSubmitting(false);
@@ -470,19 +443,14 @@ export default function FleetDashboardPage() {
             </motion.div>
           )}
 
-          {/* MY FLEET TAB */}
+          {/* ✅ UPDATED: MY FLEET TAB (Removed Add Driver button, clearer Driver's Name column) */}
           {activeTab === "fleet" && (
             <motion.div key="fleet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Trucks & Drivers</h2>
-                <div className="flex gap-2">
-                  <button onClick={() => setShowAddDriverModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors cursor-pointer">
-                    <Plus className="w-4 h-4" /> Add Driver
-                  </button>
-                  <button onClick={() => setShowAddTruckModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors cursor-pointer">
-                    <Plus className="w-4 h-4" /> Add Truck
-                  </button>
-                </div>
+                <h2 className="text-xl font-bold">My Fleet</h2>
+                <button onClick={() => setShowAddTruckModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors cursor-pointer">
+                  <Plus className="w-4 h-4" /> Add Truck
+                </button>
               </div>
 
               <div className="glass rounded-2xl overflow-hidden">
@@ -492,7 +460,7 @@ export default function FleetDashboardPage() {
                       <th className="text-left p-4 font-medium">Truck Name</th>
                       <th className="text-left p-4 font-medium">Plate Number</th>
                       <th className="text-left p-4 font-medium">Capacity</th>
-                      <th className="text-left p-4 font-medium">Assigned Driver</th>
+                      <th className="text-left p-4 font-medium">Driver's Name</th>
                       <th className="text-left p-4 font-medium">Status</th>
                     </tr>
                   </thead>
@@ -504,7 +472,18 @@ export default function FleetDashboardPage() {
                           <td className="p-4 font-medium">{truck.truck_name}</td>
                           <td className="p-4 text-muted-foreground">{truck.plate_number}</td>
                           <td className="p-4">{truck.capacity_tons} Tons</td>
-                          <td className="p-4">{assignedDriver ? assignedDriver.full_name : <span className="text-yellow-500 text-xs">Unassigned</span>}</td>
+                          <td className="p-4 font-medium text-foreground">
+                            {assignedDriver ? (
+                              <span className="flex items-center gap-2">
+                                <Users className="w-4 h-4 text-orange-500" />
+                                {assignedDriver.full_name}
+                              </span>
+                            ) : (
+                              <span className="text-yellow-500 text-xs italic flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> No driver assigned
+                              </span>
+                            )}
+                          </td>
                           <td className="p-4">
                             <span className={`px-2 py-1 rounded text-xs font-bold ${truck.status === 'active' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
                               {truck.status}
@@ -915,31 +894,6 @@ export default function FleetDashboardPage() {
                     <button type="button" onClick={() => setShowAddTruckModal(false)} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer">Cancel</button>
                     <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4" /> Add Truck</>}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Add Driver Modal */}
-      <AnimatePresence>
-        {showAddDriverModal && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isSubmitting && setShowAddDriverModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Users className="w-6 h-6 text-blue-500" /> Add New Driver</h3>
-                <form onSubmit={handleAddDriver} className="space-y-4">
-                  <input required type="text" placeholder="Driver Full Name" value={newDriver.full_name} onChange={(e) => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  <input required type="tel" placeholder="Phone Number" value={newDriver.phone} onChange={(e) => setNewDriver({...newDriver, phone: e.target.value})} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  <input required type="text" placeholder="Driver's License Number" value={newDriver.license_number} onChange={(e) => setNewDriver({...newDriver, license_number: e.target.value})} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 uppercase" />
-                  <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => setShowAddDriverModal(false)} className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer">Cancel</button>
-                    <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
-                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4" /> Add Driver</>}
                     </button>
                   </div>
                 </form>
