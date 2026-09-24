@@ -15,14 +15,18 @@ import MagneticButton from "@/components/magnetic-button";
 import { useToast } from "@/components/providers/toast-provider";
 import { submitContactForm } from "@/app/actions/contact";
 
-// --- Optimized Animated Counter (lighter version) ---
+// --- Optimized Animated Counter (Mobile-safe) ---
 function AnimatedCounter({ end, duration = 2, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
   const [count, setCount] = useState(0);
-  
+  const [hasAnimated, setHasAnimated] = useState(false);
+
   useEffect(() => {
-    // Only animate on desktop to save mobile resources
+    if (hasAnimated) return;
+    
+    // On mobile, set immediately to avoid animation lag/bugs
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setCount(end);
+      setHasAnimated(true);
       return;
     }
     
@@ -32,16 +36,20 @@ function AnimatedCounter({ end, duration = 2, suffix = "" }: { end: number; dura
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
       setCount(Math.floor(progress * end));
-      if (progress < 1) animationFrame = requestAnimationFrame(step);
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(step);
+      } else {
+        setHasAnimated(true);
+      }
     };
     animationFrame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animationFrame);
-  }, [end, duration]);
+  }, [end, duration, hasAnimated]);
   
   return <span>{count.toLocaleString()}{suffix}</span>;
 }
 
-// --- FAQ Item Component (simplified animation) ---
+// --- FAQ Item Component ---
 function FAQItem({ question, answer, isOpen, onClick }: { question: string; answer: string; isOpen: boolean; onClick: () => void }) {
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card/50 backdrop-blur-sm">
@@ -76,7 +84,6 @@ export default function Home() {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
@@ -84,14 +91,6 @@ export default function Home() {
     damping: 30,
     restDelta: 0.001
   });
-
-  // Detect mobile on mount
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const liveActivities = [
     { user: "Chioma A.", action: "ordered 5 tons of 1-Inch Granite", location: "Lekki, Lagos", time: "2 min ago" },
@@ -175,25 +174,29 @@ export default function Home() {
     }
   };
 
+  // Safe, universal animation variants
+  const fadeInUp = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
       
-      {/* 📊 SCROLL PROGRESS BAR (disabled on mobile) */}
-      {!isMobile && (
-        <motion.div
-          className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-red-500 to-amber-500 origin-left z-[100] shadow-lg shadow-orange-500/50"
-          style={{ scaleX }}
-        />
-      )}
+      {/* 📊 SCROLL PROGRESS BAR (Hidden on mobile for performance) */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-red-500 to-amber-500 origin-left z-[100] shadow-lg shadow-orange-500/50 hidden md:block"
+        style={{ scaleX }}
+      />
 
       <Navbar />
       
-      {/* 🔄 MARQUEE SECTION (simplified animation on mobile) */}
+      {/* 🔄 MARQUEE SECTION */}
       <div className="relative overflow-hidden bg-muted/30 border-b border-border py-2.5 z-20">
         <motion.div 
           className="flex whitespace-nowrap" 
-          animate={!isMobile ? { x: ["0%", "-50%"] } : {}} 
-          transition={!isMobile ? { duration: 30, ease: "linear", repeat: Infinity } : {}}
+          animate={{ x: ["0%", "-50%"] }} 
+          transition={{ duration: 30, ease: "linear", repeat: Infinity }}
         >
           {[
             { icon: Lock, text: " Escrow Protected" }, { icon: CheckCircle, text: "✅ Verified Partners" },
@@ -224,15 +227,17 @@ export default function Home() {
         </div>
         
         <div className="relative z-10 max-w-5xl mx-auto text-center w-full px-2">
-          {/* ✅ Simplified animation for mobile */}
           <motion.div 
-            initial={isMobile ? {} : { opacity: 0, y: 30 }} 
-            animate={isMobile ? {} : { opacity: 1, y: 0 }} 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={fadeInUp}
             transition={{ duration: 0.8 }}
           >
             <motion.div 
-              initial={isMobile ? {} : { opacity: 0, scale: 0.9 }} 
-              animate={isMobile ? {} : { opacity: 1, scale: 1 }} 
+              initial={{ opacity: 0, scale: 0.9 }} 
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
               className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-xs md:text-sm font-medium mb-4 md:mb-6 backdrop-blur-md"
             >
               <span className="relative flex h-2 w-2">
@@ -245,8 +250,9 @@ export default function Home() {
             </motion.div>
 
             <motion.h1 
-              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
+              initial={{ opacity: 0, y: 20 }} 
+              whileInView={{ opacity: 1, y: 0 }} 
+              viewport={{ once: true }}
               transition={{ delay: 0.2 }} 
               className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4 md:mb-6 text-white leading-tight"
             >
@@ -257,8 +263,9 @@ export default function Home() {
             </motion.h1>
             
             <motion.p 
-              initial={isMobile ? {} : { opacity: 0 }} 
-              animate={isMobile ? {} : { opacity: 1 }} 
+              initial={{ opacity: 0 }} 
+              whileInView={{ opacity: 1 }} 
+              viewport={{ once: true }}
               transition={{ delay: 0.4 }} 
               className="text-base md:text-lg lg:text-xl text-gray-200 max-w-2xl mx-auto mb-8 md:mb-10 px-2"
             >
@@ -266,12 +273,12 @@ export default function Home() {
             </motion.p>
             
             <motion.div 
-              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
+              initial={{ opacity: 0, y: 20 }} 
+              whileInView={{ opacity: 1, y: 0 }} 
+              viewport={{ once: true }}
               transition={{ delay: 0.6 }} 
               className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 md:mb-16"
             >
-              {/* ✅ Fixed: Use Link directly instead of MagneticButton for better mobile performance */}
               <Link
                 href="/materials"
                 className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 md:px-8 md:py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-full shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all active:scale-95"
@@ -288,8 +295,9 @@ export default function Home() {
             </motion.div>
 
             <motion.div
-              initial={isMobile ? {} : { opacity: 0}}
-              animate={isMobile ? {} : { opacity: 1 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
               transition={{ delay: 1.2 }}
               className="flex items-center justify-center gap-2 mb-8 md:mb-16"
             >
@@ -303,8 +311,9 @@ export default function Home() {
             </motion.div>
 
             <motion.div 
-              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-              animate={isMobile ? {} : { opacity: 1, y: 0 }} 
+              initial={{ opacity: 0, y: 20 }} 
+              whileInView={{ opacity: 1, y: 0 }} 
+              viewport={{ once: true }}
               transition={{ delay: 0.8 }} 
               className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-3xl mx-auto w-full"
             >
@@ -334,9 +343,10 @@ export default function Home() {
             ].map((item, i) => (
               <motion.div 
                 key={item.title}
-                initial={isMobile ? {} : { opacity: 0, y: 20 }}
-                whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
-                viewport={{ once: true }}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.2 }}
+                variants={fadeInUp}
                 transition={{ delay: i * 0.1 }}
                 className="flex flex-col items-center p-6 rounded-2xl bg-card/30 border border-border/50 hover:border-orange-500/30 transition-all"
               >
@@ -354,9 +364,10 @@ export default function Home() {
       {/* ️ TRUST BADGES SECTION */}
       <section className="py-16 md:py-20 px-4 md:px-6 max-w-7xl mx-auto">
         <motion.div 
-          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
-          viewport={{ once: true }} 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={fadeInUp}
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose EWA Logistics?</h2>
@@ -371,9 +382,10 @@ export default function Home() {
           ].map((badge, i) => (
             <motion.div 
               key={badge.title}
-              initial={isMobile ? {} : { opacity: 0, y: 20 }}
-              whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+              variants={fadeInUp}
               transition={{ delay: i * 0.1 }}
               className="glass p-6 rounded-2xl border border-border hover:border-orange-500/30 transition-all group"
             >
@@ -390,9 +402,10 @@ export default function Home() {
       {/* 🔄 HOW EWA WORKS */}
       <section id="how-it-works" className="py-16 md:py-20 px-4 md:px-6 max-w-6xl mx-auto bg-muted/20 rounded-3xl my-8 md:my-10">
         <motion.div 
-          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
-          viewport={{ once: true }} 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={fadeInUp}
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">How EWA Works</h2>
@@ -402,9 +415,10 @@ export default function Home() {
           {steps.map((step, i) => (
             <motion.div 
               key={i} 
-              initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-              whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
-              viewport={{ once: true }} 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+              variants={fadeInUp}
               transition={{ delay: i * 0.1 }} 
               className="glass p-6 rounded-2xl text-center relative border border-border/50"
             >
@@ -423,9 +437,10 @@ export default function Home() {
       <section id="impact" className="py-16 md:py-24 px-4 md:px-6 bg-muted/10">
         <div className="max-w-7xl mx-auto">
           <motion.div 
-            initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-            whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
-            viewport={{ once: true }} 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={fadeInUp}
             className="text-center mb-12 md:mb-16"
           >
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Impact in Numbers</h2>
@@ -443,9 +458,10 @@ export default function Home() {
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
-                initial={isMobile ? {} : { opacity: 0, y: 20 }}
-                whileInView={isMobile ? {} : { opacity: 1, y: 0 }}
-                viewport={{ once: true }}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.2 }}
+                variants={fadeInUp}
                 transition={{ delay: i * 0.1 }}
                 className="glass p-6 md:p-8 rounded-2xl border border-border/50 text-center hover:border-orange-500/30 transition-all group"
               >
@@ -465,9 +481,10 @@ export default function Home() {
       {/* ❓ FAQ */}
       <section id="faq" className="py-16 md:py-20 px-4 md:px-6 max-w-3xl mx-auto">
         <motion.div 
-          initial={isMobile ? {} : { opacity: 0, y: 20 }} 
-          whileInView={isMobile ? {} : { opacity: 1, y: 0 }} 
-          viewport={{ once: true }} 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={fadeInUp}
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
@@ -484,9 +501,10 @@ export default function Home() {
       <section id="contact" className="py-16 md:py-20 px-4 md:px-6 bg-muted/20">
         <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8 md:gap-12">
           <motion.div 
-            initial={isMobile ? {} : { opacity: 0, x: -20 }} 
-            whileInView={isMobile ? {} : { opacity: 1, x: 0 }} 
-            viewport={{ once: true }}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={fadeInUp}
           >
             <h2 className="text-3xl font-bold mb-4">Get in Touch</h2>
             <p className="text-muted-foreground mb-6">Have questions? We're here to help 24/7.</p>
@@ -534,9 +552,10 @@ export default function Home() {
           </motion.div>
           
           <motion.form 
-            initial={isMobile ? {} : { opacity: 0, x: 20 }} 
-            whileInView={isMobile ? {} : { opacity: 1, x: 0 }} 
-            viewport={{ once: true }} 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={fadeInUp}
             onSubmit={handleFormSubmit} 
             className="glass p-6 rounded-2xl space-y-4 border border-border"
           >
