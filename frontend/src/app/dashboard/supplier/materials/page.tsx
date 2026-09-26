@@ -137,23 +137,41 @@ export default function SupplierMaterialsPage() {
         return null;
       }
 
+      // Generate unique file name
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${materialId || Date.now()}.${fileExt}`;
+      const fileName = `${user.id}/${materialId || Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `materials/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
+      console.log('Uploading to path:', filePath); // Debug log
+
+      // Upload the file
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('material-images')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, { 
+          cacheControl: '3600',
+          upsert: false 
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
 
+      // Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('material-images')
         .getPublicUrl(filePath);
 
+      console.log('Public URL:', publicUrl); // Debug log
       return publicUrl;
+      
     } catch (error: any) {
-      addToast({ type: "error", title: "Upload Failed", message: error.message || "Failed to upload image." });
+      console.error('Upload failed:', error);
+      addToast({ 
+        type: "error", 
+        title: "Upload Failed", 
+        message: error.message || "Failed to upload image. Make sure the storage bucket exists and is public." 
+      });
       return null;
     } finally {
       setIsUploading(false);
@@ -543,7 +561,7 @@ export default function SupplierMaterialsPage() {
                         <option value="kg">Kilograms</option>
                         <option value="bags">Bags</option>
                         <option value="trips">Trips</option>
-                        <option value="pieces">Pieces</option> {/* ✅ ADDED PIECES HERE */}
+                        <option value="pieces">Pieces</option>
                       </select>
                     </div>
                   </div>
@@ -683,7 +701,7 @@ export default function SupplierMaterialsPage() {
                         <option value="kg">Kilograms</option>
                         <option value="bags">Bags</option>
                         <option value="trips">Trips</option>
-                        <option value="pieces">Pieces</option> {/* ✅ ADDED PIECES HERE */}
+                        <option value="pieces">Pieces</option>
                       </select>
                     </div>
                   </div>
