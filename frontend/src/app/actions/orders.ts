@@ -961,7 +961,7 @@ export async function confirmCustomerDelivery(orderId: string) {
 }
 
 // ============================================
-// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS (NEW)
+// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS
 // ============================================
 export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string) {
   const supabase = await createClient();
@@ -998,5 +998,64 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
   } catch (error: any) {
     console.error("❌ Verify payment exception:", error);
     return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// 🚛 CUSTOMER ASSIGNS OWN DRIVER (Triggers Payment)
+// ============================================
+export async function customerAssignOwnDriver(orderId: string, driverData: {
+  driver_name: string;
+  driver_phone: string;
+  truck_plate_number: string;
+  delivery_fee: number;
+}) {
+  const supabase = await createClient();
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    // Verify order belongs to this customer
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("customer_id, status")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) return { error: "Order not found" };
+    if (order.customer_id !== user.id) return { error: "You don't have permission to modify this order" };
+
+    // Update order with own driver details and set to pending payment
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        driver_name: driverData.driver_name,
+        driver_phone: driverData.driver_phone,
+        truck_plate_number: driverData.truck_plate_number,
+        delivery_fee: driverData.delivery_fee,
+        status: "pending_delivery_payment", // This triggers the payment modal flow
+        driver_assigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    if (updateError) {
+      console.error("❌ Assign own driver error:", updateError);
+      return { error: "Failed to assign driver" };
+    }
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      old_status: order.status,
+      new_status: "pending_delivery_payment",
+      changed_by: user.id,
+      notes: `Customer assigned own driver: ${driverData.driver_name}. Awaiting delivery fee payment.`,
+    });
+
+    return { success: true, message: "Driver details saved. Please proceed to payment." };
+  } catch (error: any) {
+    console.error("❌ Assign own driver exception:", error);
+    return { error: error.message || "An unexpected error occurred" };
   }
 }
