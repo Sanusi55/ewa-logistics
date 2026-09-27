@@ -626,12 +626,13 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
 }
 
 // ============================================
-// 🚛 SUPPLIER USES OWN DRIVER
+// 🚛 SUPPLIER USES OWN DRIVER (UPDATED WITH FEE)
 // ============================================
 export async function supplierUseOwnDriver(orderId: string, driverData: {
   driver_name: string;
   driver_phone: string;
   truck_plate_number: string;
+  delivery_fee: number; // ✅ Added fee
 }) {
   const supabase = await createClient();
   
@@ -642,17 +643,19 @@ export async function supplierUseOwnDriver(orderId: string, driverData: {
       return { error: "Unauthorized" };
     }
 
-    if (!driverData.driver_name || !driverData.driver_phone || !driverData.truck_plate_number) {
-      return { error: "All driver details are required" };
+    if (!driverData.driver_name || !driverData.driver_phone || !driverData.truck_plate_number || !driverData.delivery_fee) {
+      return { error: "All driver details and delivery fee are required" };
     }
 
+    // ✅ UPDATED: Set status to pending_delivery_payment so customer gets the payment prompt
     const { data, error } = await supabase
       .from("orders")
       .update({
         driver_name: driverData.driver_name,
         driver_phone: driverData.driver_phone,
         truck_plate_number: driverData.truck_plate_number,
-        status: "supplier_driver_assigned",
+        delivery_fee: driverData.delivery_fee, // ✅ Save the fee
+        status: "pending_delivery_payment", // ✅ Trigger customer payment flow
         driver_assigned_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -669,15 +672,15 @@ export async function supplierUseOwnDriver(orderId: string, driverData: {
     await supabase.from("order_status_history").insert({
       order_id: orderId,
       old_status: "no_driver_available",
-      new_status: "supplier_driver_assigned",
+      new_status: "pending_delivery_payment",
       changed_by: user.id,
-      notes: "Supplier assigned their own driver",
+      notes: `Supplier assigned own driver: ${driverData.driver_name}. Customer must pay delivery fee.`,
     });
 
     return { 
       success: true, 
       order: data,
-      message: "Your driver has been assigned!" 
+      message: "Driver assigned! Customer has been notified to pay the delivery fee." 
     };
   } catch (error: any) {
     console.error("❌ Use own driver exception:", error);

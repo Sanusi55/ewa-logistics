@@ -11,7 +11,6 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-// ✅ UPDATED: Added supplierUseOwnDriver to imports
 import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence, supplierUseOwnDriver } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
@@ -44,13 +43,14 @@ export default function SupplierDashboardPage() {
   const [evidenceNotes, setEvidenceNotes] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // ✅ NEW: Provide Own Driver State
+  // ✅ UPDATED: Provide Own Driver State (added delivery_fee)
   const [showOwnDriverModal, setShowOwnDriverModal] = useState(false);
   const [ownDriverOrder, setOwnDriverOrder] = useState<any>(null);
   const [ownDriverData, setOwnDriverData] = useState({
     driver_name: "",
     driver_phone: "",
     truck_plate_number: "",
+    delivery_fee: "",
   });
   const [isAssigningOwnDriver, setIsAssigningOwnDriver] = useState(false);
 
@@ -342,25 +342,42 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ NEW: Handle Opening Own Driver Modal
+  // ✅ UPDATED: Handle Opening Own Driver Modal
   const handleOpenOwnDriverModal = (order: any) => {
     setOwnDriverOrder(order);
-    setOwnDriverData({ driver_name: "", driver_phone: "", truck_plate_number: "" });
+    setOwnDriverData({ 
+      driver_name: "", 
+      driver_phone: "", 
+      truck_plate_number: "",
+      delivery_fee: "" 
+    });
     setShowOwnDriverModal(true);
   };
 
-  // ✅ NEW: Handle Assigning Own Driver
+  // ✅ UPDATED: Handle Assigning Own Driver (with delivery_fee validation)
   const handleAssignOwnDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ownDriverOrder) return;
     
+    const fee = parseFloat(ownDriverData.delivery_fee);
+    if (isNaN(fee) || fee <= 0) {
+      addToast({ type: "error", title: "Invalid Fee", message: "Please enter a valid delivery fee." });
+      return;
+    }
+
     setIsAssigningOwnDriver(true);
     try {
-      const result = await supplierUseOwnDriver(ownDriverOrder.id, ownDriverData);
+      const result = await supplierUseOwnDriver(ownDriverOrder.id, {
+        driver_name: ownDriverData.driver_name,
+        driver_phone: ownDriverData.driver_phone,
+        truck_plate_number: ownDriverData.truck_plate_number,
+        delivery_fee: fee
+      });
+      
       if (result.error) {
         addToast({ type: "error", title: "Error", message: result.error });
       } else {
-        addToast({ type: "success", title: "Driver Assigned! 🚛", message: "Your own driver has been successfully assigned to this order." });
+        addToast({ type: "success", title: "Driver Assigned! 🚛", message: "Your own driver has been successfully assigned. The customer will be prompted to pay the delivery fee." });
         setShowOwnDriverModal(false);
         await loadOrders();
       }
@@ -414,7 +431,6 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ NEW: Helper to check if 20 minutes have passed since supplier acceptance
   const isPast20Minutes = (order: any) => {
     const startTime = order.supplier_accepted_at || order.created_at;
     if (!startTime) return false;
@@ -698,7 +714,6 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
                       
-                      {/* ✅ NEW: Provide Own Driver Button (shows after 20 mins of driver_searching) */}
                       {order.status === "driver_searching" && isPast20Minutes(order) && (
                         <MagneticButton onClick={() => handleOpenOwnDriverModal(order)} className="px-6 py-2.5 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors flex items-center gap-2">
                           <Truck className="w-4 h-4" /> Provide Your Own Driver
@@ -974,7 +989,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Provide Own Driver Modal */}
+      {/* ✅ UPDATED: Provide Own Driver Modal (with Delivery Fee Input) */}
       <AnimatePresence>
         {showOwnDriverModal && ownDriverOrder && (
           <>
@@ -1046,6 +1061,19 @@ export default function SupplierDashboardPage() {
                       onChange={(e) => setOwnDriverData({...ownDriverData, truck_plate_number: e.target.value})}
                       className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 uppercase"
                       placeholder="e.g. ABC-123-DE"
+                      required
+                      disabled={isAssigningOwnDriver}
+                    />
+                  </div>
+                  {/* ✅ NEW: Delivery Fee Input */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Delivery Fee Customer Must Pay (₦) <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      value={ownDriverData.delivery_fee}
+                      onChange={(e) => setOwnDriverData({...ownDriverData, delivery_fee: e.target.value})}
+                      className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20"
+                      placeholder="e.g. 5000"
                       required
                       disabled={isAssigningOwnDriver}
                     />

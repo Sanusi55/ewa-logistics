@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Package, MapPin, Clock, CheckCircle, Truck, DollarSign, User, Phone, AlertCircle, Calendar } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Clock, CheckCircle, Truck, DollarSign, User, Phone, AlertCircle, Calendar, CreditCard } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
@@ -23,7 +23,14 @@ export default function OrderDetailPage() {
   const [isAssigningDriver, setIsAssigningDriver] = useState(false);
   const [materialPrice, setMaterialPrice] = useState("");
   const [showDriverForm, setShowDriverForm] = useState(false);
-  const [driverData, setDriverData] = useState({ driver_name: "", driver_phone: "", truck_plate_number: "" });
+  
+  // ✅ UPDATED: Added delivery_fee to state
+  const [driverData, setDriverData] = useState({ 
+    driver_name: "", 
+    driver_phone: "", 
+    truck_plate_number: "", 
+    delivery_fee: "" 
+  });
 
   useEffect(() => {
     if (params.id) loadOrder();
@@ -63,16 +70,24 @@ export default function OrderDetailPage() {
     }
   };
 
+  // ✅ UPDATED: Handle Use Own Driver with Fee
   const handleUseOwnDriver = async () => {
-    if (!driverData.driver_name || !driverData.driver_phone || !driverData.truck_plate_number) {
-      addToast({ type: "error", title: "Missing Information", message: "Please fill in all driver details" });
+    if (!driverData.driver_name || !driverData.driver_phone || !driverData.truck_plate_number || !driverData.delivery_fee) {
+      addToast({ type: "error", title: "Missing Information", message: "Please fill in all driver details and the delivery fee" });
       return;
     }
     setIsAssigningDriver(true);
     try {
-      const result = await supplierUseOwnDriver(params.id as string, driverData);
+      const result = await supplierUseOwnDriver(params.id as string, {
+        driver_name: driverData.driver_name,
+        driver_phone: driverData.driver_phone,
+        truck_plate_number: driverData.truck_plate_number,
+        delivery_fee: parseFloat(driverData.delivery_fee) // Pass the fee
+      });
+      
       if (result.error) { addToast({ type: "error", title: "Error", message: result.error }); return; }
-      addToast({ type: "success", title: "Driver Assigned!", message: "Your driver has been assigned to this order" });
+      
+      addToast({ type: "success", title: "Driver Assigned!", message: "Customer has been notified to pay the delivery fee." });
       setShowDriverForm(false);
       await loadOrder();
     } catch (error: any) {
@@ -87,6 +102,7 @@ export default function OrderDetailPage() {
       pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
       driver_searching: "bg-blue-500/10 text-blue-600 border-blue-500/30",
       no_driver_available: "bg-orange-500/10 text-orange-600 border-orange-500/30",
+      pending_delivery_payment: "bg-purple-500/10 text-purple-600 border-purple-500/30", // Added
       driver_assigned: "bg-green-500/10 text-green-600 border-green-500/30",
       supplier_driver_assigned: "bg-purple-500/10 text-purple-600 border-purple-500/30",
       loading: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
@@ -101,6 +117,7 @@ export default function OrderDetailPage() {
       pending_supplier_acceptance: "Pending Acceptance",
       driver_searching: "Finding Driver",
       no_driver_available: "No Driver Available",
+      pending_delivery_payment: "Awaiting Customer Payment", // Added
       driver_assigned: "Driver Assigned",
       supplier_driver_assigned: "Your Driver Assigned",
       loading: "Loading",
@@ -170,7 +187,7 @@ export default function OrderDetailPage() {
               <p className="text-muted-foreground mb-6">Set the material price to accept this order and start the driver search process.</p>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Material Price (₦) <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium mb-2">Material Price () <span className="text-red-500">*</span></label>
                   <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} placeholder="Enter price per ton" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" />
                 </div>
                 <MagneticButton onClick={handleAcceptOrder} disabled={isAccepting} className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
@@ -193,6 +210,7 @@ export default function OrderDetailPage() {
             </motion.div>
           )}
 
+          {/* ✅ UPDATED: Driver Form with Fee and Account Details */}
           {order.status === "no_driver_available" && showDriverForm && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-8 rounded-3xl border border-border mb-6">
               <h2 className="text-2xl font-bold mb-6">Assign Your Driver</h2>
@@ -200,8 +218,47 @@ export default function OrderDetailPage() {
                 <div><label className="block text-sm font-medium mb-2">Driver Name <span className="text-red-500">*</span></label><input type="text" value={driverData.driver_name} onChange={(e) => setDriverData({ ...driverData, driver_name: e.target.value })} placeholder="Enter driver's full name" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" /></div>
                 <div><label className="block text-sm font-medium mb-2">Driver Phone <span className="text-red-500">*</span></label><input type="tel" value={driverData.driver_phone} onChange={(e) => setDriverData({ ...driverData, driver_phone: e.target.value })} placeholder="Enter driver's phone number" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" /></div>
                 <div><label className="block text-sm font-medium mb-2">Truck Plate Number <span className="text-red-500">*</span></label><input type="text" value={driverData.truck_plate_number} onChange={(e) => setDriverData({ ...driverData, truck_plate_number: e.target.value })} placeholder="Enter truck plate number" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" /></div>
-                <div className="flex gap-4">
-                  <MagneticButton onClick={handleUseOwnDriver} disabled={isAssigningDriver} className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">{isAssigningDriver ? "Assigning..." : "Assign Driver"}</MagneticButton>
+                
+                {/* ✅ NEW: Delivery Fee Input */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Delivery Fee Customer Must Pay (₦) <span className="text-red-500">*</span></label>
+                  <input 
+                    type="number" 
+                    value={driverData.delivery_fee} 
+                    onChange={(e) => setDriverData({ ...driverData, delivery_fee: e.target.value })} 
+                    placeholder="e.g. 5000" 
+                    className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" 
+                  />
+                </div>
+
+                {/* ✅ NEW: Account Details Display */}
+                <div className="p-5 bg-blue-500/5 border border-blue-500/20 rounded-xl mt-4">
+                  <h4 className="font-semibold text-blue-600 mb-3 flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" /> Customer Payment Instructions
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Once you assign the driver, the customer will be prompted to pay the delivery fee to the following account:
+                  </p>
+                  <div className="space-y-3 text-sm bg-background/50 p-4 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Account Number:</span> 
+                      <span className="font-mono font-bold text-lg">1234567890</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Account Name:</span> 
+                      <span className="font-medium">EWA Logistics Escrow</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Bank:</span> 
+                      <span className="font-medium">Opay / Moniepoint</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <MagneticButton onClick={handleUseOwnDriver} disabled={isAssigningDriver} className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
+                    {isAssigningDriver ? "Assigning..." : "Assign Driver"}
+                  </MagneticButton>
                   <button onClick={() => setShowDriverForm(false)} className="px-8 py-4 border border-border rounded-xl font-semibold hover:bg-muted transition-colors">Cancel</button>
                 </div>
               </div>
