@@ -959,3 +959,44 @@ export async function confirmCustomerDelivery(orderId: string) {
     return { error: error.message || "An unexpected error occurred" };
   }
 }
+
+// ============================================
+// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS (NEW)
+// ============================================
+export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string) {
+  const supabase = await createClient();
+  
+  try {
+    // 1. Update the order status in Supabase
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: "pending_supplier_acceptance",
+        is_paid: true,
+        payment_reference: txRef,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    if (error) {
+      console.error("❌ Failed to update order status:", error);
+      return { success: false, error: error.message };
+    }
+
+    // 2. Record in status history
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      old_status: "pending_payment",
+      new_status: "pending_supplier_acceptance",
+      changed_by: "system",
+      notes: `Payment verified via Flutterwave (TxRef: ${txRef})`,
+    });
+
+    console.log("✅ Order status updated to pending_supplier_acceptance for Order ID:", orderId);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error("❌ Verify payment exception:", error);
+    return { success: false, error: error.message };
+  }
+}
