@@ -9,6 +9,53 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 // ============================================
+// 🔔 UNIFIED NOTIFICATION HELPER (In-App + Email)
+// ============================================
+async function sendNotification({
+  userId,
+  title,
+  message,
+  type = "info",
+  emailSubject,
+  emailHtml,
+  userEmail,
+}: {
+  userId: string;
+  title: string;
+  message: string;
+  type?: "info" | "success" | "warning" | "error" | "order";
+  emailSubject?: string;
+  emailHtml?: string;
+  userEmail?: string;
+}) {
+  const supabase = await createClient();
+
+  // 1. Save In-App Notification
+  await supabase.from("notifications").insert({
+    user_id: userId,
+    title,
+    message,
+    type,
+    is_read: false,
+  });
+
+  // 2. Send Email Notification (if details provided)
+  if (resend && userEmail && emailSubject && emailHtml) {
+    try {
+      // 💡 PRO TIP: Change "onboarding@resend.dev" to your verified domain (e.g., "notifications@ewalogistics.com")
+      await resend.emails.send({
+        from: "EWA Logistics <onboarding@resend.dev>",
+        to: [userEmail],
+        subject: emailSubject,
+        html: emailHtml,
+      });
+    } catch (error) {
+      console.error(`⚠️ Failed to send email to ${userEmail}:`, error);
+    }
+  }
+}
+
+// ============================================
 // 📦 CREATE ORDER (SECURED: Waits for Payment)
 // ============================================
 export async function createOrder(orderData: {
@@ -35,7 +82,7 @@ export async function createOrder(orderData: {
     }
 
     const deliveryCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const service_charge = 5000; 
+    const service_charge = 0; // ✅ CHANGED: Service charge temporarily set to 0 to gain traction
 
     const { data, error } = await supabase
       .from("orders")
@@ -68,6 +115,37 @@ export async function createOrder(orderData: {
       changed_by: user.id,
       notes: "Order created, awaiting payment", // ✅ SECURED
     });
+
+    // 📢 NOTIFY ADMIN & SUPPLIERS (Customer places order)
+    const { data: admins } = await supabase.from("profiles").select("id, email, full_name").eq("role", "admin");
+    if (admins) {
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: "New Order Placed",
+          message: `A new order for ${orderData.material_type} has been placed and is awaiting payment.`,
+          type: "info",
+          emailSubject: "🔔 New Order Placed on EWA Logistics",
+          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} tons) has been placed and is awaiting payment.</p>`,
+          userEmail: admin.email,
+        });
+      }
+    }
+
+    const { data: suppliers } = await supabase.from("profiles").select("id, email, full_name").eq("role", "supplier");
+    if (suppliers) {
+      for (const supplier of suppliers) {
+        await sendNotification({
+          userId: supplier.id,
+          title: "New Order Available",
+          message: `A new order for ${orderData.material_type} is available.`,
+          type: "info",
+          emailSubject: "📦 New Order Available for Your Review",
+          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} tons) is available in the system.</p>`,
+          userEmail: supplier.email,
+        });
+      }
+    }
 
     return { 
       success: true, 
@@ -258,7 +336,7 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
 
     const { data: order, error: orderFetchError } = await supabase
       .from("orders")
-      .select("material_type, tonnage")
+      .select("material_type, tonnage, customer_id")
       .eq("id", orderId)
       .single();
 
@@ -299,39 +377,51 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       notes: "Supplier accepted order, driver search started",
     });
 
-    if (resend) {
-      try {
-        const { data: customer } = await supabase
-          .from("profiles")
-          .select("email, full_name")
-          .eq("id", data.customer_id)
-          .single();
-
-        if (customer) {
-          await resend.emails.send({
-            from: "EWA Logistics <onboarding@resend.dev>",
-            to: [customer.email],
-            subject: `✅ Order Accepted - Driver Search Started`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #ea580c;">Order Accepted!</h2>
-                <p>Great news! A supplier has accepted your order and we're now searching for the best driver for you.</p>
-                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                  <p><strong>Order ID:</strong> ${orderId}</p>
-                  <p><strong>Material:</strong> ${data.material_type}</p>
-                  <p><strong>Tonnage:</strong> ${data.tonnage} tons</p>
-                  <p><strong>Status:</strong> Driver Search in Progress (30 minutes)</p>
-                </div>
-                <p>You'll receive another notification once a driver is assigned.</p>
+    // 📢 NOTIFY CUSTOMER (Existing logic, upgraded to use helper)
+    if (order) {
+      const { data: customer } = await supabase.from("profiles").select("email, full_name").eq("id", order.customer_id).single();
+      if (customer) {
+        await sendNotification({
+          userId: order.customer_id,
+          title: "Order Accepted! 🎉",
+          message: "A supplier has accepted your order. We are now searching for the best driver for you.",
+          type: "success",
+          emailSubject: "✅ Order Accepted - Driver Search Started",
+          emailHtml: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #ea580c;">Order Accepted!</h2>
+              <p>Great news! A supplier has accepted your order and we're now searching for the best driver for you.</p>
+              <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <p><strong>Order ID:</strong> ${orderId}</p>
+                <p><strong>Material:</strong> ${order.material_type}</p>
+                <p><strong>Tonnage:</strong> ${order.tonnage} tons</p>
+                <p><strong>Status:</strong> Driver Search in Progress (30 minutes)</p>
               </div>
-            `,
+              <p>You'll receive another notification once a driver is assigned.</p>
+            </div>
+          `,
+          userEmail: customer.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY DRIVERS IN SUPPLIER'S STATE
+    const { data: supplierProfile } = await supabase.from("profiles").select("state").eq("id", user.id).single();
+    if (supplierProfile?.state && order) {
+      const { data: drivers } = await supabase.from("profiles").select("id, email, full_name").eq("role", "driver").eq("state", supplierProfile.state);
+      if (drivers) {
+        for (const driver of drivers) {
+          await sendNotification({
+            userId: driver.id,
+            title: "New Delivery Job Available! 🚛",
+            message: `A new order for ${order.material_type} needs a driver in ${supplierProfile.state}.`,
+            type: "info",
+            emailSubject: "🚛 New Delivery Job Available in Your Area!",
+            emailHtml: `<p>Hi ${driver.full_name},</p><p>A new order for <strong>${order.material_type}</strong> (${order.tonnage} tons) needs a driver in <strong>${supplierProfile.state}</strong>.</p><p>Log in to your dashboard to place your bid!</p>`,
+            userEmail: driver.email,
           });
         }
-      } catch (emailError) {
-        console.error("⚠️ Failed to send email:", emailError);
       }
-    } else {
-      console.warn("⚠️ Resend API key missing. Email notification skipped.");
     }
 
     return { 
@@ -432,8 +522,14 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
 
     const { data: driver } = await supabase
       .from("profiles")
-      .select("full_name, phone")
+      .select("full_name, phone, email")
       .eq("id", bid.driver_id)
+      .single();
+
+    const { data: order } = await supabase
+      .from("orders")
+      .select("supplier_id, material_type")
+      .eq("id", orderId)
       .single();
 
     const driver_commission = bid.bid_amount * 0.05;
@@ -450,7 +546,7 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
       .neq("id", bidId);
 
     // ✅ CHANGED: Status is now pending_delivery_payment instead of driver_assigned
-    const { data: order, error: orderError } = await supabase
+    const { data: updatedOrder, error: orderError } = await supabase
       .from("orders")
       .update({
         driver_id: bid.driver_id,
@@ -479,42 +575,64 @@ export async function customerAcceptBid(orderId: string, bidId: string) {
       notes: `Customer accepted bid from driver, awaiting delivery payment`,
     });
 
-    if (resend) {
-      try {
-        const { data: supplier } = await supabase
-          .from("profiles")
-          .select("email")
-          .eq("id", order.supplier_id)
-          .single();
+    // 📢 NOTIFY SELECTED DRIVER
+    if (driver) {
+      await sendNotification({
+        userId: bid.driver_id,
+        title: "Bid Accepted! 🎉",
+        message: "Your bid has been accepted. Please await delivery fee payment from the customer.",
+        type: "success",
+        emailSubject: "✅ Your Bid Has Been Accepted!",
+        emailHtml: `<p>Great news, ${driver.full_name}!</p><p>Your bid for the delivery of <strong>${order?.material_type}</strong> has been accepted by the customer.</p><p>Please await the delivery fee payment to be officially assigned to this trip.</p>`,
+        userEmail: driver.email,
+      });
+    }
 
-        if (supplier) {
-          await resend.emails.send({
-            from: "EWA Logistics <onboarding@resend.dev>",
-            to: [supplier.email],
-            subject: `🚛 Driver Bid Accepted - Awaiting Delivery Payment`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #ea580c;">Driver Bid Accepted!</h2>
-                <p>The customer has accepted a driver's bid. Once the delivery fee is paid, the driver will be officially assigned.</p>
-                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                  <p><strong>Driver Name:</strong> ${order.driver_name}</p>
-                  <p><strong>Driver Phone:</strong> ${order.driver_phone}</p>
-                  <p><strong>Delivery Fee:</strong> ₦${order.delivery_fee?.toLocaleString()}</p>
-                </div>
-              </div>
-            `,
-          });
-        }
-      } catch (emailError) {
-        console.error("⚠️ Failed to send email:", emailError);
+    // 📢 NOTIFY ADMIN
+    const { data: admins } = await supabase.from("profiles").select("id, email").eq("role", "admin");
+    if (admins) {
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: "Driver Bid Accepted",
+          message: `Customer accepted a bid for Order ${orderId}. Awaiting delivery payment.`,
+          type: "info",
+          emailSubject: "🔔 Driver Bid Accepted - Awaiting Payment",
+          emailHtml: `<p>Admin Alert:</p><p>A customer has accepted a driver's bid for Order <strong>${orderId}</strong>. The system is now awaiting delivery fee payment.</p>`,
+          userEmail: admin.email,
+        });
       }
-    } else {
-      console.warn("⚠️ Resend API key missing. Email notification skipped.");
+    }
+
+    // 📢 NOTIFY SUPPLIER (Existing logic, upgraded to use helper)
+    if (order?.supplier_id) {
+      const { data: supplier } = await supabase.from("profiles").select("email").eq("id", order.supplier_id).single();
+      if (supplier) {
+        await sendNotification({
+          userId: order.supplier_id,
+          title: "Driver Bid Accepted",
+          message: "The customer has accepted a driver's bid. Awaiting delivery payment.",
+          type: "info",
+          emailSubject: "🚛 Driver Bid Accepted - Awaiting Delivery Payment",
+          emailHtml: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #ea580c;">Driver Bid Accepted!</h2>
+              <p>The customer has accepted a driver's bid. Once the delivery fee is paid, the driver will be officially assigned.</p>
+              <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <p><strong>Driver Name:</strong> ${updatedOrder.driver_name}</p>
+                <p><strong>Driver Phone:</strong> ${updatedOrder.driver_phone}</p>
+                <p><strong>Delivery Fee:</strong> ₦${updatedOrder.delivery_fee?.toLocaleString()}</p>
+              </div>
+            </div>
+          `,
+          userEmail: supplier.email,
+        });
+      }
     }
 
     return { 
       success: true, 
-      order: order,
+      order: updatedOrder,
       message: "Driver bid accepted! Awaiting delivery payment." 
     };
   } catch (error: any) {
@@ -536,7 +654,7 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
     // 1. Verify order belongs to this customer
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("customer_id, status, delivery_fee, driver_id, material_type")
+      .select("customer_id, status, delivery_fee, driver_id, material_type, supplier_id")
       .eq("id", orderId)
       .single();
 
@@ -585,36 +703,46 @@ export async function confirmDeliveryPayment(orderId: string, proofFile?: File) 
       notes: "Customer confirmed delivery fee payment. Driver officially assigned.",
     });
 
-    // ✅ NEW: Notify the driver that the delivery fee is paid and they are officially assigned
-    if (resend && order.driver_id) {
-      try {
-        const { data: driverProfile } = await supabase
-          .from("profiles")
-          .select("email, full_name")
-          .eq("id", order.driver_id)
-          .single();
+    // 📢 NOTIFY SUPPLIER
+    if (order.supplier_id) {
+      const { data: supplier } = await supabase.from("profiles").select("id, email, full_name").eq("id", order.supplier_id).single();
+      if (supplier) {
+        await sendNotification({
+          userId: supplier.id,
+          title: "Delivery Fee Paid! 💰",
+          message: "The customer has paid the delivery fee. The driver is now officially assigned and will proceed to your location.",
+          type: "success",
+          emailSubject: "✅ Delivery Fee Paid - Driver Assigned",
+          emailHtml: `<p>Good news!</p><p>The customer has paid the delivery fee for Order <strong>${orderId}</strong> (${order.material_type}).</p><p>The driver is now officially assigned and will proceed to your location shortly.</p>`,
+          userEmail: supplier.email,
+        });
+      }
+    }
 
-        if (driverProfile) {
-          await resend.emails.send({
-            from: "EWA Logistics <onboarding@resend.dev>",
-            to: [driverProfile.email],
-            subject: `🚛 Delivery Fee Paid! You are officially assigned.`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #ea580c;">Delivery Fee Secured! 🎉</h2>
-                <p>Great news, ${driverProfile.full_name}! The customer has paid the delivery fee, and you are now officially assigned to this trip.</p>
-                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                  <p><strong>Delivery Fee Secured:</strong> ₦${order.delivery_fee?.toLocaleString()}</p>
-                  <p><strong>Material:</strong> ${order.material_type || 'Construction Material'}</p>
-                  <p><strong>Action Required:</strong> Please proceed to the pickup location and contact the customer upon arrival to get your 4-digit delivery code.</p>
-                </div>
-                <p>Drive safely and have a great trip!</p>
+    // 📢 NOTIFY DRIVER (Existing logic, upgraded to use helper)
+    if (order.driver_id) {
+      const { data: driverProfile } = await supabase.from("profiles").select("email, full_name").eq("id", order.driver_id).single();
+      if (driverProfile) {
+        await sendNotification({
+          userId: order.driver_id,
+          title: "Delivery Fee Secured! 🎉",
+          message: "The customer has paid the delivery fee. You are now officially assigned to this trip.",
+          type: "success",
+          emailSubject: "🚛 Delivery Fee Paid! You are officially assigned.",
+          emailHtml: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #ea580c;">Delivery Fee Secured! 🎉</h2>
+              <p>Great news, ${driverProfile.full_name}! The customer has paid the delivery fee, and you are now officially assigned to this trip.</p>
+              <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <p><strong>Delivery Fee Secured:</strong> ₦${order.delivery_fee?.toLocaleString()}</p>
+                <p><strong>Material:</strong> ${order.material_type || 'Construction Material'}</p>
+                <p><strong>Action Required:</strong> Please proceed to the pickup location and contact the customer upon arrival to get your 4-digit delivery code.</p>
               </div>
-            `,
-          });
-        }
-      } catch (emailError) {
-        console.error("⚠️ Failed to send driver assignment email:", emailError);
+              <p>Drive safely and have a great trip!</p>
+            </div>
+          `,
+          userEmail: driverProfile.email,
+        });
       }
     }
 
@@ -701,7 +829,7 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
     // ✅ Fetch ALL necessary fields including delivery_fee and driver_commission
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("delivery_code, driver_id, status, customer_id, delivery_fee, driver_commission")
+      .select("delivery_code, driver_id, status, customer_id, supplier_id, delivery_fee, driver_commission, material_type, tonnage")
       .eq("id", orderId)
       .single();
 
@@ -812,6 +940,52 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
       notes: "Delivery confirmed by driver with code. Earnings marked as pending.",
     });
 
+    // 📢 NOTIFY SUPPLIER
+    if (order.supplier_id) {
+      const { data: supplier } = await supabase.from("profiles").select("id, email, full_name").eq("id", order.supplier_id).single();
+      if (supplier) {
+        await sendNotification({
+          userId: supplier.id,
+          title: "Delivery Completed by Driver",
+          message: `The driver has completed the delivery for ${order.material_type}. Awaiting customer confirmation.`,
+          type: "success",
+          emailSubject: "✅ Delivery Completed by Driver",
+          emailHtml: `<p>The driver has successfully completed the delivery for Order <strong>${orderId}</strong> (${order.material_type}).</p><p>The order is now awaiting final confirmation from the customer to release the escrow payment.</p>`,
+          userEmail: supplier.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY ADMIN
+    const { data: admins } = await supabase.from("profiles").select("id, email").eq("role", "admin");
+    if (admins) {
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: "Delivery Completed",
+          message: `Driver completed delivery for Order ${orderId}. Awaiting customer confirmation.`,
+          type: "info",
+          emailSubject: "🔔 Delivery Completed - Awaiting Customer Confirmation",
+          emailHtml: `<p>Admin Alert:</p><p>The driver has marked Order <strong>${orderId}</strong> as delivered. Awaiting final customer confirmation to release escrow.</p>`,
+          userEmail: admin.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY CUSTOMER
+    const { data: customer } = await supabase.from("profiles").select("id, email, full_name").eq("id", order.customer_id).single();
+    if (customer) {
+      await sendNotification({
+        userId: customer.id,
+        title: "Driver Arrived / Delivery Attempted",
+        message: "Your driver has marked the order as delivered. Please confirm the delivery to release the escrow payment.",
+        type: "warning",
+        emailSubject: "📦 Your Delivery is Ready for Confirmation!",
+        emailHtml: `<p>Hi ${customer.full_name},</p><p>Your driver has marked the delivery for Order <strong>${orderId}</strong> (${order.material_type}) as completed.</p><p>Please log in to your dashboard and confirm the delivery to release the escrow payment.</p>`,
+        userEmail: customer.email,
+      });
+    }
+
     return { success: true, message: "Delivery confirmed successfully! Payment is now pending customer approval." };
   } catch (error: any) {
     console.error("❌ Confirm delivery exception:", error);
@@ -895,7 +1069,7 @@ export async function confirmCustomerDelivery(orderId: string) {
     if (order.customer_id !== user.id) return { error: "You are not the customer for this order" };
     if (order.status === "completed") return { error: "Order is already completed" };
 
-    const service_charge = order.service_charge || 5000;
+    const service_charge = 0; // ✅ CHANGED: Service charge temporarily set to 0
     const supplier_commission = order.supplier_commission || 0;
     const driver_commission = order.driver_commission || 0;
     
@@ -927,7 +1101,7 @@ export async function confirmCustomerDelivery(orderId: string) {
       order_id: orderId,
       amount: ewa_revenue,
       type: "revenue",
-      description: `Commission & Service Charge for Order ${orderId}`,
+      description: `Commission for Order ${orderId}`, // ✅ Updated description
     });
 
     if (net_supplier_payout > 0 && order.supplier_id) {
@@ -956,6 +1130,68 @@ export async function confirmCustomerDelivery(orderId: string) {
       notes: "Delivery confirmed by customer. Escrow released and earnings credited.",
     });
 
+    // 📢 NOTIFY CUSTOMER (Order Completed)
+    const { data: customer } = await supabase.from("profiles").select("email, full_name").eq("id", order.customer_id).single();
+    if (customer) {
+      await sendNotification({
+        userId: order.customer_id,
+        title: "Order Completed Successfully! 🎉",
+        message: "Your order is fully completed. Escrow has been released.",
+        type: "success",
+        emailSubject: "🎉 Order Completed Successfully!",
+        emailHtml: `<p>Hi ${customer.full_name},</p><p>Your order <strong>${orderId}</strong> has been fully completed and the escrow payment has been successfully released to the supplier and driver.</p><p>Thank you for using EWA Logistics!</p>`,
+        userEmail: customer.email,
+      });
+    }
+
+    // 📢 NOTIFY SUPPLIER (Payment Released)
+    if (order.supplier_id) {
+      const { data: supplier } = await supabase.from("profiles").select("email, full_name").eq("id", order.supplier_id).single();
+      if (supplier) {
+        await sendNotification({
+          userId: order.supplier_id,
+          title: "Payment Released! 💰",
+          message: "The customer has confirmed delivery. Your earnings have been credited to your wallet.",
+          type: "success",
+          emailSubject: "💰 Payment Released for Your Order!",
+          emailHtml: `<p>Great news!</p><p>The customer has confirmed the delivery for Order <strong>${orderId}</strong>. Your earnings have been credited to your EWA Logistics wallet and are available for withdrawal.</p>`,
+          userEmail: supplier.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY DRIVER (Payment Released)
+    if (order.driver_id) {
+      const { data: driver } = await supabase.from("profiles").select("email, full_name").eq("id", order.driver_id).single();
+      if (driver) {
+        await sendNotification({
+          userId: order.driver_id,
+          title: "Payment Released! 💰",
+          message: "The customer has confirmed delivery. Your trip earnings have been credited to your wallet.",
+          type: "success",
+          emailSubject: "💰 Trip Earnings Credited to Your Wallet!",
+          emailHtml: `<p>Great job, ${driver.full_name}!</p><p>The customer has confirmed the delivery for Order <strong>${orderId}</strong>. Your trip earnings have been credited to your EWA Logistics wallet and are available for withdrawal.</p>`,
+          userEmail: driver.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY ADMIN
+    const { data: admins } = await supabase.from("profiles").select("id, email").eq("role", "admin");
+    if (admins) {
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: "Order Completed & Escrow Released",
+          message: `Order ${orderId} is fully completed. Escrow released to supplier and driver.`,
+          type: "success",
+          emailSubject: "✅ Order Completed & Escrow Released",
+          emailHtml: `<p>Admin Alert:</p><p>Order <strong>${orderId}</strong> has been fully completed by the customer. Escrow funds have been successfully released to the supplier and driver.</p>`,
+          userEmail: admin.email,
+        });
+      }
+    }
+
     return { success: true, message: "Delivery confirmed successfully! Escrow released and earnings credited." };
   } catch (error: any) {
     console.error("❌ Confirm delivery exception:", error);
@@ -964,12 +1200,14 @@ export async function confirmCustomerDelivery(orderId: string) {
 }
 
 // ============================================
-// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS
+// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS (UPDATED WITH NOTIFICATIONS)
 // ============================================
 export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string) {
   const supabase = await createClient();
   
   try {
+    const { data: order } = await supabase.from("orders").select("customer_id, material_type, tonnage, pickup_location").eq("id", orderId).single();
+    
     // 1. Update the order status in Supabase
     const { error } = await supabase
       .from("orders")
@@ -995,7 +1233,39 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
       notes: `Payment verified via Flutterwave (TxRef: ${txRef})`,
     });
 
-    console.log("✅ Order status updated to pending_supplier_acceptance for Order ID:", orderId);
+    // 📢 NOTIFY ADMIN (Order is now paid and ready)
+    const { data: admins } = await supabase.from("profiles").select("id, email, full_name").eq("role", "admin");
+    if (admins) {
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: "Payment Verified - Order Ready",
+          message: `Payment verified for ${order?.material_type}. Ready for supplier acceptance.`,
+          type: "success",
+          emailSubject: "✅ Payment Verified - Order Ready for Supplier",
+          emailHtml: `<p>Payment has been successfully verified for an order of <strong>${order?.material_type}</strong>. It is now ready for supplier acceptance.</p>`,
+          userEmail: admin.email,
+        });
+      }
+    }
+
+    // 📢 NOTIFY ALL SUPPLIERS (Order is now paid and ready)
+    const { data: suppliers } = await supabase.from("profiles").select("id, email, full_name").eq("role", "supplier");
+    if (suppliers) {
+      for (const supplier of suppliers) {
+        await sendNotification({
+          userId: supplier.id,
+          title: "New Paid Order Ready for Acceptance! 🎉",
+          message: `A customer has paid for ${order?.material_type}. Please review and accept the order.`,
+          type: "order",
+          emailSubject: "📦 New Paid Order Ready for Your Acceptance!",
+          emailHtml: `<p>A customer has successfully paid for an order of <strong>${order?.material_type}</strong> (${order?.tonnage} tons).</p><p>Please log in to your supplier dashboard to review and accept this order.</p>`,
+          userEmail: supplier.email,
+        });
+      }
+    }
+
+    console.log("✅ Order status updated and notifications sent for Order ID:", orderId);
     return { success: true };
 
   } catch (error: any) {

@@ -17,6 +17,7 @@ import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
 import MagneticButton from "@/components/magnetic-button";
+import NotificationBell from "@/components/notification-bell"; // ✅ ADDED: Import the real notification bell
 
 interface Order {
   id: string;
@@ -32,7 +33,7 @@ interface Order {
   driver_name: string | null;
   driver_phone: string | null;
   customer_phone: string | null;
-  supplier?: { phone: string | null; warehouse_address: string | null } | null; // ✅ UPDATED: Include warehouse_address
+  supplier?: { phone: string | null; warehouse_address: string | null } | null;
   truck_plate_number: string | null;
   delivery_code: string | null;
   delivery_code_confirmed: boolean;
@@ -195,7 +196,6 @@ export default function DriverDashboardPage() {
     const { data: bidsData } = await supabase.from("driver_bids").select("*").eq("driver_id", user.id).order("created_at", { ascending: false });
     if (bidsData) setMyBids(bidsData);
 
-    // ✅ UPDATED: Fetch both supplier phone AND warehouse_address
     const { data: ordersData } = await supabase
       .from("orders")
       .select(`
@@ -612,6 +612,9 @@ export default function DriverDashboardPage() {
               {isOnline ? "Online" : "Offline"}
             </button>
 
+            {/* ✅ ADDED: Notification Bell for Driver */}
+            <NotificationBell />
+
             <button
               onClick={() => handleTabChange("settings")}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all cursor-pointer shadow-lg text-sm ${
@@ -781,7 +784,6 @@ export default function DriverDashboardPage() {
                         <div className="flex-1 space-y-6">
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Pickup</p>
-                            {/* ✅ UPDATED: Now shows the supplier's exact warehouse address */}
                             <p className="text-sm font-semibold text-foreground">
                               {activeDelivery.pickup_location || "Supplier Warehouse"}
                             </p>

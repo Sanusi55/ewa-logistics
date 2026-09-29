@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getUserOrders, customerAcceptBid, confirmDeliveryPayment, customerAssignOwnDriver } from "@/app/actions/orders"; // ✅ Added customerAssignOwnDriver
+import { getUserOrders, customerAcceptBid, confirmDeliveryPayment } from "@/app/actions/orders"; 
 import { createDispute } from "@/app/actions/disputes";
 import { useToast } from "@/components/providers/toast-provider";
 import MagneticButton from "@/components/magnetic-button";
@@ -30,12 +30,6 @@ export default function CustomerDashboardPage() {
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
-
-  // ✅ NEW: Own Driver Modal State
-  const [showOwnDriverModal, setShowOwnDriverModal] = useState(false);
-  const [selectedOrderForOwnDriver, setSelectedOrderForOwnDriver] = useState<any>(null);
-  const [ownDriverData, setOwnDriverData] = useState({ driver_name: "", driver_phone: "", truck_plate_number: "" });
-  const [isSubmittingOwnDriver, setIsSubmittingOwnDriver] = useState(false);
 
   // ✅ Dispute State
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -90,46 +84,6 @@ export default function CustomerDashboardPage() {
       addToast({ type: "error", title: "Error", message: error.message || "Failed to accept bid" });
     } finally {
       setAcceptingBidId(null);
-    }
-  };
-
-  // ✅ NEW: Handle Own Driver Submission
-  const handleAssignOwnDriver = async () => {
-    if (!selectedOrderForOwnDriver || !ownDriverData.driver_name || !ownDriverData.driver_phone || !ownDriverData.truck_plate_number) {
-      addToast({ type: "error", title: "Missing Info", message: "Please fill in all driver details." });
-      return;
-    }
-
-    setIsSubmittingOwnDriver(true);
-    try {
-      // Default delivery fee if not set (you can adjust this logic or make it an input field)
-      const deliveryFee = selectedOrderForOwnDriver.delivery_fee || selectedOrderForOwnDriver.delivery_fee_offer || 5000;
-
-      const result = await customerAssignOwnDriver(selectedOrderForOwnDriver.id, {
-        ...ownDriverData,
-        delivery_fee: deliveryFee
-      });
-
-      if (result.error) {
-        addToast({ type: "error", title: "Error", message: result.error });
-      } else {
-        addToast({ type: "success", title: "Driver Added!", message: "Please complete the delivery fee payment." });
-        setShowOwnDriverModal(false);
-        setOwnDriverData({ driver_name: "", driver_phone: "", truck_plate_number: "" });
-        
-        // ✅ Automatically open the payment modal for this order
-        const updatedResult = await getUserOrders("customer");
-        const updatedOrder = updatedResult.orders?.find((o: any) => o.id === selectedOrderForOwnDriver.id);
-        if (updatedOrder) {
-          setSelectedOrderForPayment(updatedOrder);
-          setShowPaymentModal(true);
-        }
-        await loadOrders();
-      }
-    } catch (error: any) {
-      addToast({ type: "error", title: "Error", message: error.message || "Failed to assign driver" });
-    } finally {
-      setIsSubmittingOwnDriver(false);
     }
   };
 
@@ -256,10 +210,10 @@ export default function CustomerDashboardPage() {
         ) : (
           <div className="space-y-6">
             {orders.map((order, index) => {
+              // ✅ UPDATED: Removed service charge from calculations
               const materialCost = order.total_amount || 0;
-              const serviceCharge = order.service_charge || 5000;
               const deliveryFee = order.delivery_fee || 0;
-              const totalValue = materialCost + serviceCharge + deliveryFee;
+              const totalValue = materialCost + deliveryFee;
 
               return (
                 <motion.div
@@ -304,6 +258,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
 
+                  {/* ✅ UPDATED: Removed EWA Service Charge from the breakdown */}
                   <div className="mb-6 p-4 bg-muted/20 rounded-xl">
                     <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Order Cost Breakdown</h4>
                     <div className="space-y-2 text-sm">
@@ -321,10 +276,6 @@ export default function CustomerDashboardPage() {
                               : "Pending driver bid"}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">EWA Service Charge</span>
-                        <span className="font-medium text-orange-500">{formatNaira(serviceCharge)}</span>
-                      </div>
                       <div className="flex justify-between pt-2 mt-2 border-t border-border">
                         <span className="font-bold text-foreground">Total Order Value</span>
                         <span className="font-bold text-orange-500 text-base">{formatNaira(totalValue)}</span>
@@ -335,18 +286,9 @@ export default function CustomerDashboardPage() {
                   {/* DRIVER BIDDING SECTION */}
                   {order.status === "driver_searching" && (
                     <div className="mt-6 pt-6 border-t border-border">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <Truck className="w-5 h-5 text-blue-500" />
-                          <h4 className="text-lg font-bold">Driver Bids ({order.driver_bids?.length || 0})</h4>
-                        </div>
-                        {/* ✅ NEW: Provide Own Driver Button */}
-                        <button
-                          onClick={() => { setSelectedOrderForOwnDriver(order); setShowOwnDriverModal(true); }}
-                          className="text-sm font-semibold text-purple-600 bg-purple-500/10 px-4 py-2 rounded-lg hover:bg-purple-500/20 transition-colors flex items-center gap-2 cursor-pointer"
-                        >
-                          <User className="w-4 h-4" /> Provide Your Own Driver
-                        </button>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Truck className="w-5 h-5 text-blue-500" />
+                        <h4 className="text-lg font-bold">Driver Bids ({order.driver_bids?.length || 0})</h4>
                       </div>
 
                       {(!order.driver_bids || order.driver_bids.length === 0) ? (
@@ -403,19 +345,15 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* ✅ NO DRIVER AVAILABLE SECTION (with Own Driver option) */}
+                  {/* ✅ NO DRIVER AVAILABLE SECTION (Customer just waits, Supplier handles it) */}
                   {order.status === "no_driver_available" && (
                     <div className="mt-6 pt-6 border-t border-border">
                       <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-xl text-center">
                         <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-bold text-red-600 mb-2">No EWA Drivers Available</h4>
-                        <p className="text-sm text-muted-foreground mb-4">No drivers accepted this job within the time limit.</p>
-                        <MagneticButton
-                          onClick={() => { setSelectedOrderForOwnDriver(order); setShowOwnDriverModal(true); }}
-                          className="px-6 py-3 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-600 transition-colors shadow-lg shadow-purple-500/20 inline-flex items-center gap-2"
-                        >
-                          <User className="w-4 h-4" /> Provide Your Own Driver
-                        </MagneticButton>
+                        <h4 className="text-lg font-bold text-red-600 mb-2">No EWA Drivers Available Yet</h4>
+                        <p className="text-sm text-muted-foreground">
+                          No drivers have accepted this job within the time limit. Our system is continuing to search, or the supplier may assign their own driver shortly.
+                        </p>
                       </div>
                     </div>
                   )}
@@ -510,106 +448,6 @@ export default function CustomerDashboardPage() {
           </div>
         )}
       </div>
-
-      {/* ✅ NEW: Provide Your Own Driver Modal */}
-      <AnimatePresence>
-        {showOwnDriverModal && selectedOrderForOwnDriver && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => !isSubmittingOwnDriver && setShowOwnDriverModal(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-            >
-              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2 text-purple-600">
-                    <Truck className="w-6 h-6" /> Provide Your Own Driver
-                  </h3>
-                  <button onClick={() => setShowOwnDriverModal(false)} className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl mb-6">
-                  <p className="text-sm text-purple-700 dark:text-purple-300 font-medium mb-2">
-                    ⚠️ No EWA drivers accepted within 20 minutes.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    You can assign your own driver. A standard delivery fee will still apply to cover platform coordination and escrow security.
-                  </p>
-                </div>
-
-                <div className="space-y-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Driver Name <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={ownDriverData.driver_name}
-                      onChange={(e) => setOwnDriverData({...ownDriverData, driver_name: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-purple-500/20 focus:border-purple-500 transition-all"
-                      placeholder="e.g. John Doe"
-                      disabled={isSubmittingOwnDriver}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Driver Phone <span className="text-red-500">*</span></label>
-                    <input
-                      type="tel"
-                      value={ownDriverData.driver_phone}
-                      onChange={(e) => setOwnDriverData({...ownDriverData, driver_phone: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-purple-500/20 focus:border-purple-500 transition-all"
-                      placeholder="e.g. 08012345678"
-                      disabled={isSubmittingOwnDriver}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Truck Plate Number <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={ownDriverData.truck_plate_number}
-                      onChange={(e) => setOwnDriverData({...ownDriverData, truck_plate_number: e.target.value})}
-                      className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-purple-500/20 focus:border-purple-500 transition-all"
-                      placeholder="e.g. ABC-123-XY"
-                      disabled={isSubmittingOwnDriver}
-                    />
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-xl">
-                    <p className="text-sm text-muted-foreground mb-1">Delivery Fee to Pay</p>
-                    <p className="text-2xl font-bold text-orange-500">
-                      {formatNaira(selectedOrderForOwnDriver.delivery_fee || selectedOrderForOwnDriver.delivery_fee_offer || 5000)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setShowOwnDriverModal(false)}
-                    disabled={isSubmittingOwnDriver}
-                    className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <MagneticButton 
-                    onClick={handleAssignOwnDriver}
-                    disabled={isSubmittingOwnDriver}
-                    className="flex-1 py-3 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingOwnDriver ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                    ) : (
-                      <><CheckCircle className="w-4 h-4" /> Assign & Pay</>
-                    )}
-                  </MagneticButton>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* ✅ EXISTING: Delivery Payment Modal */}
       <AnimatePresence>

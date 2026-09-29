@@ -377,7 +377,7 @@ export default function SupplierDashboardPage() {
       if (result.error) {
         addToast({ type: "error", title: "Error", message: result.error });
       } else {
-        addToast({ type: "success", title: "Driver Assigned! 🚛", message: "Your own driver has been successfully assigned. The customer will be prompted to pay the delivery fee." });
+        addToast({ type: "success", title: "Driver Assigned! ", message: "Your own driver has been successfully assigned. The customer will be prompted to pay the delivery fee." });
         setShowOwnDriverModal(false);
         await loadOrders();
       }
@@ -420,7 +420,7 @@ export default function SupplierDashboardPage() {
       if (result.error) {
         addToast({ type: "error", title: "Upload Failed", message: result.error });
       } else {
-        addToast({ type: "success", title: "Evidence Uploaded! 📸", message: "Proof of delivery has been recorded." });
+        addToast({ type: "success", title: "Evidence Uploaded! ", message: "Proof of delivery has been recorded." });
         setShowEvidenceModal(false);
         await loadOrders();
       }
@@ -431,11 +431,12 @@ export default function SupplierDashboardPage() {
     }
   };
 
+  // ✅ UPDATED: Changed from 20 minutes to 1 minute
   const isPast20Minutes = (order: any) => {
     const startTime = order.supplier_accepted_at || order.created_at;
     if (!startTime) return false;
-    const twentyMinutesAgo = new Date().getTime() - 20 * 60 * 1000;
-    return new Date(startTime).getTime() < twentyMinutesAgo;
+    const oneMinuteAgo = new Date().getTime() - 1 * 60 * 1000; // ✅ CHANGED: 1 minute instead of 20
+    return new Date(startTime).getTime() < oneMinuteAgo;
   };
 
   const getStatusColor = (status: string) => {
@@ -714,6 +715,7 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
                       
+                      {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                       {order.status === "driver_searching" && isPast20Minutes(order) && (
                         <MagneticButton onClick={() => handleOpenOwnDriverModal(order)} className="px-6 py-2.5 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors flex items-center gap-2">
                           <Truck className="w-4 h-4" /> Provide Your Own Driver
@@ -973,8 +975,9 @@ export default function SupplierDashboardPage() {
                     <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500/20" placeholder="Enter price" disabled={acceptingOrderId !== null} />
                     <p className="text-xs text-muted-foreground mt-1">This is the price for the material. Delivery fee will be added separately.</p>
                   </div>
+                  {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                   <div className="p-4 bg-blue-500/10 rounded-xl">
-                    <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 20 minutes. If none accept, you can provide your own driver.</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 1 minute. If none accept, you can provide your own driver.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -1023,8 +1026,9 @@ export default function SupplierDashboardPage() {
                 <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
                   <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} Tons • {ownDriverOrder.delivery_location}</p>
+                  {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                   <p className="text-xs text-orange-500 mt-2 font-medium">
-                    ⏱️ No EWA drivers accepted within 20 minutes. You can now assign your own driver.
+                    ⏱️ No EWA drivers accepted within 1 minute. You can now assign your own driver.
                   </p>
                 </div>
 

@@ -170,7 +170,7 @@ export default function MaterialsPage() {
             Premium Construction <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">Materials</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Source the best granite, sand, and stone for your next big project. 
+            Source the best granite, sand, cement, steel, and bricks for your next big project. 
             Direct from verified suppliers with escrow protection.
           </p>
           
@@ -179,7 +179,7 @@ export default function MaterialsPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search for granite, sand, stone base..."
+              placeholder="Search for granite, sand, cement, steel, bricks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-4 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 transition-all text-lg"
@@ -232,6 +232,10 @@ export default function MaterialsPage() {
                 <option value="granite">Granite</option>
                 <option value="stone">Stone</option>
                 <option value="gravel">Gravel</option>
+                {/* ✅ NEW: Added Cement, Steel, and Bricks */}
+                <option value="cement">Cement</option>
+                <option value="steel">Steel</option>
+                <option value="bricks">Bricks</option>
               </select>
             </div>
 

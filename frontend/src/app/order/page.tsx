@@ -114,7 +114,7 @@ function OrderPageContent() {
   };
 
   const subtotal = material ? material.price_per_ton * formData.quantity : 0;
-  const serviceCharge = 5000; 
+  const serviceCharge = 0; // ✅ CHANGED: Service charge temporarily set to 0 to gain traction
   const deliveryOffer = formData.useCustomOffer ? (parseInt(formData.customDeliveryOffer) || 0) : 0;
   const totalAmount = subtotal + serviceCharge + deliveryOffer;
 
@@ -454,14 +454,11 @@ function OrderPageContent() {
                   </div>
                 </div>
 
+                {/* ✅ UPDATED: Removed Service Charge from the UI */}
                 <div className="space-y-2 pt-4 border-t border-border">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₦{subtotal.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Service Charge</span>
-                    <span>₦{serviceCharge.toLocaleString()}</span>
                   </div>
                   {formData.useCustomOffer && deliveryOffer > 0 && (
                     <div className="flex justify-between text-sm text-orange-500">
