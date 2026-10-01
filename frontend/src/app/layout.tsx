@@ -8,7 +8,8 @@ import CommandPalette from "@/components/command-palette";
 import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
-import Footer from "@/components/footer"; // ✅ NEW: Footer import
+import Footer from "@/components/footer";
+import OneSignalProvider from "@/components/OneSignalProvider"; // ✅ NEW: OneSignal Provider import
 
 export const viewport: Viewport = {
   themeColor: "#f97316",
@@ -19,7 +20,6 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  // ✅ CRITICAL FIX: This resolves the "metadataBase property is not set" terminal warning
   metadataBase: new URL("https://ewalogistics.com"),
   
   title: {
@@ -40,7 +40,6 @@ export const metadata: Metadata = {
   publisher: "EWA Logistics Limited",
   manifest: "/manifest.json",
   
-  // ✅ Google Search Console Verification
   verification: {
     google: "cjuYcuTzi9SOUy-bZkwQff5_DTlc0TQJcNdUrFMxR4E",
   },
@@ -127,49 +126,49 @@ export default function RootLayout({
           }
         `}</style>
       </head>
-      {/* ✅ UPDATED: Added flex classes to push footer to the bottom */}
       <body className="antialiased flex flex-col min-h-screen">
-        <CursorSpotlight />
-        
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <ToastProvider>
-            {/* ✅ UPDATED: Wrapped children in main tag to take up remaining space */}
-            <main className="flex-1">
-              {children}
-            </main>
-            
-            {/* ✅ NEW: Footer component added globally */}
-            <Footer />
-            
-            <ChatWidget />
-            <CommandPalette />
-            <MaterialCalculator />
-            <PWAInstallPrompt />
-          </ToastProvider>
-        </ThemeProvider>
+        {/* ✅ NEW: Wrapped everything in OneSignalProvider */}
+        <OneSignalProvider>
+          <CursorSpotlight />
+          
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ToastProvider>
+              <main className="flex-1">
+                {children}
+              </main>
+              
+              <Footer />
+              
+              <ChatWidget />
+              <CommandPalette />
+              <MaterialCalculator />
+              <PWAInstallPrompt />
+            </ToastProvider>
+          </ThemeProvider>
 
-        {/* ✅ PWA Service Worker Registration (Re-enabled) */}
-        <Script id="register-sw" strategy="afterInteractive">
-          {`
-            if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js').then(
-                  function(registration) {
-                    console.log('✅ Service Worker registered with scope:', registration.scope);
-                  },
-                  function(err) {
-                    console.warn('❌ Service Worker registration failed:', err);
-                  }
-                );
-              });
-            }
-          `}
-        </Script>
+          {/* ✅ PWA Service Worker Registration */}
+          <Script id="register-sw" strategy="afterInteractive">
+            {`
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(registration) {
+                      console.log('✅ Service Worker registered with scope:', registration.scope);
+                    },
+                    function(err) {
+                      console.warn('❌ Service Worker registration failed:', err);
+                    }
+                  );
+                });
+              }
+            `}
+          </Script>
+        </OneSignalProvider>
       </body>
     </html>
   );

@@ -209,6 +209,13 @@ export default function AdminPage() {
   const [adminNotes, setAdminNotes] = useState("");
   const [isResolvingDispute, setIsResolvingDispute] = useState(false);
 
+  // ✅ NEW: Manual Confirm Delivery State
+  const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
+  const [manualConfirmOrder, setManualConfirmOrder] = useState<Order | null>(null);
+  const [manualConfirmReason, setManualConfirmReason] = useState("");
+  const [manualConfirmProof, setManualConfirmProof] = useState("");
+  const [isManuallyConfirming, setIsManuallyConfirming] = useState(false);
+
   useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
@@ -471,6 +478,36 @@ export default function AdminPage() {
   const formatNaira = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount || 0);
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const formatTime = (dateString: string) => new Date(dateString).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  // ✅ NEW: Handle Manual Confirm Delivery
+  const handleManualConfirmDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualConfirmOrder || !manualConfirmReason.trim()) return;
+
+    setIsManuallyConfirming(true);
+    try {
+      const { adminManualConfirmDelivery } = await import("@/app/actions/orders");
+      const result = await adminManualConfirmDelivery(
+        manualConfirmOrder.id, 
+        manualConfirmReason.trim(), 
+        manualConfirmProof.trim() || undefined
+      );
+
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ type: "success", title: "Delivery Confirmed! 🎉", message: result.message });
+        setShowManualConfirmModal(false);
+        setManualConfirmReason("");
+        setManualConfirmProof("");
+        fetchOrders();
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to manually confirm delivery" });
+    } finally {
+      setIsManuallyConfirming(false);
+    }
+  };
 
   if (authState === "loading") {
     return (
@@ -928,11 +965,23 @@ export default function AdminPage() {
                               <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>{status.label}</span>
                             </td>
                             <td className="p-4 text-right">
-                              <Link href={`/dashboard/tracking?id=${order.id}`} target="_blank">
-                                <button className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5 ml-auto">
-                                  <Eye className="w-3.5 h-3.5" /> Track
-                                </button>
-                              </Link>
+                              <div className="flex items-center justify-end gap-2">
+                                <Link href={`/dashboard/tracking?id=${order.id}`} target="_blank">
+                                  <button className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5">
+                                    <Eye className="w-3.5 h-3.5" /> Track
+                                  </button>
+                                </Link>
+                                
+                                {/* ✅ NEW: Manual Confirm Delivery Button */}
+                                {order.status !== "completed" && order.status !== "cancelled" && (
+                                  <button 
+                                    onClick={() => { setManualConfirmOrder(order); setShowManualConfirmModal(true); }}
+                                    className="px-3 py-1.5 text-xs bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5" /> Manual Confirm
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1420,6 +1469,82 @@ export default function AdminPage() {
                     <button onClick={handleMarkAsResponded} className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity cursor-pointer"><CheckCircle className="w-4 h-4" /> Mark as Responded</button>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Manual Delivery Confirmation Modal */}
+      <AnimatePresence>
+        {showManualConfirmModal && manualConfirmOrder && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isManuallyConfirming && setShowManualConfirmModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+              <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-red-500/30 shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-red-400">
+                    <AlertTriangle className="w-6 h-6" /> Manual Delivery Confirmation
+                  </h3>
+                  <button onClick={() => setShowManualConfirmModal(false)} disabled={isManuallyConfirming} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
+                  <p className="text-sm text-red-400 font-medium mb-2">⚠️ Warning: Irreversible Action</p>
+                  <p className="text-xs text-slate-300">
+                    Are you sure you want to manually confirm this delivery? This action will mark the order as <strong>Delivered</strong> and may trigger payment release to the supplier and driver.
+                  </p>
+                </div>
+
+                <form onSubmit={handleManualConfirmDelivery} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5 text-slate-300">Reason for Manual Confirmation <span className="text-red-500">*</span></label>
+                    <textarea
+                      value={manualConfirmReason}
+                      onChange={(e) => setManualConfirmReason(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all resize-none text-white"
+                      placeholder="e.g., Customer has no network, Delivery code unavailable..."
+                      required
+                      disabled={isManuallyConfirming}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5 text-slate-300">Delivery Proof Reference (Optional)</label>
+                    <input
+                      type="text"
+                      value={manualConfirmProof}
+                      onChange={(e) => setManualConfirmProof(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-white"
+                      placeholder="e.g., WhatsApp image link or file name"
+                      disabled={isManuallyConfirming}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowManualConfirmModal(false)}
+                      disabled={isManuallyConfirming}
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer text-slate-300"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isManuallyConfirming || !manualConfirmReason.trim()}
+                      className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isManuallyConfirming ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+                      ) : (
+                        <><AlertTriangle className="w-4 h-4" /> Confirm Delivery</>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           </>

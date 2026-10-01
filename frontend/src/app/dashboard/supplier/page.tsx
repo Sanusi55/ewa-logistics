@@ -5,7 +5,7 @@ import {
   Package, Truck, Clock, CheckCircle, DollarSign, 
   MapPin, Calendar, Loader2, AlertCircle, Building2,
   TrendingUp, Users, BarChart3, Eye, Phone, Navigation,
-  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle, LogOut
+  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle, LogOut, KeyRound
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -53,6 +53,12 @@ export default function SupplierDashboardPage() {
     delivery_fee: "",
   });
   const [isAssigningOwnDriver, setIsAssigningOwnDriver] = useState(false);
+
+  // ✅ NEW: Confirm Delivery State
+  const [showConfirmDeliveryModal, setShowConfirmDeliveryModal] = useState(false);
+  const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<any>(null);
+  const [confirmDeliveryCode, setConfirmDeliveryCode] = useState("");
+  const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
 
   // Account Details State
   const [accountDetails, setAccountDetails] = useState({
@@ -342,7 +348,6 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ UPDATED: Handle Opening Own Driver Modal
   const handleOpenOwnDriverModal = (order: any) => {
     setOwnDriverOrder(order);
     setOwnDriverData({ 
@@ -354,7 +359,6 @@ export default function SupplierDashboardPage() {
     setShowOwnDriverModal(true);
   };
 
-  // ✅ UPDATED: Handle Assigning Own Driver (with delivery_fee validation)
   const handleAssignOwnDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ownDriverOrder) return;
@@ -385,6 +389,39 @@ export default function SupplierDashboardPage() {
       addToast({ type: "error", title: "Error", message: error.message || "Failed to assign driver" });
     } finally {
       setIsAssigningOwnDriver(false);
+    }
+  };
+
+  // ✅ NEW: Handle Confirm Delivery
+  const handleOpenConfirmDeliveryModal = (order: any) => {
+    setConfirmDeliveryOrder(order);
+    setConfirmDeliveryCode("");
+    setShowConfirmDeliveryModal(true);
+  };
+
+  const handleConfirmDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmDeliveryOrder || confirmDeliveryCode.length !== 4) {
+      addToast({ type: "error", title: "Invalid Code", message: "Please enter a valid 4-digit delivery code." });
+      return;
+    }
+
+    setIsConfirmingDelivery(true);
+    try {
+      const { confirmSupplierDelivery } = await import("@/app/actions/orders");
+      const result = await confirmSupplierDelivery(confirmDeliveryOrder.id, confirmDeliveryCode);
+      
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+      } else {
+        addToast({ type: "success", title: "Delivery Confirmed! 🎉", message: result.message });
+        setShowConfirmDeliveryModal(false);
+        await loadOrders();
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to confirm delivery" });
+    } finally {
+      setIsConfirmingDelivery(false);
     }
   };
 
@@ -431,11 +468,10 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ UPDATED: Changed from 20 minutes to 1 minute
   const isPast20Minutes = (order: any) => {
     const startTime = order.supplier_accepted_at || order.created_at;
     if (!startTime) return false;
-    const oneMinuteAgo = new Date().getTime() - 1 * 60 * 1000; // ✅ CHANGED: 1 minute instead of 20
+    const oneMinuteAgo = new Date().getTime() - 1 * 60 * 1000;
     return new Date(startTime).getTime() < oneMinuteAgo;
   };
 
@@ -715,10 +751,19 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
                       
-                      {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                       {order.status === "driver_searching" && isPast20Minutes(order) && (
                         <MagneticButton onClick={() => handleOpenOwnDriverModal(order)} className="px-6 py-2.5 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 transition-colors flex items-center gap-2">
                           <Truck className="w-4 h-4" /> Provide Your Own Driver
+                        </MagneticButton>
+                      )}
+
+                      {/* ✅ UPDATED: Confirm Delivery Button now appears for driver_assigned, in_transit, or delivered orders */}
+                      {(order.status === "driver_assigned" || order.status === "in_transit" || order.status === "delivered") && (
+                        <MagneticButton 
+                          onClick={() => handleOpenConfirmDeliveryModal(order)} 
+                          className="px-6 py-2.5 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center gap-2"
+                        >
+                          <CheckCircle className="w-4 h-4" /> Confirm Delivery
                         </MagneticButton>
                       )}
 
@@ -975,7 +1020,6 @@ export default function SupplierDashboardPage() {
                     <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} className="w-full px-4 py-3 bg-muted/50 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500/20" placeholder="Enter price" disabled={acceptingOrderId !== null} />
                     <p className="text-xs text-muted-foreground mt-1">This is the price for the material. Delivery fee will be added separately.</p>
                   </div>
-                  {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                   <div className="p-4 bg-blue-500/10 rounded-xl">
                     <p className="text-sm text-blue-700 dark:text-blue-300"><strong>Note:</strong> After accepting, the system will search for available drivers for 1 minute. If none accept, you can provide your own driver.</p>
                   </div>
@@ -992,7 +1036,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ UPDATED: Provide Own Driver Modal (with Delivery Fee Input) */}
+      {/* Provide Own Driver Modal */}
       <AnimatePresence>
         {showOwnDriverModal && ownDriverOrder && (
           <>
@@ -1026,7 +1070,6 @@ export default function SupplierDashboardPage() {
                 <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
                   <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} Tons • {ownDriverOrder.delivery_location}</p>
-                  {/* ✅ UPDATED: Changed from 20 minutes to 1 minute */}
                   <p className="text-xs text-orange-500 mt-2 font-medium">
                     ⏱️ No EWA drivers accepted within 1 minute. You can now assign your own driver.
                   </p>
@@ -1069,7 +1112,6 @@ export default function SupplierDashboardPage() {
                       disabled={isAssigningOwnDriver}
                     />
                   </div>
-                  {/* ✅ NEW: Delivery Fee Input */}
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Delivery Fee Customer Must Pay (₦) <span className="text-red-500">*</span></label>
                     <input
@@ -1101,6 +1143,88 @@ export default function SupplierDashboardPage() {
                         <><Loader2 className="w-4 h-4 animate-spin" /> Assigning...</>
                       ) : (
                         <><CheckCircle className="w-4 h-4" /> Assign Driver</>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Confirm Delivery Modal */}
+      <AnimatePresence>
+        {showConfirmDeliveryModal && confirmDeliveryOrder && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isConfirmingDelivery && setShowConfirmDeliveryModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-green-500">
+                    <CheckCircle className="w-6 h-6" /> Confirm Delivery
+                  </h3>
+                  <button 
+                    onClick={() => setShowConfirmDeliveryModal(false)} 
+                    disabled={isConfirmingDelivery}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="mb-6 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+                  <p className="text-sm font-semibold mb-1">{confirmDeliveryOrder.material_type}</p>
+                  <p className="text-xs text-muted-foreground">{confirmDeliveryOrder.tonnage} Tons • {confirmDeliveryOrder.delivery_location}</p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">
+                    ⚠️ Enter the 4-digit code provided by the customer to confirm delivery and release escrow.
+                  </p>
+                </div>
+
+                <form onSubmit={handleConfirmDelivery} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Customer's Delivery Code <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={confirmDeliveryCode}
+                      onChange={(e) => setConfirmDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4).toUpperCase())}
+                      className="w-full px-4 py-4 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-2xl font-bold text-center tracking-widest uppercase"
+                      placeholder="0000"
+                      required
+                      disabled={isConfirmingDelivery}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowConfirmDeliveryModal(false)}
+                      disabled={isConfirmingDelivery}
+                      className="flex-1 py-3 rounded-xl font-medium hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isConfirmingDelivery || confirmDeliveryCode.length !== 4}
+                      className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isConfirmingDelivery ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+                      ) : (
+                        <><CheckCircle className="w-4 h-4" /> Confirm & Release Escrow</>
                       )}
                     </button>
                   </div>
