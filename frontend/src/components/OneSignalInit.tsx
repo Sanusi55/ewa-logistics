@@ -12,18 +12,19 @@ export default function OneSignalInit() {
     script.async = true;
     script.defer = true;
     
-    script.onload = async () => {
+    script.onload = () => {
       console.log('✅ OneSignal script loaded');
       
-      // 2. Initialize the SDK
-      await initializeOneSignal();
+      // 2. Initialize the SDK (this sets up the queue)
+      initializeOneSignal();
       
       // 3. Check if user is already logged in and link them
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await setOneSignalUserId(user.id);
-      }
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          setOneSignalUserId(user.id);
+        }
+      });
 
       // 4. Listen for future login/logout events
       supabase.auth.onAuthStateChange((event, session) => {
@@ -34,10 +35,6 @@ export default function OneSignalInit() {
     };
 
     document.head.appendChild(script);
-
-    return () => {
-      // Cleanup
-    };
   }, []);
 
   return null;
