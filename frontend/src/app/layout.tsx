@@ -9,7 +9,7 @@ import MaterialCalculator from "@/components/material-calculator";
 import CursorSpotlight from "@/components/cursor-spotlight";
 import PWAInstallPrompt from "@/components/pwa-install-prompt";
 import Footer from "@/components/footer";
-import OneSignalProvider from "@/components/OneSignalProvider"; // ✅ NEW: OneSignal Provider import
+import OneSignalInit from "@/components/OneSignalInit"; // ✅ NEW: OneSignal Init component
 
 export const viewport: Viewport = {
   themeColor: "#f97316",
@@ -127,48 +127,48 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className="antialiased flex flex-col min-h-screen">
-        {/* ✅ NEW: Wrapped everything in OneSignalProvider */}
-        <OneSignalProvider>
-          <CursorSpotlight />
-          
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ToastProvider>
-              <main className="flex-1">
-                {children}
-              </main>
-              
-              <Footer />
-              
-              <ChatWidget />
-              <CommandPalette />
-              <MaterialCalculator />
-              <PWAInstallPrompt />
-            </ToastProvider>
-          </ThemeProvider>
+        {/* ✅ NEW: Initialize OneSignal on the client side */}
+        <OneSignalInit />
+        
+        <CursorSpotlight />
+        
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ToastProvider>
+            <main className="flex-1">
+              {children}
+            </main>
+            
+            <Footer />
+            
+            <ChatWidget />
+            <CommandPalette />
+            <MaterialCalculator />
+            <PWAInstallPrompt />
+          </ToastProvider>
+        </ThemeProvider>
 
-          {/* ✅ PWA Service Worker Registration */}
-          <Script id="register-sw" strategy="afterInteractive">
-            {`
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    function(registration) {
-                      console.log('✅ Service Worker registered with scope:', registration.scope);
-                    },
-                    function(err) {
-                      console.warn('❌ Service Worker registration failed:', err);
-                    }
-                  );
-                });
-              }
-            `}
-          </Script>
-        </OneSignalProvider>
+        {/* ✅ PWA Service Worker Registration */}
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(
+                  function(registration) {
+                    console.log('✅ Service Worker registered with scope:', registration.scope);
+                  },
+                  function(err) {
+                    console.warn('❌ Service Worker registration failed:', err);
+                  }
+                );
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );
