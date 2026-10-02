@@ -1,17 +1,19 @@
-// Tell TypeScript about the global OneSignal object
+// Tell TypeScript about the official OneSignal v16 global variables
 declare global {
   interface Window {
+    OneSignalDeferred: any[];
     OneSignal: any;
   }
 }
 
 export const initializeOneSignal = () => {
   if (typeof window !== 'undefined') {
-    // Initialize the push queue
-    window.OneSignal = window.OneSignal || [];
+    // 1. Initialize the official deferred queue
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
     
-    window.OneSignal.push(function () {
-      window.OneSignal.init({
+    // 2. Push the init command to the queue
+    window.OneSignalDeferred.push(function(OneSignal: any) {
+      OneSignal.init({
         appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
         allowLocalhostAsSecureOrigin: true, // Allows testing on localhost
       })
@@ -26,10 +28,10 @@ export const initializeOneSignal = () => {
 };
 
 export const setOneSignalUserId = (userId: string) => {
-  if (typeof window !== 'undefined' && window.OneSignal) {
-    // Use the push queue to ensure the SDK is fully ready before logging in
-    window.OneSignal.push(function () {
-      window.OneSignal.login(userId)
+  if (typeof window !== 'undefined' && window.OneSignalDeferred) {
+    // 3. Push the login command to the queue so it waits for init to finish
+    window.OneSignalDeferred.push(function(OneSignal: any) {
+      OneSignal.login(userId)
         .then(() => {
           console.log('✅ OneSignal user ID set:', userId);
         })

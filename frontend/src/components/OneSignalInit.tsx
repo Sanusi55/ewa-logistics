@@ -15,7 +15,7 @@ export default function OneSignalInit() {
     script.onload = () => {
       console.log('✅ OneSignal script loaded');
       
-      // 2. Initialize the SDK (this sets up the queue)
+      // 2. Initialize the SDK (this sets up the OneSignalDeferred queue)
       initializeOneSignal();
       
       // 3. Check if user is already logged in and link them
