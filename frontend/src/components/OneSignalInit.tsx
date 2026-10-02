@@ -6,34 +6,39 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function OneSignalInit() {
   useEffect(() => {
-    // 1. Initialize OneSignal SDK
-    initializeOneSignal();
-
-    const supabase = createClient();
-
-    // 2. Check if user is already logged in when the app loads
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // 1. Load the official OneSignal SDK script
+    const script = document.createElement("script");
+    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = async () => {
+      console.log('✅ OneSignal script loaded');
+      
+      // 2. Initialize the SDK
+      await initializeOneSignal();
+      
+      // 3. Check if user is already logged in and link them
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setOneSignalUserId(user.id);
+        await setOneSignalUserId(user.id);
       }
-    });
 
-    // 3. Listen for real-time login/logout events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        console.log("✅ User signed in, linking to OneSignal:", session.user.id);
-        setOneSignalUserId(session.user.id);
-      } else if (event === "SIGNED_OUT") {
-        console.log("🚪 User signed out");
-        // Optional: You can also call OneSignal.logout() here if needed
-      }
-    });
+      // 4. Listen for future login/logout events
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          setOneSignalUserId(session.user.id);
+        }
+      });
+    };
 
-    // Cleanup subscription on unmount
+    document.head.appendChild(script);
+
     return () => {
-      subscription.unsubscribe();
+      // Cleanup
     };
   }, []);
 
-  return null; // This component doesn't render anything visually
+  return null;
 }

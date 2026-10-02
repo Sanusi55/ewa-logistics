@@ -1,9 +1,14 @@
-import OneSignal from 'react-onesignal';
+// Tell TypeScript about the global OneSignal object
+declare global {
+  interface Window {
+    OneSignal: any;
+  }
+}
 
 export const initializeOneSignal = async () => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.OneSignal) {
     try {
-      await OneSignal.init({
+      await window.OneSignal.init({
         appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
         allowLocalhostAsSecureOrigin: true, // Allows testing on localhost
       });
@@ -15,10 +20,10 @@ export const initializeOneSignal = async () => {
 };
 
 export const setOneSignalUserId = async (userId: string) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.OneSignal) {
     try {
-      // This is the magic line that links the browser to the Supabase User ID
-      await OneSignal.login(userId); 
+      // This is the official way to link a user ID
+      await window.OneSignal.login(userId); 
       console.log('✅ OneSignal user ID set:', userId);
     } catch (error) {
       console.error('❌ Failed to set OneSignal user ID:', error);
