@@ -34,9 +34,19 @@ export const setOneSignalUserId = (userId: string) => {
       OneSignal.login(userId)
         .then(() => {
           console.log('✅ OneSignal user ID set:', userId);
+          
+          // 4. Request permission to actually subscribe the browser to push notifications
+          return OneSignal.Notifications.requestPermission(true);
+        })
+        .then((permissionGranted: boolean) => {
+          if (permissionGranted) {
+            console.log('✅ User subscribed to push notifications!');
+          } else {
+            console.log('⚠️ User declined notification permission');
+          }
         })
         .catch((err: any) => {
-          console.error('❌ Failed to set OneSignal user ID:', err);
+          console.error('❌ Failed to set OneSignal user ID or request permission:', err);
         });
     });
   }
