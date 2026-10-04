@@ -17,6 +17,8 @@ import { logout } from "@/app/actions/auth";
 import { useToast } from "@/components/providers/toast-provider";
 import MagneticButton from "@/components/magnetic-button";
 import { SkeletonTable } from "@/components/ui/skeleton";
+// ✅ ADDED: Import the Live GPS Sharing component
+import DriverLocationShare from "@/components/driver-location-share";
 
 export default function SupplierDashboardPage() {
   const router = useRouter();
@@ -1317,6 +1319,23 @@ export default function SupplierDashboardPage() {
                       </div>
                     </div>
                   )}
+                  
+                  {/* ✅ ADDED: Live GPS Sharing Component inside the Modal */}
+                  {["driver_assigned", "supplier_driver_assigned", "loading", "in_transit", "pending_delivery_payment"].includes(trackingOrder.status) && (
+                    <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                      <h4 className="font-bold mb-3 flex items-center gap-2 text-blue-600">
+                        <Navigation className="w-5 h-5" /> Live GPS Sharing
+                      </h4>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Click "Start Sharing" below to broadcast this driver's live location to the customer's map.
+                      </p>
+                      <DriverLocationShare 
+                        orderId={trackingOrder.id} 
+                        orderStatus={trackingOrder.status} 
+                      />
+                    </div>
+                  )}
+
                   <div className="p-4 rounded-xl bg-muted/30">
                     <h4 className="font-bold mb-4">Order Status</h4>
                     <div className="space-y-3">

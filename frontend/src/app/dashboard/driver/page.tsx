@@ -17,7 +17,9 @@ import { getAvailableJobs, submitDriverBid, confirmDriverDelivery } from "@/app/
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
 import MagneticButton from "@/components/magnetic-button";
-import NotificationBell from "@/components/notification-bell"; // ✅ ADDED: Import the real notification bell
+import NotificationBell from "@/components/notification-bell";
+// ✅ ADDED: Import the Live GPS Sharing component
+import DriverLocationShare from "@/components/driver-location-share";
 
 interface Order {
   id: string;
@@ -115,6 +117,7 @@ export default function DriverDashboardPage() {
   const [showBidModal, setShowBidModal] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
+  const [showTrackingModal, setShowTrackingModal] = useState(false); // ✅ ADDED: Tracking modal state
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
   const [bidAmount, setBidAmount] = useState("");
@@ -612,7 +615,6 @@ export default function DriverDashboardPage() {
               {isOnline ? "Online" : "Offline"}
             </button>
 
-            {/* ✅ ADDED: Notification Bell for Driver */}
             <NotificationBell />
 
             <button
@@ -795,15 +797,19 @@ export default function DriverDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <a href={`tel:${activeDelivery.supplier?.phone || activeDelivery.customer_phone}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
-                          <Phone className="w-4 h-4" /> Contact Supplier
+                      {/* ✅ UPDATED: Added Live Tracking Button */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+                        <a href={`tel:${activeDelivery.supplier?.phone || activeDelivery.customer_phone}`} className="flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
+                          <Phone className="w-4 h-4" /> Contact
                         </a>
-                        <MagneticButton onClick={() => handleOpenProofModal(activeDelivery)} className="flex-[2] flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20">
-                          <Camera className="w-4 h-4" /> Upload Delivery Proof
+                        <MagneticButton onClick={() => setShowTrackingModal(true)} className="flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/20">
+                          <Navigation className="w-4 h-4" /> Live Tracking
                         </MagneticButton>
-                        <MagneticButton onClick={() => handleOpenCodeModal(activeDelivery)} className="flex-[2] flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20">
-                          <Key className="w-4 h-4" /> Complete with Code
+                        <MagneticButton onClick={() => handleOpenProofModal(activeDelivery)} className="flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20">
+                          <Camera className="w-4 h-4" /> Upload Proof
+                        </MagneticButton>
+                        <MagneticButton onClick={() => handleOpenCodeModal(activeDelivery)} className="flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20">
+                          <Key className="w-4 h-4" /> Complete
                         </MagneticButton>
                       </div>
                     </div>
@@ -1263,6 +1269,60 @@ export default function DriverDashboardPage() {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* ✅ ADDED: Live Tracking Modal */}
+      <AnimatePresence>
+        {showTrackingModal && activeDelivery && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTrackingModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Navigation className="w-6 h-6 text-blue-500" /> Live GPS Tracking
+                  </h3>
+                  <button 
+                    onClick={() => setShowTrackingModal(false)} 
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">Share your location with the customer</p>
+                  <p className="text-xs text-muted-foreground">This will update the live map on the customer's dashboard in real-time.</p>
+                </div>
+
+                <DriverLocationShare 
+                  orderId={activeDelivery.id} 
+                  orderStatus={activeDelivery.status} 
+                />
+
+                <div className="mt-6 flex justify-end">
+                  <button 
+                    onClick={() => setShowTrackingModal(false)}
+                    className="px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Bid Modal */}
       <AnimatePresence>

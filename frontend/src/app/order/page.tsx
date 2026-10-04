@@ -124,7 +124,7 @@ function OrderPageContent() {
     const orderData = {
       material_type: material?.name || "Construction Material",
       tonnage: formData.quantity,
-      // ✅ UPDATED: Use the dynamic warehouse address instead of hardcoded text
+      unit: material?.unit || "tons", // ✅ CRITICAL FIX: Pass the material unit to the backend!
       pickup_location: supplierWarehouseAddress || "Supplier Warehouse", 
       delivery_location: `${formData.city}, ${formData.state}`,
       delivery_address: formData.address,

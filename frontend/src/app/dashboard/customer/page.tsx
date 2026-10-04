@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Truck, Clock, CheckCircle, DollarSign, 
   User, MapPin, Calendar, Loader2, AlertCircle, Star, Plus, KeyRound,
-  AlertTriangle, X
+  AlertTriangle, X, Navigation
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -210,7 +210,6 @@ export default function CustomerDashboardPage() {
         ) : (
           <div className="space-y-6">
             {orders.map((order, index) => {
-              // ✅ UPDATED: Removed service charge from calculations
               const materialCost = order.total_amount || 0;
               const deliveryFee = order.delivery_fee || 0;
               const totalValue = materialCost + deliveryFee;
@@ -244,7 +243,7 @@ export default function CustomerDashboardPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Package className="w-4 h-4 text-orange-500" />
-                          <span>{order.tonnage} Tons</span>
+                          <span>{order.tonnage} {order.unit || 'tons'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="w-4 h-4 text-orange-500" />
@@ -258,7 +257,6 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
 
-                  {/* ✅ UPDATED: Removed EWA Service Charge from the breakdown */}
                   <div className="mb-6 p-4 bg-muted/20 rounded-xl">
                     <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Order Cost Breakdown</h4>
                     <div className="space-y-2 text-sm">
@@ -345,7 +343,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* ✅ NO DRIVER AVAILABLE SECTION (Customer just waits, Supplier handles it) */}
+                  {/* NO DRIVER AVAILABLE SECTION */}
                   {order.status === "no_driver_available" && (
                     <div className="mt-6 pt-6 border-t border-border">
                       <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-xl text-center">
@@ -388,7 +386,7 @@ export default function CustomerDashboardPage() {
                     </div>
                   )}
 
-                  {/* ASSIGNED DRIVER SECTION */}
+                  {/* ✅ ASSIGNED DRIVER SECTION (UPDATED WITH TRACKING BUTTON) */}
                   {(order.status === "driver_assigned" || order.status === "supplier_driver_assigned" || order.status === "loading" || order.status === "in_transit") && order.driver_name && (
                     <div className="mt-6 pt-6 border-t border-border">
                       <div className="flex items-center gap-2 mb-4">
@@ -417,6 +415,15 @@ export default function CustomerDashboardPage() {
                             <a href={`tel:${order.driver_phone}`} className="font-semibold text-orange-500 hover:underline">{order.driver_phone}</a>
                           </div>
                         </div>
+                      </div>
+                      
+                      {/* ✅ NEW: Track Live Location Button */}
+                      <div className="mt-4">
+                        <Link href={`/dashboard/tracking?id=${order.id}`}>
+                          <MagneticButton className="w-full py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2">
+                            <Navigation className="w-4 h-4" /> Track Live Location
+                          </MagneticButton>
+                        </Link>
                       </div>
                       
                       {(order.status === "in_transit" || order.status === "loading" || order.status === "driver_assigned" || order.status === "supplier_driver_assigned") && order.delivery_code && (
@@ -483,7 +490,7 @@ export default function CustomerDashboardPage() {
                     <p className="font-mono text-lg font-bold">1234567890</p>
                     <p className="text-muted-foreground">EWA Logistics Escrow</p>
                     <p className="text-muted-foreground">Opay / Moniepoint</p>
-                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">⚠️ Please include your Order ID as reference.</p>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">️ Please include your Order ID as reference.</p>
                   </div>
 
                   <div>

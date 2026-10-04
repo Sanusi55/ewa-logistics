@@ -4,21 +4,22 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Package, Plus, Search, Edit2, Trash2, 
-  AlertCircle, CheckCircle, XCircle, ArrowLeft
+  AlertCircle, CheckCircle, XCircle, ArrowLeft, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock Inventory Data
-const initialInventory = [
-  { id: 1, name: "1-Inch Granite", category: "Granite", stock: 120, unit: "tons", price: 45000, status: "healthy" },
-  { id: 2, name: "3/4 Granite", category: "Granite", stock: 45, unit: "tons", price: 40000, status: "healthy" },
-  { id: 3, name: "Sharp Sand", category: "Sand", stock: 8, unit: "tons", price: 15000, status: "low" },
-  { id: 4, name: "Stone Base", category: "Stone", stock: 0, unit: "tons", price: 30000, status: "out" },
-  { id: 5, name: "Stone Dust", category: "Sand", stock: 200, unit: "tons", price: 12000, status: "healthy" },
-  { id: 6, name: "Hardcore Granite", category: "Granite", stock: 15, unit: "tons", price: 35000, status: "low" },
-];
+interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  unit: string;
+  price: number;
+  status: "healthy" | "low" | "out";
+}
 
 function InventorySkeleton() {
   return (
@@ -33,15 +34,52 @@ function InventorySkeleton() {
 
 export default function SupplierInventoryPage() {
   const { addToast } = useToast();
+  const supabase = createClient();
   const [isLoading, setIsLoading] = useState(true);
-  const [inventory, setInventory] = useState(initialInventory);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timer);
+    fetchInventory();
   }, []);
+
+  async function fetchInventory() {
+    setIsLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Fetch real materials from the database instead of mock data
+    const { data, error } = await supabase
+      .from("materials")
+      .select("id, name, price_per_ton, unit, is_active")
+      .eq("supplier_id", user.id);
+
+    if (error) {
+      addToast({ type: "error", title: "Error", message: "Failed to load inventory" });
+    } else if (data) {
+      // Map real data to the inventory format
+      const mappedInventory: InventoryItem[] = data.map((item: any) => {
+        // Simple logic to determine stock status (you can expand this later)
+        const status: "healthy" | "low" | "out" = item.is_active ? "healthy" : "out";
+        
+        return {
+          id: item.id,
+          name: item.name,
+          category: item.name.split(" ")[0], // Simple category extraction
+          stock: 100, // Placeholder until you add a dedicated stock column
+          unit: item.unit || "tons", // ✅ DYNAMIC UNIT
+          price: item.price_per_ton,
+          status: status
+        };
+      });
+      setInventory(mappedInventory);
+    }
+    setIsLoading(false);
+  }
 
   const formatNaira = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
@@ -63,9 +101,20 @@ export default function SupplierInventoryPage() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleDelete = (id: number, name: string) => {
-    setInventory(inventory.filter(item => item.id !== id));
-    addToast({ type: "success", title: "Material Removed", message: `${name} has been removed from your inventory.` });
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name}?`)) return;
+
+    const { error } = await supabase
+      .from("materials")
+      .delete()
+      .eq("id", id);
+
+    if (!error) {
+      setInventory(inventory.filter(item => item.id !== id));
+      addToast({ type: "success", title: "Material Removed", message: `${name} has been removed from your inventory.` });
+    } else {
+      addToast({ type: "error", title: "Error", message: "Failed to remove material." });
+    }
   };
 
   const handleEdit = (name: string) => {
@@ -73,7 +122,8 @@ export default function SupplierInventoryPage() {
   };
 
   const handleAddMaterial = () => {
-    addToast({ type: "info", title: "Add Material", message: "Opening new material form..." });
+    // Redirect to the actual materials page to add
+    window.location.href = "/dashboard/supplier/materials";
   };
 
   return (
@@ -114,7 +164,7 @@ export default function SupplierInventoryPage() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 custom-scrollbar">
-            {["all", "granite", "sand", "stone"].map((cat) => (
+            {["all", "granite", "sand", "stone", "block", "cement"].map((cat) => (
               <button 
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
@@ -142,7 +192,8 @@ export default function SupplierInventoryPage() {
                     <th className="text-left p-4 font-medium">Material Name</th>
                     <th className="text-left p-4 font-medium hidden md:table-cell">Category</th>
                     <th className="text-left p-4 font-medium">Stock Level</th>
-                    <th className="text-left p-4 font-medium hidden md:table-cell">Price per Ton</th>
+                    {/* ✅ UPDATED: Changed "Price per Ton" to "Price / Unit" */}
+                    <th className="text-left p-4 font-medium hidden md:table-cell">Price / Unit</th>
                     <th className="text-left p-4 font-medium">Status</th>
                     <th className="text-right p-4 font-medium">Actions</th>
                   </tr>
@@ -170,6 +221,7 @@ export default function SupplierInventoryPage() {
                         <td className="p-4 text-muted-foreground hidden md:table-cell capitalize">{item.category}</td>
                         <td className="p-4">
                           <span className="font-medium text-foreground">{item.stock}</span>
+                          {/* ✅ DYNAMIC UNIT DISPLAY */}
                           <span className="text-muted-foreground text-xs ml-1">{item.unit}</span>
                         </td>
                         <td className="p-4 font-semibold text-foreground hidden md:table-cell">

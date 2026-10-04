@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Package, MapPin, Clock, CheckCircle, Truck, DollarSign, User, Phone, AlertCircle, Calendar, CreditCard } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Clock, CheckCircle, Truck, DollarSign, User, Phone, AlertCircle, Calendar, CreditCard, Navigation } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
@@ -10,6 +10,8 @@ import { getOrderById, supplierAcceptOrder, supplierUseOwnDriver } from "@/app/a
 import { useToast } from "@/components/providers/toast-provider";
 import DashboardLayout from "@/components/dashboard-layout";
 import MagneticButton from "@/components/magnetic-button";
+// ✅ ADDED: Import the Live GPS Sharing component
+import DriverLocationShare from "@/components/driver-location-share";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -24,7 +26,6 @@ export default function OrderDetailPage() {
   const [materialPrice, setMaterialPrice] = useState("");
   const [showDriverForm, setShowDriverForm] = useState(false);
   
-  // ✅ UPDATED: Added delivery_fee to state
   const [driverData, setDriverData] = useState({ 
     driver_name: "", 
     driver_phone: "", 
@@ -70,7 +71,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  // ✅ UPDATED: Handle Use Own Driver with Fee
   const handleUseOwnDriver = async () => {
     if (!driverData.driver_name || !driverData.driver_phone || !driverData.truck_plate_number || !driverData.delivery_fee) {
       addToast({ type: "error", title: "Missing Information", message: "Please fill in all driver details and the delivery fee" });
@@ -82,7 +82,7 @@ export default function OrderDetailPage() {
         driver_name: driverData.driver_name,
         driver_phone: driverData.driver_phone,
         truck_plate_number: driverData.truck_plate_number,
-        delivery_fee: parseFloat(driverData.delivery_fee) // Pass the fee
+        delivery_fee: parseFloat(driverData.delivery_fee)
       });
       
       if (result.error) { addToast({ type: "error", title: "Error", message: result.error }); return; }
@@ -102,7 +102,7 @@ export default function OrderDetailPage() {
       pending_supplier_acceptance: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
       driver_searching: "bg-blue-500/10 text-blue-600 border-blue-500/30",
       no_driver_available: "bg-orange-500/10 text-orange-600 border-orange-500/30",
-      pending_delivery_payment: "bg-purple-500/10 text-purple-600 border-purple-500/30", // Added
+      pending_delivery_payment: "bg-purple-500/10 text-purple-600 border-purple-500/30",
       driver_assigned: "bg-green-500/10 text-green-600 border-green-500/30",
       supplier_driver_assigned: "bg-purple-500/10 text-purple-600 border-purple-500/30",
       loading: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
@@ -117,7 +117,7 @@ export default function OrderDetailPage() {
       pending_supplier_acceptance: "Pending Acceptance",
       driver_searching: "Finding Driver",
       no_driver_available: "No Driver Available",
-      pending_delivery_payment: "Awaiting Customer Payment", // Added
+      pending_delivery_payment: "Awaiting Customer Payment",
       driver_assigned: "Driver Assigned",
       supplier_driver_assigned: "Your Driver Assigned",
       loading: "Loading",
@@ -169,7 +169,7 @@ export default function OrderDetailPage() {
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div><label className="text-sm text-muted-foreground mb-1 block">Material</label><div className="flex items-center gap-2"><Package className="w-5 h-5 text-orange-500" /><span className="font-medium">{order.material_type}</span></div></div>
-                <div><label className="text-sm text-muted-foreground mb-1 block">Tonnage</label><div className="font-medium">{order.tonnage} tons</div></div>
+                <div><label className="text-sm text-muted-foreground mb-1 block">Quantity</label><div className="font-medium">{order.tonnage} {order.unit || 'tons'}</div></div>
                 <div><label className="text-sm text-muted-foreground mb-1 block">Pickup Location</label><div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-orange-500" /><span>{order.pickup_location}</span></div></div>
               </div>
               <div className="space-y-4">
@@ -187,8 +187,8 @@ export default function OrderDetailPage() {
               <p className="text-muted-foreground mb-6">Set the material price to accept this order and start the driver search process.</p>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Material Price () <span className="text-red-500">*</span></label>
-                  <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} placeholder="Enter price per ton" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" />
+                  <label className="block text-sm font-medium mb-2">Material Price (₦) <span className="text-red-500">*</span></label>
+                  <input type="number" value={materialPrice} onChange={(e) => setMaterialPrice(e.target.value)} placeholder="Enter price" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" />
                 </div>
                 <MagneticButton onClick={handleAcceptOrder} disabled={isAccepting} className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
                   {isAccepting ? "Accepting..." : "Accept Order & Start Driver Search"}
@@ -210,7 +210,6 @@ export default function OrderDetailPage() {
             </motion.div>
           )}
 
-          {/* ✅ UPDATED: Driver Form with Fee and Account Details */}
           {order.status === "no_driver_available" && showDriverForm && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-8 rounded-3xl border border-border mb-6">
               <h2 className="text-2xl font-bold mb-6">Assign Your Driver</h2>
@@ -219,7 +218,6 @@ export default function OrderDetailPage() {
                 <div><label className="block text-sm font-medium mb-2">Driver Phone <span className="text-red-500">*</span></label><input type="tel" value={driverData.driver_phone} onChange={(e) => setDriverData({ ...driverData, driver_phone: e.target.value })} placeholder="Enter driver's phone number" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" /></div>
                 <div><label className="block text-sm font-medium mb-2">Truck Plate Number <span className="text-red-500">*</span></label><input type="text" value={driverData.truck_plate_number} onChange={(e) => setDriverData({ ...driverData, truck_plate_number: e.target.value })} placeholder="Enter truck plate number" className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500 transition-all" /></div>
                 
-                {/* ✅ NEW: Delivery Fee Input */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Delivery Fee Customer Must Pay (₦) <span className="text-red-500">*</span></label>
                   <input 
@@ -231,7 +229,6 @@ export default function OrderDetailPage() {
                   />
                 </div>
 
-                {/* ✅ NEW: Account Details Display */}
                 <div className="p-5 bg-blue-500/5 border border-blue-500/20 rounded-xl mt-4">
                   <h4 className="font-semibold text-blue-600 mb-3 flex items-center gap-2">
                     <CreditCard className="w-5 h-5" /> Customer Payment Instructions
@@ -274,6 +271,19 @@ export default function OrderDetailPage() {
                 {order.truck_plate_number && <div><label className="text-sm text-muted-foreground mb-1 block">Truck Plate Number</label><div className="flex items-center gap-2"><Truck className="w-5 h-5 text-orange-500" /><span className="font-medium">{order.truck_plate_number}</span></div></div>}
                 {order.delivery_fee && <div><label className="text-sm text-muted-foreground mb-1 block">Delivery Fee</label><div className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-green-500" /><span className="font-medium">₦{order.delivery_fee.toLocaleString()}</span></div></div>}
               </div>
+
+              {/* ✅ ADDED: Live GPS Tracking for Supplier's Own Driver */}
+              {["pending_delivery_payment", "supplier_driver_assigned", "loading", "in_transit"].includes(order.status) && (
+                <div className="mt-8 pt-8 border-t border-border">
+                  <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+                    <Navigation className="w-5 h-5 text-blue-500" /> Live GPS Tracking
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Use the button below to share this driver's live location with the customer in real-time.
+                  </p>
+                  <DriverLocationShare orderId={order.id} orderStatus={order.status} />
+                </div>
+              )}
             </motion.div>
           )}
 

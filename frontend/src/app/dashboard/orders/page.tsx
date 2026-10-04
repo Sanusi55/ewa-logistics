@@ -19,10 +19,11 @@ interface Order {
   status: string;
   delivery_address: string;
   delivery_location: string;
-  pickup_location: string; // ✅ ADDED: To display exact pickup location
+  pickup_location: string;
   created_at: string;
   material_type: string;
   tonnage: number;
+  unit?: string; // ✅ ADDED: unit field
   driver_name?: string;
   driver_phone?: string;
   truck_plate_number?: string;
@@ -261,8 +262,9 @@ export default function OrdersPage() {
                             {status.label}
                           </span>
                         </div>
+                        {/* ✅ UPDATED: Dynamic unit display */}
                         <p className="text-sm font-medium text-foreground truncate">
-                          {order.material_type || "Material Order"} ({order.tonnage} tons)
+                          {order.material_type || "Material Order"} ({order.tonnage} {order.unit || 'tons'})
                         </p>
                         
                         {/* ✅ UPDATED: Shows both Pickup and Dropoff locations clearly */}
@@ -498,13 +500,14 @@ export default function OrdersPage() {
                 </div>
                 <div className="space-y-4 mb-6">
                   <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-2">⚠️ Please verify before confirming</p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-2">️ Please verify before confirming</p>
                     <p className="text-xs text-muted-foreground">Once you confirm, the delivery will be marked as complete and payment will be released to the supplier.</p>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-xl border border-border">
                     <p className="text-xs text-muted-foreground mb-2">Order Summary</p>
                     <p className="font-bold text-foreground">{orderToConfirm.material_type}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{orderToConfirm.tonnage} tons</p>
+                    {/* ✅ UPDATED: Dynamic unit display */}
+                    <p className="text-sm text-muted-foreground mt-1">{orderToConfirm.tonnage} {orderToConfirm.unit || 'tons'}</p>
                   </div>
                   <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                     <p className="text-sm text-green-700 dark:text-green-300 font-medium">✓ By clicking confirm, you acknowledge that:</p>

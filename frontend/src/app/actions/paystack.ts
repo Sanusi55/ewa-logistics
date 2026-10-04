@@ -6,11 +6,13 @@ import { headers } from 'next/headers';
 export async function initializeSecurePayment(orderData: {
   material_type: string;
   tonnage: number;
+  unit: string; // ✅ ADDED: unit parameter
   pickup_location: string;
   delivery_location: string;
   delivery_address: string;
   total_amount: number;
   customer_notes?: string;
+  delivery_fee_offer?: number | null; // ✅ ADDED: delivery fee offer
 }) {
   const supabase = await createClient();
 
@@ -65,11 +67,13 @@ export async function initializeSecurePayment(orderData: {
       customer_id: user.id,
       material_type: orderData.material_type,
       tonnage: orderData.tonnage,
+      unit: orderData.unit, // ✅ CRITICAL FIX: Save the unit to the database!
       pickup_location: orderData.pickup_location,
       delivery_location: orderData.delivery_location,
       delivery_address: orderData.delivery_address,
       customer_notes: orderData.customer_notes,
       total_amount: orderData.total_amount,
+      delivery_fee_offer: orderData.delivery_fee_offer || null, // ✅ ADDED
       status: "pending_payment",
       is_paid: false,
       payment_reference: txRef,
@@ -111,7 +115,8 @@ export async function initializeSecurePayment(orderData: {
       },
       customizations: {
         title: "EWA Logistics Payment",
-        description: `Payment for ${orderData.tonnage} tons of ${orderData.material_type}`,
+        // ✅ FIXED: Dynamic unit in the payment description instead of hardcoded "tons"
+        description: `Payment for ${orderData.tonnage} ${orderData.unit || 'tons'} of ${orderData.material_type}`,
         logo: "https://ewalogistics.com/logo.png",
       },
     }),
@@ -120,7 +125,7 @@ export async function initializeSecurePayment(orderData: {
   const flutterwaveData = await flutterwaveResponse.json();
 
   if (flutterwaveData.status !== "success") {
-    console.error("❌ Flutterwave initialization failed:", flutterwaveData);
+    console.error(" Flutterwave initialization failed:", flutterwaveData);
     return { error: flutterwaveData.message || "Payment initialization failed" };
   }
 

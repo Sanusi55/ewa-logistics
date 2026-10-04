@@ -208,7 +208,8 @@ export default function OrderDetailsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Quantity</span>
-                  <span className="font-medium">{order.tonnage} Tons</span>
+                  {/* ✅ FIXED: Dynamic unit display */}
+                  <span className="font-medium">{order.tonnage} {order.unit || 'tons'}</span>
                 </div>
                 {order.delivery_fee && (
                   <div className="flex justify-between">
