@@ -144,7 +144,8 @@ export default function SupplierOrdersPage() {
                       <tr>
                         <th className="text-left p-4 text-sm font-medium text-muted-foreground">Order ID</th>
                         <th className="text-left p-4 text-sm font-medium text-muted-foreground">Material</th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Tonnage</th>
+                        {/* ✅ UPDATED: Changed "Tonnage" to "Quantity" */}
+                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Quantity</th>
                         <th className="text-left p-4 text-sm font-medium text-muted-foreground">Location</th>
                         <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
                         <th className="text-right p-4 text-sm font-medium text-muted-foreground">Action</th>
@@ -155,7 +156,10 @@ export default function SupplierOrdersPage() {
                         <motion.tr key={order.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="border-t border-border hover:bg-muted/30 transition-colors">
                           <td className="p-4"><span className="font-mono text-sm">{order.id.slice(0, 8)}...</span></td>
                           <td className="p-4"><div className="font-medium">{order.material_type}</div></td>
-                          <td className="p-4"><span>{order.tonnage} tons</span></td>
+                          {/* ✅ UPDATED: Dynamically show the correct unit (pieces, bags, tons) */}
+                          <td className="p-4">
+                            <span>{order.tonnage} {order.unit || 'tons'}</span>
+                          </td>
                           <td className="p-4 text-sm">{order.delivery_location}</td>
                           <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></td>
                           <td className="p-4 text-right">

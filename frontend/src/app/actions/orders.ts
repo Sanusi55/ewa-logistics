@@ -91,6 +91,7 @@ async function sendNotification({
 export async function createOrder(orderData: {
   material_type: string;
   tonnage: number;
+  unit: string; // ✅ ADDED: unit parameter
   pickup_location: string;
   delivery_location: string;
   delivery_address: string;
@@ -107,7 +108,7 @@ export async function createOrder(orderData: {
       return { error: "You must be logged in to create an order" };
     }
 
-    if (!orderData.material_type || !orderData.tonnage || !orderData.pickup_location || !orderData.delivery_location || !orderData.delivery_address) {
+    if (!orderData.material_type || !orderData.tonnage || !orderData.unit || !orderData.pickup_location || !orderData.delivery_location || !orderData.delivery_address) {
       return { error: "All fields are required" };
     }
 
@@ -120,6 +121,7 @@ export async function createOrder(orderData: {
         customer_id: user.id,
         material_type: orderData.material_type,
         tonnage: orderData.tonnage,
+        unit: orderData.unit, // ✅ ADDED: Save unit to database
         pickup_location: orderData.pickup_location,
         delivery_location: orderData.delivery_location,
         delivery_address: orderData.delivery_address,
@@ -156,7 +158,8 @@ export async function createOrder(orderData: {
           message: `A new order for ${orderData.material_type} has been placed and is awaiting payment.`,
           type: "info",
           emailSubject: "🔔 New Order Placed on EWA Logistics",
-          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} tons) has been placed and is awaiting payment.</p>`,
+          // ✅ UPDATED: Dynamic unit in email
+          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} ${orderData.unit}) has been placed and is awaiting payment.</p>`,
           userEmail: admin.email,
           link: "/admin?tab=orders",
         });
@@ -172,7 +175,8 @@ export async function createOrder(orderData: {
           message: `A new order for ${orderData.material_type} is available.`,
           type: "info",
           emailSubject: "📦 New Order Available for Your Review",
-          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} tons) is available in the system.</p>`,
+          // ✅ UPDATED: Dynamic unit in email
+          emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} ${orderData.unit}) is available in the system.</p>`,
           userEmail: supplier.email,
           link: "/dashboard/supplier?tab=orders",
         });
@@ -365,9 +369,10 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       return { error: "Unauthorized" };
     }
 
+    // ✅ UPDATED: Added 'unit' to select
     const { data: order, error: orderFetchError } = await supabase
       .from("orders")
-      .select("material_type, tonnage, customer_id")
+      .select("material_type, tonnage, unit, customer_id")
       .eq("id", orderId)
       .single();
 
@@ -424,7 +429,7 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
               <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
                 <p><strong>Order ID:</strong> ${orderId}</p>
                 <p><strong>Material:</strong> ${order.material_type}</p>
-                <p><strong>Tonnage:</strong> ${order.tonnage} tons</p>
+                <p><strong>Quantity:</strong> ${order.tonnage} ${order.unit || 'tons'}</p>
                 <p><strong>Status:</strong> Driver Search in Progress (30 minutes)</p>
               </div>
               <p>You'll receive another notification once a driver is assigned.</p>
@@ -447,7 +452,8 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
             message: `A new order for ${order.material_type} needs a driver in ${supplierProfile.state}.`,
             type: "info",
             emailSubject: "🚛 New Delivery Job Available in Your Area!",
-            emailHtml: `<p>Hi ${driver.full_name},</p><p>A new order for <strong>${order.material_type}</strong> (${order.tonnage} tons) needs a driver in <strong>${supplierProfile.state}</strong>.</p><p>Log in to your dashboard to place your bid!</p>`,
+            // ✅ UPDATED: Dynamic unit in email
+            emailHtml: `<p>Hi ${driver.full_name},</p><p>A new order for <strong>${order.material_type}</strong> (${order.tonnage} ${order.unit || 'tons'}) needs a driver in <strong>${supplierProfile.state}</strong>.</p><p>Log in to your dashboard to place your bid!</p>`,
             userEmail: driver.email,
             link: "/dashboard/driver?tab=jobs",
           });
@@ -853,7 +859,7 @@ export async function confirmDriverDelivery(orderId: string, deliveryCode: strin
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("delivery_code, driver_id, status, customer_id, supplier_id, delivery_fee, driver_commission, material_type, tonnage")
+      .select("delivery_code, driver_id, status, customer_id, supplier_id, delivery_fee, driver_commission, material_type, tonnage, unit")
       .eq("id", orderId)
       .single();
 
@@ -1330,7 +1336,8 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
   const supabase = await createClient();
   
   try {
-    const { data: order } = await supabase.from("orders").select("customer_id, material_type, tonnage, pickup_location").eq("id", orderId).single();
+    // ✅ UPDATED: Added 'unit' to select
+    const { data: order } = await supabase.from("orders").select("customer_id, material_type, tonnage, unit, pickup_location").eq("id", orderId).single();
     
     const { error } = await supabase
       .from("orders")
@@ -1380,7 +1387,8 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
           message: `A customer has paid for ${order?.material_type}. Please review and accept the order.`,
           type: "order",
           emailSubject: "📦 New Paid Order Ready for Your Acceptance!",
-          emailHtml: `<p>A customer has successfully paid for an order of <strong>${order?.material_type}</strong> (${order?.tonnage} tons).</p><p>Please log in to your supplier dashboard to review and accept this order.</p>`,
+          // ✅ UPDATED: Dynamic unit in email
+          emailHtml: `<p>A customer has successfully paid for an order of <strong>${order?.material_type}</strong> (${order?.tonnage} ${order?.unit || 'tons'}).</p><p>Please log in to your supplier dashboard to review and accept this order.</p>`,
           userEmail: supplier.email,
           link: "/dashboard/supplier?tab=orders",
         });
@@ -1543,4 +1551,4 @@ export async function adminManualConfirmDelivery(orderId: string, reason: string
     console.error("❌ Admin manual confirm delivery exception:", error);
     return { error: error.message || "An unexpected error occurred" };
   }
-} 
+}

@@ -122,7 +122,7 @@ export default function SupplierDashboardPage() {
 
       setOrders(sortedOrders);
     } catch (error: any) {
-      console.error("❌ Load orders error:", error);
+      console.error(" Load orders error:", error);
       addToast({ type: "error", title: "Error", message: "Failed to load orders" });
     } finally {
       setIsLoading(false);
@@ -333,7 +333,7 @@ export default function SupplierDashboardPage() {
 
       addToast({ 
         type: "success", 
-        title: "Order Accepted! ", 
+        title: "Order Accepted! ✅", 
         message: "Driver search has started for this order." 
       });
       
@@ -381,7 +381,7 @@ export default function SupplierDashboardPage() {
       if (result.error) {
         addToast({ type: "error", title: "Error", message: result.error });
       } else {
-        addToast({ type: "success", title: "Driver Assigned! ", message: "Your own driver has been successfully assigned. The customer will be prompted to pay the delivery fee." });
+        addToast({ type: "success", title: "Driver Assigned! ✅", message: "Your own driver has been successfully assigned. The customer will be prompted to pay the delivery fee." });
         setShowOwnDriverModal(false);
         await loadOrders();
       }
@@ -457,7 +457,7 @@ export default function SupplierDashboardPage() {
       if (result.error) {
         addToast({ type: "error", title: "Upload Failed", message: result.error });
       } else {
-        addToast({ type: "success", title: "Evidence Uploaded! ", message: "Proof of delivery has been recorded." });
+        addToast({ type: "success", title: "Evidence Uploaded! ✅", message: "Proof of delivery has been recorded." });
         setShowEvidenceModal(false);
         await loadOrders();
       }
@@ -628,7 +628,8 @@ export default function SupplierDashboardPage() {
                       <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center"><Package className="w-5 h-5 text-orange-500" /></div>
                       <div>
                         <p className="font-semibold text-sm">{order.material_type}</p>
-                        <p className="text-xs text-muted-foreground">{order.tonnage} tons • {order.delivery_location}</p>
+                        {/* ✅ UPDATED: Dynamic unit display */}
+                        <p className="text-xs text-muted-foreground">{order.tonnage} {order.unit || 'tons'} • {order.delivery_location}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -725,7 +726,8 @@ export default function SupplierDashboardPage() {
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} Tons</span></div>
+                          {/* ✅ UPDATED: Dynamic unit display */}
+                          <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} {order.unit || 'tons'}</span></div>
                           <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /><span>{order.delivery_location}</span></div>
                           <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" /><span>{new Date(order.created_at).toLocaleDateString()}</span></div>
                           <div className="flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /><span className="font-semibold text-foreground">{formatNaira(order.total_amount)}</span></div>
@@ -1012,7 +1014,8 @@ export default function SupplierDashboardPage() {
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-500/10 flex items-center justify-center"><CheckCircle className="w-8 h-8 text-yellow-500" /></div>
                   <h3 className="text-xl font-bold mb-2">Accept Order?</h3>
-                  <p className="text-sm text-muted-foreground">You are accepting this order for <span className="font-semibold text-foreground">{selectedOrder.tonnage} tons</span> of {selectedOrder.material_type}.</p>
+                  {/* ✅ UPDATED: Dynamic unit display */}
+                  <p className="text-sm text-muted-foreground">You are accepting this order for <span className="font-semibold text-foreground">{selectedOrder.tonnage} {selectedOrder.unit || 'tons'}</span> of {selectedOrder.material_type}.</p>
                 </div>
                 <div className="space-y-4 mb-6">
                   <div>
@@ -1069,7 +1072,8 @@ export default function SupplierDashboardPage() {
                 
                 <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
                   <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
-                  <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} Tons • {ownDriverOrder.delivery_location}</p>
+                  {/* ✅ UPDATED: Dynamic unit display */}
+                  <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} {ownDriverOrder.unit || 'tons'} • {ownDriverOrder.delivery_location}</p>
                   <p className="text-xs text-orange-500 mt-2 font-medium">
                     ⏱️ No EWA drivers accepted within 1 minute. You can now assign your own driver.
                   </p>
@@ -1186,7 +1190,8 @@ export default function SupplierDashboardPage() {
 
                 <div className="mb-6 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
                   <p className="text-sm font-semibold mb-1">{confirmDeliveryOrder.material_type}</p>
-                  <p className="text-xs text-muted-foreground">{confirmDeliveryOrder.tonnage} Tons • {confirmDeliveryOrder.delivery_location}</p>
+                  {/* ✅ UPDATED: Dynamic unit display */}
+                  <p className="text-xs text-muted-foreground">{confirmDeliveryOrder.tonnage} {confirmDeliveryOrder.unit || 'tons'} • {confirmDeliveryOrder.delivery_location}</p>
                   <p className="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">
                     ⚠️ Enter the 4-digit code provided by the customer to confirm delivery and release escrow.
                   </p>
@@ -1248,7 +1253,8 @@ export default function SupplierDashboardPage() {
                 </div>
                 <div className="mb-6 p-4 bg-muted/50 rounded-xl">
                   <p className="text-sm font-semibold">{evidenceOrder.material_type}</p>
-                  <p className="text-xs text-muted-foreground">{evidenceOrder.tonnage} Tons • {evidenceOrder.delivery_location}</p>
+                  {/* ✅ UPDATED: Dynamic unit display */}
+                  <p className="text-xs text-muted-foreground">{evidenceOrder.tonnage} {evidenceOrder.unit || 'tons'} • {evidenceOrder.delivery_location}</p>
                   <p className="text-xs text-muted-foreground mt-1">Delivered: {new Date(evidenceOrder.delivered_at || evidenceOrder.updated_at).toLocaleDateString()}</p>
                 </div>
                 <form onSubmit={handleUploadEvidence} className="space-y-4">
@@ -1298,7 +1304,7 @@ export default function SupplierDashboardPage() {
                   <div className="p-4 rounded-xl bg-muted/30">
                     <h4 className="font-bold mb-3">{trackingOrder.material_type}</h4>
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div><p className="text-muted-foreground">Tonnage</p><p className="font-semibold">{trackingOrder.tonnage} tons</p></div>
+                      <div><p className="text-muted-foreground">Quantity</p><p className="font-semibold">{trackingOrder.tonnage} {trackingOrder.unit || 'tons'}</p></div>
                       <div><p className="text-muted-foreground">Delivery</p><p className="font-semibold">{trackingOrder.delivery_location}</p></div>
                     </div>
                   </div>

@@ -6,12 +6,13 @@ declare global {
   }
 }
 
+let isOneSignalReady = false;
+let pendingUserId: string | null = null;
+
 export const initializeOneSignal = () => {
   if (typeof window !== 'undefined') {
-    // 1. Initialize the official deferred queue
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     
-    // 2. Push the init command to the queue
     window.OneSignalDeferred.push(function(OneSignal: any) {
       OneSignal.init({
         appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
@@ -19,6 +20,13 @@ export const initializeOneSignal = () => {
       })
         .then(() => {
           console.log('✅ OneSignal initialized successfully');
+          isOneSignalReady = true;
+          
+          // If a user ID was provided before init finished, process it now
+          if (pendingUserId) {
+            processLogin(OneSignal, pendingUserId);
+            pendingUserId = null;
+          }
         })
         .catch((err: any) => {
           console.error('❌ OneSignal initialization error:', err);
@@ -27,27 +35,41 @@ export const initializeOneSignal = () => {
   }
 };
 
-export const setOneSignalUserId = (userId: string) => {
-  if (typeof window !== 'undefined' && window.OneSignalDeferred) {
-    // 3. Push the login command to the queue so it waits for init to finish
-    window.OneSignalDeferred.push(function(OneSignal: any) {
-      OneSignal.login(userId)
-        .then(() => {
-          console.log('✅ OneSignal user ID set:', userId);
-          
-          // 4. Request permission to actually subscribe the browser to push notifications
-          return OneSignal.Notifications.requestPermission(true);
-        })
-        .then((permissionGranted: boolean) => {
-          if (permissionGranted) {
-            console.log('✅ User subscribed to push notifications!');
-          } else {
-            console.log('⚠️ User declined notification permission');
-          }
-        })
-        .catch((err: any) => {
-          console.error('❌ Failed to set OneSignal user ID or request permission:', err);
-        });
+const processLogin = (OneSignal: any, userId: string) => {
+  OneSignal.login(userId)
+    .then(() => {
+      console.log('✅ OneSignal user ID set:', userId);
+      return OneSignal.Notifications.requestPermission(true);
+    })
+    .then((permissionGranted: boolean) => {
+      if (permissionGranted) {
+        console.log('✅ User subscribed to push notifications!');
+      } else {
+        console.log('⚠️ User declined notification permission');
+      }
+    })
+    .catch((err: any) => {
+      console.error('❌ Failed to set OneSignal user ID or request permission:', err);
     });
+};
+
+export const setOneSignalUserId = (userId: string) => {
+  if (typeof window !== 'undefined') {
+    if (isOneSignalReady && window.OneSignal) {
+      // SDK is already fully initialized, we can call it directly
+      processLogin(window.OneSignal, userId);
+    } else {
+      // SDK is still initializing, save the ID to be processed when init finishes
+      pendingUserId = userId;
+      
+      // Also push to the queue as a fallback
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(function(OneSignal: any) {
+        if (pendingUserId === userId) {
+          processLogin(OneSignal, userId);
+          pendingUserId = null;
+        }
+      });
+    }
   }
 };
