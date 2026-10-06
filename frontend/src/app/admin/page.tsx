@@ -11,7 +11,7 @@ import {
   Megaphone, History, Send, RefreshCw, X, Loader2,
   Edit2, UserX, UserCheck, Target, Mail, Lock, ArrowRight, 
   AlertCircle as AlertIcon, Eye, MessageSquare, Key, Layers, CreditCard,
-  LogOut, MapPin, Award, ShieldCheck, Smartphone, Copy, Check
+  LogOut, MapPin, Award, ShieldCheck, Smartphone, Copy, Check, Navigation
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/providers/toast-provider";
@@ -32,6 +32,7 @@ import {
   updatePlatformSetting,
   updateListingStatus,
 } from "@/app/actions/admin";
+import { generateTrackingLink } from "@/app/actions/tracking"; // ✅ ADDED: Import tracking action
 
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -216,6 +217,12 @@ export default function AdminPage() {
   const [manualConfirmProof, setManualConfirmProof] = useState("");
   const [isManuallyConfirming, setIsManuallyConfirming] = useState(false);
 
+  // ✅ NEW: Tracking Link Modal State
+  const [showTrackingLinkModal, setShowTrackingLinkModal] = useState(false);
+  const [selectedOrderForLink, setSelectedOrderForLink] = useState<any>(null);
+  const [generatedTrackingLink, setGeneratedTrackingLink] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+
   useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
@@ -223,7 +230,6 @@ export default function AdminPage() {
     if (tab) setActiveTab(tab);
   }, [searchParams]);
 
-  // ✅ IMPROVED: Actually checks if the user is already a logged-in admin before forcing login
   async function checkAuth() {
     setAuthState("loading");
     const { data: { user } } = await supabase.auth.getUser();
@@ -243,7 +249,6 @@ export default function AdminPage() {
       }
     }
     
-    // If not logged in or not an admin, show login
     setAuthState("login");
     setIsLoading(false);
   }
@@ -506,6 +511,31 @@ export default function AdminPage() {
       addToast({ type: "error", title: "Error", message: error.message || "Failed to manually confirm delivery" });
     } finally {
       setIsManuallyConfirming(false);
+    }
+  };
+
+  // ✅ NEW: Handle Generate Tracking Link
+  const handleGenerateTrackingLink = async (order: any) => {
+    setSelectedOrderForLink(order);
+    setIsGeneratingLink(true);
+    setGeneratedTrackingLink("");
+    setShowTrackingLinkModal(true);
+    
+    try {
+      const result = await generateTrackingLink(order.id);
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+        setShowTrackingLinkModal(false);
+      } else {
+        // ✅ FIXED: Added fallback to satisfy TypeScript strict null checks
+        setGeneratedTrackingLink(result.url || ""); 
+        addToast({ type: "success", title: "Link Generated!", message: "Copy the link and send it to the driver." });
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to generate link" });
+      setShowTrackingLinkModal(false);
+    } finally {
+      setIsGeneratingLink(false);
     }
   };
 
@@ -965,12 +995,22 @@ export default function AdminPage() {
                               <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${status.color}`}>{status.label}</span>
                             </td>
                             <td className="p-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-2 flex-wrap">
                                 <Link href={`/dashboard/tracking?id=${order.id}`} target="_blank">
                                   <button className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5">
                                     <Eye className="w-3.5 h-3.5" /> Track
                                   </button>
                                 </Link>
+                                
+                                {/* ✅ NEW: Create Tracking Link Button for Supplier Drivers */}
+                                {order.status === "supplier_driver_assigned" && (
+                                  <button 
+                                    onClick={() => handleGenerateTrackingLink(order)}
+                                    className="px-3 py-1.5 text-xs bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:opacity-90 cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Navigation className="w-3.5 h-3.5" /> Tracking Link
+                                  </button>
+                                )}
                                 
                                 {/* ✅ NEW: Manual Confirm Delivery Button */}
                                 {order.status !== "completed" && order.status !== "cancelled" && (
@@ -1545,6 +1585,88 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Generate Tracking Link Modal */}
+      <AnimatePresence>
+        {showTrackingLinkModal && selectedOrderForLink && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isGeneratingLink && setShowTrackingLinkModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-slate-700 shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-400">
+                    <Navigation className="w-6 h-6" /> Create Tracking Link
+                  </h3>
+                  <button 
+                    onClick={() => setShowTrackingLinkModal(false)}
+                    disabled={isGeneratingLink}
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                {isGeneratingLink ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                    <p className="text-slate-400">Generating secure tracking link...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <p className="text-sm font-semibold text-blue-300 mb-2">Order: {selectedOrderForLink.material_type || "Material Order"}</p>
+                      <p className="text-xs text-slate-400">
+                        Send this link to the assigned driver via SMS or WhatsApp. They can open it on their phone to start sharing their live location.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5 text-slate-300">Tracking Link</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={generatedTrackingLink}
+                          className="flex-1 px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none text-sm font-mono text-slate-300"
+                        />
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(generatedTrackingLink);
+                            addToast({ type: "success", title: "Copied!", message: "Link copied to clipboard." });
+                          }}
+                          className="px-4 py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                          <Copy className="w-4 h-4" /> Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button 
+                        onClick={() => setShowTrackingLinkModal(false)}
+                        className="flex-1 py-3 border border-slate-600 rounded-xl font-medium hover:bg-slate-700 transition-colors cursor-pointer text-white"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </>

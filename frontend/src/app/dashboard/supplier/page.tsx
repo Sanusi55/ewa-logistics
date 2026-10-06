@@ -14,10 +14,10 @@ import { createClient } from "@/lib/supabase/client";
 import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence, supplierUseOwnDriver } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
+import { generateTrackingLink } from "@/app/actions/tracking"; // ✅ ADDED: Import new tracking action
 import { useToast } from "@/components/providers/toast-provider";
 import MagneticButton from "@/components/magnetic-button";
 import { SkeletonTable } from "@/components/ui/skeleton";
-// ✅ ADDED: Import the Live GPS Sharing component
 import DriverLocationShare from "@/components/driver-location-share";
 
 export default function SupplierDashboardPage() {
@@ -38,6 +38,12 @@ export default function SupplierDashboardPage() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState<any>(null);
   
+  // ✅ NEW: Tracking Link Modal State
+  const [showTrackingLinkModal, setShowTrackingLinkModal] = useState(false);
+  const [selectedOrderForLink, setSelectedOrderForLink] = useState<any>(null);
+  const [generatedTrackingLink, setGeneratedTrackingLink] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+
   // Evidence Upload State
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
   const [evidenceOrder, setEvidenceOrder] = useState<any>(null);
@@ -432,6 +438,31 @@ export default function SupplierDashboardPage() {
     setShowTrackingModal(true);
   };
 
+  // ✅ NEW: Handle Generate Tracking Link
+  const handleGenerateTrackingLink = async (order: any) => {
+    setSelectedOrderForLink(order);
+    setIsGeneratingLink(true);
+    setGeneratedTrackingLink("");
+    setShowTrackingLinkModal(true);
+    
+    try {
+      const result = await generateTrackingLink(order.id);
+      if (result.error) {
+        addToast({ type: "error", title: "Error", message: result.error });
+        setShowTrackingLinkModal(false);
+      } else {
+        // ✅ FIXED: Added fallback to satisfy TypeScript strict null checks
+        setGeneratedTrackingLink(result.url || ""); 
+        addToast({ type: "success", title: "Link Generated!", message: "Copy the link and send it to the driver." });
+      }
+    } catch (error: any) {
+      addToast({ type: "error", title: "Error", message: error.message || "Failed to generate link" });
+      setShowTrackingLinkModal(false);
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
   const handleOpenEvidenceModal = (order: any) => {
     setEvidenceOrder(order);
     setEvidenceFile(null);
@@ -748,7 +779,7 @@ export default function SupplierDashboardPage() {
                       </div>
                     )}
 
-                    <div className="flex justify-end gap-2 flex-wrap">
+                    <div className="flex justify-end gap-2 flex-wrap mt-4">
                       {order.status === "pending_supplier_acceptance" && (
                         <MagneticButton onClick={() => handleOpenAcceptModal(order)} className="px-6 py-2.5 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition-colors flex items-center gap-2">
                           <CheckCircle className="w-4 h-4" /> Accept Order
@@ -761,7 +792,16 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
 
-                      {/* ✅ UPDATED: Confirm Delivery Button now appears for driver_assigned, in_transit, or delivered orders */}
+                      {/* ✅ NEW: Create Tracking Link Button for Supplier Drivers */}
+                      {order.status === "supplier_driver_assigned" && (
+                        <MagneticButton 
+                          onClick={() => handleGenerateTrackingLink(order)}
+                          className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2"
+                        >
+                          <Navigation className="w-4 h-4" /> Create Tracking Link
+                        </MagneticButton>
+                      )}
+
                       {(order.status === "driver_assigned" || order.status === "in_transit" || order.status === "delivered") && (
                         <MagneticButton 
                           onClick={() => handleOpenConfirmDeliveryModal(order)} 
@@ -1362,6 +1402,88 @@ export default function SupplierDashboardPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NEW: Generate Tracking Link Modal */}
+      <AnimatePresence>
+        {showTrackingLinkModal && selectedOrderForLink && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => !isGeneratingLink && setShowTrackingLinkModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="glass rounded-2xl max-w-md w-full p-6 pointer-events-auto border border-border shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-blue-500">
+                    <Navigation className="w-6 h-6" /> Create Tracking Link
+                  </h3>
+                  <button 
+                    onClick={() => setShowTrackingLinkModal(false)}
+                    disabled={isGeneratingLink}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {isGeneratingLink ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                    <p className="text-muted-foreground">Generating secure tracking link...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">Order: {selectedOrderForLink.material_type}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Send this link to the assigned driver via SMS or WhatsApp. They can open it on their phone to start sharing their live location.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Tracking Link</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={generatedTrackingLink}
+                          className="flex-1 px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none text-sm font-mono text-muted-foreground"
+                        />
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(generatedTrackingLink);
+                            addToast({ type: "success", title: "Copied!", message: "Link copied to clipboard." });
+                          }}
+                          className="px-4 py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button 
+                        onClick={() => setShowTrackingLinkModal(false)}
+                        className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </>
