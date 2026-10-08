@@ -152,3 +152,52 @@ export async function getTrackingSessionDetails(token: string) {
     order: session.orders 
   };
 }
+
+// ============================================
+// 📝 RECORD HOW THE LINK WAS SHARED (For Audit Trail)
+// ============================================
+export async function updateTrackingShareMethod(token: string, method: "copied" | "whatsapp") {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("tracking_sessions")
+    .update({ share_method: method })
+    .eq("tracking_token", token);
+
+  if (error) {
+    console.error("❌ Failed to update share method:", error);
+    return { error: "Failed to record share method" };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// 📊 GET ALL TRACKING SESSIONS (For Admin Audit)
+// ============================================
+export async function getTrackingSessions() {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("tracking_sessions")
+    .select(`
+      id,
+      tracking_token,
+      share_method,
+      is_active,
+      created_at,
+      orders (
+        id,
+        material_type,
+        delivery_location
+      )
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("❌ Failed to fetch tracking sessions:", error);
+    return { error: "Failed to load tracking history." };
+  }
+
+  return { success: true, data: data || [] };
+}

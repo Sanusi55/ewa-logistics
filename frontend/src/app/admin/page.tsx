@@ -32,7 +32,7 @@ import {
   updatePlatformSetting,
   updateListingStatus,
 } from "@/app/actions/admin";
-import { generateTrackingLink } from "@/app/actions/tracking"; // ✅ ADDED: Import tracking action
+import { generateTrackingLink, getTrackingSessions } from "@/app/actions/tracking"; // ✅ ADDED: getTrackingSessions
 
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -223,6 +223,9 @@ export default function AdminPage() {
   const [generatedTrackingLink, setGeneratedTrackingLink] = useState("");
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
+  // ✅ NEW: Tracking Sessions Data State
+  const [trackingSessionsData, setTrackingSessionsData] = useState<any[]>([]);
+
   useEffect(() => { checkAuth(); }, []);
 
   useEffect(() => {
@@ -303,7 +306,10 @@ export default function AdminPage() {
     if (activeTab === "users") fetchUsers();
     if (activeTab === "orders") fetchOrders();
     if (activeTab === "deliveries") fetchDeliveries();
-    if (activeTab === "audit") fetchAuditLogs();
+    if (activeTab === "audit") {
+      fetchAuditLogs();
+      fetchTrackingSessions(); // ✅ Fetch tracking sessions when audit tab is active
+    }
     if (activeTab === "settings") fetchSettings();
     if (activeTab === "messages") fetchMessages();
     if (activeTab === "payments") fetchWithdrawals();
@@ -322,6 +328,10 @@ export default function AdminPage() {
   async function fetchOrders() { const result = await getAdminOrders(orderFilter); if (result.data) setOrders(result.data); }
   async function fetchDeliveries() { const result = await getAdminDeliveries(deliveryFilter); if (result.data) setDeliveries(result.data); }
   async function fetchAuditLogs() { const result = await getAuditLogs(100); if (result.data) setAuditLogs(result.data); }
+  async function fetchTrackingSessions() { 
+    const result = await getTrackingSessions(); 
+    if (result.success) setTrackingSessionsData(result.data); 
+  }
   async function fetchSettings() { const result = await getPlatformSettings(); if (result.data) setSettings(result.data); }
   async function fetchMessages() {
     try {
@@ -1303,12 +1313,85 @@ export default function AdminPage() {
             </motion.div>
           )}
 
+          {/* ✅ UPDATED: Audit Tab with Tracking History */}
           {activeTab === "audit" && (
-            <motion.div key="audit" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <motion.div key="audit" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              
+              {/* ✅ NEW: Tracking History Section */}
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-                  <h3 className="font-semibold text-white flex items-center gap-2"><History className="w-5 h-5 text-orange-400" /> Recent Admin Actions</h3>
-                  <button onClick={fetchAuditLogs} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"><RefreshCw className="w-4 h-4 text-slate-400" /></button>
+                  <h3 className="font-semibold text-white flex items-center gap-2">
+                    <Navigation className="w-5 h-5 text-blue-400" /> Tracking Link Audit Trail
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-900/50 text-slate-400">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Order ID</th>
+                        <th className="text-left p-4 font-medium">Material</th>
+                        <th className="text-left p-4 font-medium">Share Method</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-left p-4 font-medium">Generated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trackingSessionsData.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-slate-400">No tracking links generated yet.</td>
+                        </tr>
+                      ) : (
+                        trackingSessionsData.map((session: any) => {
+                          const methodColor = 
+                            session.share_method === "whatsapp" ? "bg-green-500/10 text-green-400 border-green-500/30" :
+                            session.share_method === "copied" ? "bg-blue-500/10 text-blue-400 border-blue-500/30" :
+                            "bg-slate-500/10 text-slate-400 border-slate-500/30";
+                          
+                          const methodLabel = 
+                            session.share_method === "whatsapp" ? "Shared via WhatsApp" :
+                            session.share_method === "copied" ? "Copied to Clipboard" :
+                            "Generated";
+
+                          return (
+                            <tr key={session.id} className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors">
+                              <td className="p-4 font-mono text-xs text-slate-300">
+                                {session.orders?.id ? `#${session.orders.id.slice(0, 8).toUpperCase()}` : "N/A"}
+                              </td>
+                              <td className="p-4 text-slate-300">
+                                {session.orders?.material_type || "Unknown"} <br/>
+                                <span className="text-xs text-slate-500">{session.orders?.delivery_location || ""}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${methodColor}`}>
+                                  {methodLabel}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-lg text-xs font-medium ${session.is_active ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                                  {session.is_active ? "Active" : "Expired/Revoked"}
+                                </span>
+                              </td>
+                              <td className="p-4 text-slate-400 text-xs">
+                                {new Date(session.created_at).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Existing Admin Actions Log */}
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                  <h3 className="font-semibold text-white flex items-center gap-2">
+                    <History className="w-5 h-5 text-orange-400" /> Recent Admin Actions
+                  </h3>
+                  <button onClick={fetchAuditLogs} className="p-2 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
+                    <RefreshCw className="w-4 h-4 text-slate-400" />
+                  </button>
                 </div>
                 <div className="divide-y divide-slate-700">
                   {auditLogs.map((log) => (

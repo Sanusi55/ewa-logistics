@@ -5,7 +5,7 @@ import {
   Package, Truck, Clock, CheckCircle, DollarSign, 
   MapPin, Calendar, Loader2, AlertCircle, Building2,
   TrendingUp, Users, BarChart3, Eye, Phone, Navigation,
-  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle, LogOut, KeyRound
+  Filter, Search, Plus, Download, MoreVertical, Upload, Camera, X, FileText, Wallet, AlertTriangle, LogOut, KeyRound, Copy, MessageCircle
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getUserOrders, supplierAcceptOrder, uploadSupplierEvidence, supplierUseOwnDriver } from "@/app/actions/orders";
 import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
-import { generateTrackingLink } from "@/app/actions/tracking"; // ✅ ADDED: Import new tracking action
+import { generateTrackingLink } from "@/app/actions/tracking";
 import { useToast } from "@/components/providers/toast-provider";
 import MagneticButton from "@/components/magnetic-button";
 import { SkeletonTable } from "@/components/ui/skeleton";
@@ -38,20 +38,18 @@ export default function SupplierDashboardPage() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState<any>(null);
   
-  // ✅ NEW: Tracking Link Modal State
   const [showTrackingLinkModal, setShowTrackingLinkModal] = useState(false);
   const [selectedOrderForLink, setSelectedOrderForLink] = useState<any>(null);
   const [generatedTrackingLink, setGeneratedTrackingLink] = useState("");
+  const [generatedTrackingToken, setGeneratedTrackingToken] = useState(""); // ✅ NEW: Store token for audit logging
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
-  // Evidence Upload State
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
   const [evidenceOrder, setEvidenceOrder] = useState<any>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidenceNotes, setEvidenceNotes] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // ✅ UPDATED: Provide Own Driver State (added delivery_fee)
   const [showOwnDriverModal, setShowOwnDriverModal] = useState(false);
   const [ownDriverOrder, setOwnDriverOrder] = useState<any>(null);
   const [ownDriverData, setOwnDriverData] = useState({
@@ -62,13 +60,11 @@ export default function SupplierDashboardPage() {
   });
   const [isAssigningOwnDriver, setIsAssigningOwnDriver] = useState(false);
 
-  // ✅ NEW: Confirm Delivery State
   const [showConfirmDeliveryModal, setShowConfirmDeliveryModal] = useState(false);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<any>(null);
   const [confirmDeliveryCode, setConfirmDeliveryCode] = useState("");
   const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
 
-  // Account Details State
   const [accountDetails, setAccountDetails] = useState({
     bankName: "",
     accountNumber: "",
@@ -400,7 +396,6 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // ✅ NEW: Handle Confirm Delivery
   const handleOpenConfirmDeliveryModal = (order: any) => {
     setConfirmDeliveryOrder(order);
     setConfirmDeliveryCode("");
@@ -438,11 +433,11 @@ export default function SupplierDashboardPage() {
     setShowTrackingModal(true);
   };
 
-  // ✅ NEW: Handle Generate Tracking Link
   const handleGenerateTrackingLink = async (order: any) => {
     setSelectedOrderForLink(order);
     setIsGeneratingLink(true);
     setGeneratedTrackingLink("");
+    setGeneratedTrackingToken(""); // ✅ NEW: Reset token
     setShowTrackingLinkModal(true);
     
     try {
@@ -451,8 +446,8 @@ export default function SupplierDashboardPage() {
         addToast({ type: "error", title: "Error", message: result.error });
         setShowTrackingLinkModal(false);
       } else {
-        // ✅ FIXED: Added fallback to satisfy TypeScript strict null checks
         setGeneratedTrackingLink(result.url || ""); 
+        setGeneratedTrackingToken(result.token || ""); // ✅ NEW: Save token for audit logging
         addToast({ type: "success", title: "Link Generated!", message: "Copy the link and send it to the driver." });
       }
     } catch (error: any) {
@@ -572,7 +567,6 @@ export default function SupplierDashboardPage() {
     <div className="pt-24 pb-12 px-4 md:px-6">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold mb-2">Supplier Dashboard</h1>
@@ -590,7 +584,6 @@ export default function SupplierDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-5 rounded-xl">
             <div className="flex items-center justify-between mb-3">
@@ -629,7 +622,6 @@ export default function SupplierDashboardPage() {
           </motion.div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2">
           {["overview", "orders", "tracking", "withdrawals", "account"].map((tab) => (
             <button
@@ -646,7 +638,6 @@ export default function SupplierDashboardPage() {
           ))}
         </div>
 
-        {/* Overview Tab */}
         {activeTab === "overview" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="glass rounded-2xl p-6">
@@ -661,7 +652,6 @@ export default function SupplierDashboardPage() {
                       <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center"><Package className="w-5 h-5 text-orange-500" /></div>
                       <div>
                         <p className="font-semibold text-sm">{order.material_type}</p>
-                        {/* ✅ UPDATED: Dynamic unit display */}
                         <p className="text-xs text-muted-foreground">{order.tonnage} {order.unit || 'tons'} • {order.delivery_location}</p>
                       </div>
                     </div>
@@ -716,7 +706,6 @@ export default function SupplierDashboardPage() {
           </motion.div>
         )}
 
-        {/* Orders Tab */}
         {activeTab === "orders" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div className="glass p-4 rounded-xl bg-muted/20 flex flex-col md:flex-row gap-3">
@@ -759,7 +748,6 @@ export default function SupplierDashboardPage() {
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
-                          {/* ✅ UPDATED: Dynamic unit display */}
                           <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} {order.unit || 'tons'}</span></div>
                           <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /><span>{order.delivery_location}</span></div>
                           <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" /><span>{new Date(order.created_at).toLocaleDateString()}</span></div>
@@ -792,8 +780,8 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
 
-                      {/* ✅ NEW: Create Tracking Link Button for Supplier Drivers */}
-                      {order.status === "supplier_driver_assigned" && (
+                      {/* ✅ FOOLPROOF FIX: Show button for ANY order with a driver that isn't finished */}
+                      {order.driver_name && !["completed", "cancelled", "delivered"].includes(order.status) && (
                         <MagneticButton 
                           onClick={() => handleGenerateTrackingLink(order)}
                           className="px-6 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center gap-2"
@@ -827,7 +815,6 @@ export default function SupplierDashboardPage() {
           </motion.div>
         )}
 
-        {/* Tracking Tab */}
         {activeTab === "tracking" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div className="glass rounded-2xl p-6">
@@ -861,7 +848,6 @@ export default function SupplierDashboardPage() {
           </motion.div>
         )}
 
-        {/* Withdrawals Tab */}
         {activeTab === "withdrawals" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="glass rounded-2xl p-6 md:p-8">
@@ -940,7 +926,6 @@ export default function SupplierDashboardPage() {
           </motion.div>
         )}
 
-        {/* Account Details Tab */}
         {activeTab === "account" && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
             <div className="glass rounded-2xl p-6 md:p-8">
@@ -1056,7 +1041,6 @@ export default function SupplierDashboardPage() {
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-500/10 flex items-center justify-center"><CheckCircle className="w-8 h-8 text-yellow-500" /></div>
                   <h3 className="text-xl font-bold mb-2">Accept Order?</h3>
-                  {/* ✅ UPDATED: Dynamic unit display */}
                   <p className="text-sm text-muted-foreground">You are accepting this order for <span className="font-semibold text-foreground">{selectedOrder.tonnage} {selectedOrder.unit || 'tons'}</span> of {selectedOrder.material_type}.</p>
                 </div>
                 <div className="space-y-4 mb-6">
@@ -1114,7 +1098,6 @@ export default function SupplierDashboardPage() {
                 
                 <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
                   <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
-                  {/* ✅ UPDATED: Dynamic unit display */}
                   <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} {ownDriverOrder.unit || 'tons'} • {ownDriverOrder.delivery_location}</p>
                   <p className="text-xs text-orange-500 mt-2 font-medium">
                     ⏱️ No EWA drivers accepted within 1 minute. You can now assign your own driver.
@@ -1199,7 +1182,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Confirm Delivery Modal */}
+      {/* Confirm Delivery Modal */}
       <AnimatePresence>
         {showConfirmDeliveryModal && confirmDeliveryOrder && (
           <>
@@ -1232,7 +1215,6 @@ export default function SupplierDashboardPage() {
 
                 <div className="mb-6 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
                   <p className="text-sm font-semibold mb-1">{confirmDeliveryOrder.material_type}</p>
-                  {/* ✅ UPDATED: Dynamic unit display */}
                   <p className="text-xs text-muted-foreground">{confirmDeliveryOrder.tonnage} {confirmDeliveryOrder.unit || 'tons'} • {confirmDeliveryOrder.delivery_location}</p>
                   <p className="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">
                     ⚠️ Enter the 4-digit code provided by the customer to confirm delivery and release escrow.
@@ -1295,7 +1277,6 @@ export default function SupplierDashboardPage() {
                 </div>
                 <div className="mb-6 p-4 bg-muted/50 rounded-xl">
                   <p className="text-sm font-semibold">{evidenceOrder.material_type}</p>
-                  {/* ✅ UPDATED: Dynamic unit display */}
                   <p className="text-xs text-muted-foreground">{evidenceOrder.tonnage} {evidenceOrder.unit || 'tons'} • {evidenceOrder.delivery_location}</p>
                   <p className="text-xs text-muted-foreground mt-1">Delivered: {new Date(evidenceOrder.delivered_at || evidenceOrder.updated_at).toLocaleDateString()}</p>
                 </div>
@@ -1360,7 +1341,6 @@ export default function SupplierDashboardPage() {
                     </div>
                   )}
                   
-                  {/* ✅ ADDED: Live GPS Sharing Component inside the Modal */}
                   {["driver_assigned", "supplier_driver_assigned", "loading", "in_transit", "pending_delivery_payment"].includes(trackingOrder.status) && (
                     <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
                       <h4 className="font-bold mb-3 flex items-center gap-2 text-blue-600">
@@ -1408,7 +1388,7 @@ export default function SupplierDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Generate Tracking Link Modal */}
+      {/* Generate Tracking Link Modal */}
       <AnimatePresence>
         {showTrackingLinkModal && selectedOrderForLink && (
           <>
@@ -1453,31 +1433,55 @@ export default function SupplierDashboardPage() {
                       </p>
                     </div>
 
+                    {/* ✅ UPDATED: Audit Trail Logging */}
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Tracking Link</label>
+                      <label className="block text-sm font-medium mb-1.5 text-slate-300">Tracking Link</label>
                       <div className="flex gap-2">
                         <input 
                           type="text" 
                           readOnly 
                           value={generatedTrackingLink}
-                          className="flex-1 px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none text-sm font-mono text-muted-foreground"
+                          className="flex-1 px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl outline-none text-sm font-mono text-slate-300"
                         />
                         <button 
-                          onClick={() => {
-                            navigator.clipboard.writeText(generatedTrackingLink);
-                            addToast({ type: "success", title: "Copied!", message: "Link copied to clipboard." });
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(generatedTrackingLink);
+                            // ✅ Record to database for audit trail
+                            await import("@/app/actions/tracking").then(mod => 
+                              mod.updateTrackingShareMethod(generatedTrackingToken, "copied")
+                            );
+                            addToast({ type: "success", title: "Copied!", message: "Link copied and logged." });
                           }}
-                          className="px-4 py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center gap-2 cursor-pointer"
+                          className="px-4 py-3 bg-slate-700 text-white rounded-xl font-medium hover:bg-slate-600 transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                          Copy
+                          <Copy className="w-4 h-4" /> Copy
                         </button>
                       </div>
                     </div>
 
                     <div className="flex gap-3 pt-2">
                       <button 
+                        onClick={async () => {
+                          // ✅ Record to database for audit trail before opening WhatsApp
+                          await import("@/app/actions/tracking").then(mod => 
+                            mod.updateTrackingShareMethod(generatedTrackingToken, "whatsapp")
+                          );
+                          
+                          const shortId = selectedOrderForLink.id ? selectedOrderForLink.id.slice(0, 8).toUpperCase() : "N/A";
+                          const destination = selectedOrderForLink.delivery_location || "Destination";
+                          const brandedMessage = `🚚 *EWA Logistics - Live Delivery Update*%0A--------------------------------%0A📦 *Order:* #${shortId}%0A📍 *Destination:* ${destination}%0A%0ATrack your delivery live here: ${generatedTrackingLink}`;
+                          
+                          window.open(`https://wa.me/?text=${brandedMessage}`, '_blank');
+                          addToast({ type: "success", title: "Opening WhatsApp...", message: "Share method logged." });
+                        }}
+                        className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <MessageCircle className="w-5 h-5" /> Share via WhatsApp
+                      </button>
+                      
+                      <button 
                         onClick={() => setShowTrackingLinkModal(false)}
-                        className="flex-1 py-3 border border-border rounded-xl font-medium hover:bg-muted transition-colors cursor-pointer"
+                        className="px-4 py-3 border border-slate-600 text-slate-300 rounded-xl font-medium hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         Close
                       </button>
