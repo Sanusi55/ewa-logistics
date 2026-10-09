@@ -73,6 +73,7 @@ export default function DeliveriesPage() {
         tonnage,
         pickup_location,
         delivery_location,
+        delivery_address,
         status,
         delivery_fee,
         truck_id,
@@ -137,6 +138,7 @@ export default function DeliveriesPage() {
       delivery.id.toLowerCase().includes(searchLower) || 
       (delivery.profiles?.full_name || "").toLowerCase().includes(searchLower) ||
       delivery.delivery_location.toLowerCase().includes(searchLower) ||
+      (delivery.delivery_address || "").toLowerCase().includes(searchLower) ||
       delivery.material_type.toLowerCase().includes(searchLower);
     
     const matchesStatus = statusFilter === "all" || delivery.status === statusFilter;
@@ -277,6 +279,12 @@ export default function DeliveriesPage() {
                           <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Dropoff Location</p>
                             <p className="text-sm font-semibold text-foreground">{delivery.delivery_location}</p>
+                            {/* ✅ ADDED: Exact Delivery Address Display */}
+                            {delivery.delivery_address && (
+                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> {delivery.delivery_address}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -384,6 +392,12 @@ export default function DeliveriesPage() {
                   <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> {selectedDelivery.delivery_location}
                   </p>
+                  {/* ✅ ADDED: Exact Delivery Address in Modal */}
+                  {selectedDelivery.delivery_address && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {selectedDelivery.delivery_address}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-4 mb-6">

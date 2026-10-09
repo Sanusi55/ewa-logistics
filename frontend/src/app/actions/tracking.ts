@@ -127,7 +127,8 @@ export async function getTrackingSessionDetails(token: string) {
         material_type,
         tonnage,
         unit,
-        delivery_location
+        delivery_location,
+        delivery_address
       )
     `)
     .eq("tracking_token", token)
@@ -189,7 +190,8 @@ export async function getTrackingSessions() {
       orders (
         id,
         material_type,
-        delivery_location
+        delivery_location,
+        delivery_address
       )
     `)
     .order("created_at", { ascending: false });

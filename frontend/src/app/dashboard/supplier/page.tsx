@@ -41,7 +41,7 @@ export default function SupplierDashboardPage() {
   const [showTrackingLinkModal, setShowTrackingLinkModal] = useState(false);
   const [selectedOrderForLink, setSelectedOrderForLink] = useState<any>(null);
   const [generatedTrackingLink, setGeneratedTrackingLink] = useState("");
-  const [generatedTrackingToken, setGeneratedTrackingToken] = useState(""); // ✅ NEW: Store token for audit logging
+  const [generatedTrackingToken, setGeneratedTrackingToken] = useState(""); 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
@@ -437,7 +437,7 @@ export default function SupplierDashboardPage() {
     setSelectedOrderForLink(order);
     setIsGeneratingLink(true);
     setGeneratedTrackingLink("");
-    setGeneratedTrackingToken(""); // ✅ NEW: Reset token
+    setGeneratedTrackingToken(""); 
     setShowTrackingLinkModal(true);
     
     try {
@@ -447,7 +447,7 @@ export default function SupplierDashboardPage() {
         setShowTrackingLinkModal(false);
       } else {
         setGeneratedTrackingLink(result.url || ""); 
-        setGeneratedTrackingToken(result.token || ""); // ✅ NEW: Save token for audit logging
+        setGeneratedTrackingToken(result.token || ""); 
         addToast({ type: "success", title: "Link Generated!", message: "Copy the link and send it to the driver." });
       }
     } catch (error: any) {
@@ -540,9 +540,12 @@ export default function SupplierDashboardPage() {
   };
 
   const filteredOrders = orders.filter(order => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
-      order.material_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.delivery_location?.toLowerCase().includes(searchQuery.toLowerCase());
+      order.material_type?.toLowerCase().includes(searchLower) ||
+      order.delivery_location?.toLowerCase().includes(searchLower) ||
+      (order.delivery_address || "").toLowerCase().includes(searchLower); // ✅ ADDED: Search by exact address
+    
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -749,7 +752,17 @@ export default function SupplierDashboardPage() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
                           <div className="flex items-center gap-2"><Package className="w-4 h-4 text-orange-500" /><span>{order.tonnage} {order.unit || 'tons'}</span></div>
-                          <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /><span>{order.delivery_location}</span></div>
+                          <div className="flex items-start gap-2 sm:col-span-2">
+                            <MapPin className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <span className="font-medium text-foreground">{order.delivery_location}</span>
+                              {order.delivery_address && (
+                                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" /> {order.delivery_address}
+                                </p>
+                              )}
+                            </div>
+                          </div>
                           <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" /><span>{new Date(order.created_at).toLocaleDateString()}</span></div>
                           <div className="flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /><span className="font-semibold text-foreground">{formatNaira(order.total_amount)}</span></div>
                         </div>
@@ -1099,6 +1112,11 @@ export default function SupplierDashboardPage() {
                 <div className="mb-6 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
                   <p className="text-sm font-semibold">{ownDriverOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{ownDriverOrder.tonnage} {ownDriverOrder.unit || 'tons'} • {ownDriverOrder.delivery_location}</p>
+                  {ownDriverOrder.delivery_address && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {ownDriverOrder.delivery_address}
+                    </p>
+                  )}
                   <p className="text-xs text-orange-500 mt-2 font-medium">
                     ⏱️ No EWA drivers accepted within 1 minute. You can now assign your own driver.
                   </p>
@@ -1216,6 +1234,11 @@ export default function SupplierDashboardPage() {
                 <div className="mb-6 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
                   <p className="text-sm font-semibold mb-1">{confirmDeliveryOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{confirmDeliveryOrder.tonnage} {confirmDeliveryOrder.unit || 'tons'} • {confirmDeliveryOrder.delivery_location}</p>
+                  {confirmDeliveryOrder.delivery_address && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {confirmDeliveryOrder.delivery_address}
+                    </p>
+                  )}
                   <p className="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">
                     ⚠️ Enter the 4-digit code provided by the customer to confirm delivery and release escrow.
                   </p>
@@ -1278,6 +1301,11 @@ export default function SupplierDashboardPage() {
                 <div className="mb-6 p-4 bg-muted/50 rounded-xl">
                   <p className="text-sm font-semibold">{evidenceOrder.material_type}</p>
                   <p className="text-xs text-muted-foreground">{evidenceOrder.tonnage} {evidenceOrder.unit || 'tons'} • {evidenceOrder.delivery_location}</p>
+                  {evidenceOrder.delivery_address && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {evidenceOrder.delivery_address}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">Delivered: {new Date(evidenceOrder.delivered_at || evidenceOrder.updated_at).toLocaleDateString()}</p>
                 </div>
                 <form onSubmit={handleUploadEvidence} className="space-y-4">
@@ -1328,7 +1356,15 @@ export default function SupplierDashboardPage() {
                     <h4 className="font-bold mb-3">{trackingOrder.material_type}</h4>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div><p className="text-muted-foreground">Quantity</p><p className="font-semibold">{trackingOrder.tonnage} {trackingOrder.unit || 'tons'}</p></div>
-                      <div><p className="text-muted-foreground">Delivery</p><p className="font-semibold">{trackingOrder.delivery_location}</p></div>
+                      <div className="flex flex-col">
+                        <p className="text-muted-foreground">Delivery</p>
+                        <p className="font-semibold">{trackingOrder.delivery_location}</p>
+                        {trackingOrder.delivery_address && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {trackingOrder.delivery_address}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {trackingOrder.driver_name && (
@@ -1481,7 +1517,7 @@ export default function SupplierDashboardPage() {
                       
                       <button 
                         onClick={() => setShowTrackingLinkModal(false)}
-                        className="px-4 py-3 border border-slate-600 text-slate-300 rounded-xl font-medium hover:bg-slate-800 transition-colors cursor-pointer"
+                        className="flex-1 py-3 border border-slate-600 text-slate-300 rounded-xl font-medium hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         Close
                       </button>

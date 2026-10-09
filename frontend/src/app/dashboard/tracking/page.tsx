@@ -416,7 +416,19 @@ export default function TrackingPage() {
                       <span className="text-muted-foreground">Quantity</span>
                       <span className="font-medium text-foreground">{order.tonnage} Tons</span>
                     </div>
-                    <div className="flex justify-between">
+                    
+                    {/* ✅ ADDED: Exact Delivery Address Display in Summary */}
+                    <div className="flex flex-col gap-1 pt-2 border-t border-border/50">
+                      <span className="text-muted-foreground">Delivery Location</span>
+                      <span className="font-medium text-foreground">{order.delivery_location}</span>
+                      {order.delivery_address && (
+                        <span className="text-xs text-orange-600 dark:text-orange-400 font-medium flex items-start gap-1 mt-1">
+                          <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" /> {order.delivery_address}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between pt-2">
                       <span className="text-muted-foreground">Date</span>
                       <span className="font-medium text-foreground">{formatDate(order.created_at)}</span>
                     </div>

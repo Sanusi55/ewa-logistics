@@ -92,14 +92,15 @@ export default function DriverTrackingPage() {
     }
   };
 
-  // 2. Smart WhatsApp Share (Fixed Encoding)
+  // 2. Smart WhatsApp Share (Fixed to include Exact Address)
   const handleWhatsAppShare = async () => {
     setIsProcessing(true);
     
     const shortId = order?.id ? order.id.slice(0, 8).toUpperCase() : "N/A";
-    const destination = order?.delivery_location || "N/A";
     const material = order?.material_type || "N/A";
     const quantity = order?.tonnage ? `${order.tonnage} ${order.unit || 'tons'}` : "N/A";
+    const cityState = order?.delivery_location || "N/A";
+    const exactAddress = order?.delivery_address || "";
 
     let mapsLink = "";
 
@@ -111,12 +112,14 @@ export default function DriverTrackingPage() {
       mapsLink = `\n\n_(I will share my live location shortly)_`;
     }
 
+    // ✅ CRITICAL FIX: Added exact address to the WhatsApp message
     const messageText = `🚚 *EWA Logistics - Live Delivery Update*
 --------------------------------
 📦 *Order:* #${shortId}
 🧱 *Material:* ${material}
 ⚖️ *Quantity:* ${quantity}
-📍 *Destination:* ${destination}
+📍 *Destination:* ${cityState}
+${exactAddress ? `🏠 *Exact Address:* ${exactAddress}` : ''}
 
 I am your assigned EWA driver. Here is my current status:${mapsLink}`;
     
@@ -125,11 +128,12 @@ I am your assigned EWA driver. Here is my current status:${mapsLink}`;
     setIsProcessing(false);
   };
 
-  // 3. Copy Branded Update
+  // 3. Copy Branded Update (Fixed to include Exact Address)
   const copyBrandedUpdate = async () => {
     setIsProcessing(true);
     const shortId = order?.id ? order.id.slice(0, 8).toUpperCase() : "N/A";
-    const destination = order?.delivery_location || "N/A";
+    const cityState = order?.delivery_location || "N/A";
+    const exactAddress = order?.delivery_address || "";
     const material = order?.material_type || "N/A";
     const quantity = order?.tonnage ? `${order.tonnage} ${order.unit || 'tons'}` : "N/A";
     const currentUrl = window.location.href;
@@ -144,12 +148,14 @@ I am your assigned EWA driver. Here is my current status:${mapsLink}`;
       mapsSection = "\n\n(I will share my live location shortly.)";
     }
 
+    // ✅ CRITICAL FIX: Added exact address to the copied text
     const textToCopy = `🚚 EWA Logistics - Live Delivery Update
 --------------------------------
 📦 Order: #${shortId}
 🧱 Material: ${material}
-️ Quantity: ${quantity}
-📍 Destination: ${destination}
+⚖️ Quantity: ${quantity}
+📍 Destination: ${cityState}
+${exactAddress ? `🏠 Exact Address: ${exactAddress}` : ''}
 
 I am your assigned EWA driver.${mapsSection}
 
@@ -219,9 +225,16 @@ ${currentUrl}`;
               <span className="text-sm text-slate-500">Quantity</span>
               <span className="font-semibold text-slate-900 text-right">{order.tonnage} {order.unit || 'tons'}</span>
             </div>
-            <div className="flex justify-between items-start">
+            
+            {/* ✅ CRITICAL FIX: Added Exact Delivery Address for the Driver */}
+            <div className="flex flex-col gap-1 pt-2 border-t border-slate-100">
               <span className="text-sm text-slate-500">Destination</span>
-              <span className="font-semibold text-slate-900 text-right max-w-[60%]">{order.delivery_location}</span>
+              <span className="font-semibold text-slate-900">{order.delivery_location}</span>
+              {order.delivery_address && (
+                <span className="text-xs text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1 mt-1 bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg">
+                  <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> {order.delivery_address}
+                </span>
+              )}
             </div>
           </div>
         </div>

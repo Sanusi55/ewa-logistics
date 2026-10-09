@@ -240,18 +240,27 @@ export default function CustomerDashboardPage() {
                           </button>
                         )}
                       </div>
+                      
+                      {/* ✅ UPDATED: Added Exact Delivery Address Display */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Package className="w-4 h-4 text-orange-500" />
                           <span>{order.tonnage} {order.unit || 'tons'}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-orange-500" />
-                          <span>{order.delivery_location}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-orange-500" />
                           <span>{new Date(order.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-start gap-2 sm:col-span-2">
+                          <MapPin className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium text-foreground">{order.delivery_location}</span>
+                            {order.delivery_address && (
+                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> {order.delivery_address}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

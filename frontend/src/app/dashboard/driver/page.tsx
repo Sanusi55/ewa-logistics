@@ -18,7 +18,6 @@ import { createDispute } from "@/app/actions/disputes";
 import { logout } from "@/app/actions/auth";
 import MagneticButton from "@/components/magnetic-button";
 import NotificationBell from "@/components/notification-bell";
-// ✅ ADDED: Import the Live GPS Sharing component
 import DriverLocationShare from "@/components/driver-location-share";
 
 interface Order {
@@ -117,7 +116,7 @@ export default function DriverDashboardPage() {
   const [showBidModal, setShowBidModal] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
-  const [showTrackingModal, setShowTrackingModal] = useState(false); // ✅ ADDED: Tracking modal state
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
   const [bidAmount, setBidAmount] = useState("");
@@ -701,6 +700,12 @@ export default function DriverDashboardPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-muted-foreground mb-1">Drop-off</p>
                         <p className="text-sm font-medium truncate">{job.delivery_location}</p>
+                        {/* ✅ ADDED: Exact Delivery Address for Available Jobs */}
+                        {job.delivery_address && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium truncate flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {job.delivery_address}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -791,13 +796,24 @@ export default function DriverDashboardPage() {
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Dropoff</p>
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Dropoff Location</p>
                             <p className="text-sm font-semibold text-foreground">{activeDelivery.delivery_location}</p>
+                            
+                            {/* ✅ CRITICAL FIX: Prominently display the exact delivery address */}
+                            {activeDelivery.delivery_address && (
+                              <div className="mt-2 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                <p className="text-xs font-bold text-orange-600 dark:text-orange-400 mb-1 flex items-center gap-1.5">
+                                  <MapPin className="w-3.5 h-3.5" /> Exact Delivery Address
+                                </p>
+                                <p className="text-sm text-foreground font-medium leading-snug">
+                                  {activeDelivery.delivery_address}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* ✅ UPDATED: Added Live Tracking Button */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
                         <a href={`tel:${activeDelivery.supplier?.phone || activeDelivery.customer_phone}`} className="flex items-center justify-center gap-2 py-3 bg-muted hover:bg-muted/80 rounded-xl font-medium transition-colors cursor-pointer">
                           <Phone className="w-4 h-4" /> Contact
@@ -834,6 +850,12 @@ export default function DriverDashboardPage() {
                         <div>
                           <p className="font-bold">{order.material_type} - {order.tonnage} Tons</p>
                           <p className="text-sm text-muted-foreground">{order.delivery_location}</p>
+                          {/* ✅ ADDED: Exact address for completed deliveries too */}
+                          {order.delivery_address && (
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                              <MapPin className="w-3 h-3" /> {order.delivery_address}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
                         </div>
                         <div className="text-right">
