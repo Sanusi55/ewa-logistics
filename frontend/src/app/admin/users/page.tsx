@@ -20,19 +20,43 @@ export default function AdminUsersPage() {
   async function fetchUsers() {
     setIsLoading(true);
     const result = await getAdminUsers(userFilter, userSearch);
-    if (result.data) setUsers(result.data);
+    
+    if (result.data) {
+      console.log("✅ Fetched users from DB:", result.data); // Debug log to verify data
+      setUsers(result.data);
+    } else if (result.error) {
+      addToast({ type: "error", title: "Error", message: result.error });
+    }
+    
     setIsLoading(false);
   }
 
   const handleSuspend = async (user: any) => {
     const reason = prompt(`Why are you suspending ${user.full_name || user.email}?`);
-    if (!reason) return;
-    const result = await suspendUser(user.id, reason);
+    
+    // 1. If user clicks "Cancel", reason is null. We just exit silently.
+    if (reason === null) {
+      return; 
+    }
+    
+    // 2. If user clicks "OK" but leaves it blank, reason is "". We show an error.
+    if (!reason.trim()) {
+      addToast({ type: "error", title: "Error", message: "Suspension reason cannot be empty." });
+      return;
+    }
+
+    // 3. Attempt to suspend
+    const result = await suspendUser(user.id, reason.trim());
+    
     if (result.success) {
       addToast({ type: "success", title: "User Suspended", message: `${user.full_name || user.email} has been suspended.` });
-      fetchUsers();
+      fetchUsers(); // Refresh the table
     } else {
-      addToast({ type: "error", title: "Error", message: result.error });
+      addToast({ 
+        type: "error", 
+        title: "Suspend Failed", 
+        message: result.error || "Could not suspend user. Please check Supabase 'profiles' table." 
+      });
     }
   };
 
@@ -64,11 +88,9 @@ export default function AdminUsersPage() {
       addToast({ type: "success", title: "User Deleted", message: `${user.full_name || user.email} has been removed.` });
       fetchUsers();
     } else {
-      addToast({ type: "error", title: "Error", message: result.error });
+      addToast({ type: "error", title: "Delete Failed", message: result.error });
     }
   };
-
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">

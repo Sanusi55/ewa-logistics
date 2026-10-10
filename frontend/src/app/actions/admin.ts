@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 // ============================================
-// ✅ BASIC AUTHENTICATION ACTIONS (ADDED)
+// ✅ BASIC AUTHENTICATION ACTIONS
 // ============================================
 
 export async function login(formData: FormData) {
@@ -23,11 +23,10 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    console.error("❌ Login Error:", error.message);
+    console.error(" Login Error:", error.message);
     return { error: "Invalid email or password. Please check your credentials." };
   }
 
-  // Returning a simple, serializable object prevents the "unexpected response" error
   return { success: true };
 }
 
@@ -38,10 +37,9 @@ export async function logout() {
 }
 
 // ============================================
-// ✅ ADMIN ACTIONS (Your existing code)
+// ✅ ADMIN ACTIONS
 // ============================================
 
-// ✅ Verify admin access with detailed logging
 async function requireAdmin() {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -51,7 +49,7 @@ async function requireAdmin() {
   }
   
   if (!user) {
-    console.warn("⚠️ No user found in requireAdmin. This usually means the auth cookie is missing, expired, or not being read correctly by the server. Try refreshing the page.");
+    console.warn("️ No user found in requireAdmin.");
     return { error: "Not authenticated. Please refresh the page and try again.", isAdmin: false };
   }
 
@@ -66,14 +64,13 @@ async function requireAdmin() {
   }
 
   if (!profile || profile.role !== "admin") {
-    console.warn(`⚠️ User ${user.id} does not have admin privileges. Role in database:`, profile?.role || "none");
-    return { error: "Admin privileges required. Please check your profile role in the database.", isAdmin: false };
+    console.warn(`⚠️ User ${user.id} does not have admin privileges.`);
+    return { error: "Admin privileges required.", isAdmin: false };
   }
 
   return { user, profile, isAdmin: true };
 }
 
-// ✅ Log admin action
 async function logAdminAction(
   adminId: string,
   action: string,
@@ -95,14 +92,18 @@ async function logAdminAction(
   }
 }
 
-// ✅ Get admin dashboard stats
 export async function getAdminStats() {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error };
 
   const supabase = await createClient();
 
-  const { data: users } = await supabase.from("profiles").select("id, role, created_at, is_suspended, is_approved");
+  // ✅ UPDATED: Exclude soft-deleted users from stats
+  const { data: users } = await supabase
+    .from("profiles")
+    .select("id, role, created_at, is_suspended, is_approved")
+    .eq("is_deleted", false);
+    
   const { data: orders } = await supabase.from("orders").select("id, status, total_amount, created_at, delivery_fee, driver_id");
   const { data: deliveries } = await supabase.from("deliveries").select("id, status, created_at, accepted_bid_amount");
   const { data: bids } = await supabase.from("driver_bids").select("id, status, bid_amount, created_at");
@@ -169,13 +170,17 @@ export async function getAdminStats() {
   };
 }
 
-// ✅ Get all users (with filters)
+// ✅ UPDATED: Exclude soft-deleted users from the user list
 export async function getAdminUsers(filter: string = "all", search: string = "") {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: [] };
 
   const supabase = await createClient();
-  let query = supabase.from("profiles").select("*").order("created_at", { ascending: false });
+  let query = supabase
+    .from("profiles")
+    .select("*")
+    .eq("is_deleted", false) // Hide soft-deleted users
+    .order("created_at", { ascending: false });
 
   if (filter !== "all") {
     query = query.eq("role", filter);
@@ -191,12 +196,26 @@ export async function getAdminUsers(filter: string = "all", search: string = "")
   return { data: data || [], error: null };
 }
 
-// ✅ Suspend user
 export async function suspendUser(userId: string, reason: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
 
   const supabase = await createClient();
+  
+  const { data: userCheck, error: checkError } = await supabase
+    .from("profiles")
+    .select("id, is_suspended")
+    .eq("id", userId)
+    .single();
+
+  if (checkError || !userCheck) {
+    return { success: false, error: "User not found." };
+  }
+
+  if (userCheck.is_suspended) {
+    return { success: false, error: "This user is already suspended." };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({ 
@@ -207,15 +226,17 @@ export async function suspendUser(userId: string, reason: string) {
     .eq("id", userId);
 
   if (error) {
-    console.error("❌ Suspend User Error:", error);
-    return { success: false, error: error.message };
+    console.error("❌ Suspend User Database Error:", error);
+    return { 
+      success: false, 
+      error: `Database error: ${error.message}. Please check your Supabase 'profiles' table to ensure the 'is_suspended' (boolean) and 'suspension_reason' (text) columns exist.` 
+    };
   }
 
   await logAdminAction(admin.user!.id, "suspend_user", "user", userId, { reason });
   return { success: true };
 }
 
-// ✅ Unsuspend user
 export async function unsuspendUser(userId: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
@@ -235,7 +256,6 @@ export async function unsuspendUser(userId: string) {
   return { success: true };
 }
 
-// ✅ Change user role
 export async function changeUserRole(userId: string, newRole: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
@@ -260,35 +280,32 @@ export async function changeUserRole(userId: string, newRole: string) {
   return { success: true };
 }
 
-// ✅ Delete user
+// ✅ UPDATED: Perform a "Soft Delete" instead of hard delete
 export async function deleteUser(userId: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
 
   const supabase = await createClient();
   
+  // Soft delete: Mark as deleted and record the timestamp
   const { error } = await supabase
     .from("profiles")
-    .delete()
+    .update({ 
+      is_deleted: true, 
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString() 
+    })
     .eq("id", userId);
 
   if (error) {
-    console.error("❌ Delete User Error:", error);
-    const isForeignKeyError = error.message.includes("foreign key constraint") || error.message.includes("violates foreign key");
-    
-    return { 
-      success: false, 
-      error: isForeignKeyError 
-        ? "Cannot delete user: They have existing orders or records. Please suspend them instead." 
-        : error.message 
-    };
+    console.error("❌ Soft Delete User Database Error:", error);
+    return { success: false, error: error.message };
   }
 
-  await logAdminAction(admin.user!.id, "delete_user", "user", userId);
+  await logAdminAction(admin.user!.id, "delete_user", "user", userId, { method: "soft_delete" });
   return { success: true };
 }
 
-// ✅ Get all orders
 export async function getAdminOrders(status: string = "all", search: string = "") {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: [] };
@@ -320,7 +337,6 @@ export async function getAdminOrders(status: string = "all", search: string = ""
   return { data: data || [], error: null };
 }
 
-// ✅ Get all deliveries
 export async function getAdminDeliveries(status: string = "all") {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: [] };
@@ -350,7 +366,7 @@ export async function getAdminDeliveries(status: string = "all") {
   return { data: mappedData, error: null };
 }
 
-// ✅ Broadcast notification to all users
+// ✅ UPDATED: Only broadcast to non-deleted users
 export async function broadcastNotification(title: string, message: string, targetRoles: string[]) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
@@ -360,7 +376,8 @@ export async function broadcastNotification(title: string, message: string, targ
   const { data: users } = await supabase
     .from("profiles")
     .select("id")
-    .in("role", targetRoles);
+    .in("role", targetRoles)
+    .eq("is_deleted", false);
 
   if (!users || users.length === 0) {
     return { success: false, error: "No users found for selected roles" };
@@ -399,7 +416,6 @@ export async function broadcastNotification(title: string, message: string, targ
   return { success: true, sentCount: users.length };
 }
 
-// ✅ Get audit logs
 export async function getAuditLogs(limit: number = 50) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: [] };
@@ -416,7 +432,6 @@ export async function getAuditLogs(limit: number = 50) {
   return { data: data || [], error: null };
 }
 
-// ✅ Get platform settings
 export async function getPlatformSettings() {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { error: admin.error, data: {} };
@@ -434,7 +449,6 @@ export async function getPlatformSettings() {
   return { data: settings, error: null };
 }
 
-// ✅ Update platform setting
 export async function updatePlatformSetting(key: string, value: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
@@ -454,7 +468,6 @@ export async function updatePlatformSetting(key: string, value: string) {
   return { success: true };
 }
 
-// ✅ NEW: Approve user (for pending supplier/driver registrations)
 export async function approveUser(userId: string) {
   const admin = await requireAdmin();
   if (!admin.isAdmin) return { success: false, error: admin.error };
@@ -474,15 +487,9 @@ export async function approveUser(userId: string) {
   return { success: true };
 }
 
-// ✅ NEW: Approve or Reject a Material Listing
 export async function updateListingStatus(listingId: string, status: "approved" | "rejected") {
-  console.log(`🔄 Attempting to update listing ${listingId} to ${status}...`);
-  
   const admin = await requireAdmin();
-  if (!admin.isAdmin) {
-    console.error("❌ updateListingStatus failed admin check:", admin.error);
-    return { success: false, error: admin.error };
-  }
+  if (!admin.isAdmin) return { success: false, error: admin.error };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -496,6 +503,5 @@ export async function updateListingStatus(listingId: string, status: "approved" 
   }
 
   await logAdminAction(admin.user!.id, `listing_${status}`, "material", listingId, { status });
-  console.log(`✅ Successfully updated listing ${listingId} to ${status}`);
   return { success: true };
 }

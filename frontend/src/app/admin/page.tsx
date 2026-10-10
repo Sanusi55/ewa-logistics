@@ -442,10 +442,20 @@ export default function AdminPage() {
     if (result.success) { addToast({ type: "success", title: "Role Updated", message: `Role changed to ${newRole}` }); fetchUsers(); }
   };
 
+  // ✅ UPDATED: Handle Delete User with proper error feedback
   const handleDeleteUser = async (user: UserProfile) => {
     if (!confirm(`⚠️ DELETE ${user.full_name || user.email}? This cannot be undone!`)) return;
+    
     const result = await deleteUser(user.id);
-    if (result.success) { addToast({ type: "success", title: "User Deleted", message: `${user.full_name || user.email} has been removed.` }); fetchUsers(); fetchAllData(); }
+    
+    if (result.success) { 
+      addToast({ type: "success", title: "User Deleted", message: `${user.full_name || user.email} has been removed.` }); 
+      fetchUsers(); 
+      fetchAllData(); 
+    } else {
+      // ✅ ADDED: Show error toast if deletion fails (e.g., due to foreign key constraints)
+      addToast({ type: "error", title: "Delete Failed", message: result.error || "Could not delete user." });
+    }
   };
 
   const handleBroadcast = async () => {
