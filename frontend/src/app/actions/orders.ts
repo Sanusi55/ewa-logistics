@@ -1330,15 +1330,43 @@ export async function confirmSupplierDelivery(orderId: string, deliveryCode: str
 }
 
 // ============================================
-// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS
+// ✅ VERIFY PAYMENT & UPDATE ORDER STATUS (SECURED)
 // ============================================
 export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string) {
   const supabase = await createClient();
   
   try {
-    // ✅ UPDATED: Added 'unit' to select
-    const { data: order } = await supabase.from("orders").select("customer_id, material_type, tonnage, unit, pickup_location").eq("id", orderId).single();
+    // 🛡️ STEP 1: ACTUALLY VERIFY WITH FLUTTERWAVE API using tx_ref
+    const verifyUrl = `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${txRef}`;
     
+    const verifyResponse = await fetch(verifyUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    
+    const verifyData = await verifyResponse.json();
+    
+    // Check if Flutterwave says the transaction was truly successful
+    if (verifyData.status !== "success" || verifyData.data?.status !== "successful") {
+      console.error("❌ Flutterwave verification failed:", verifyData);
+      return { success: false, error: "Payment verification failed. Transaction was not successful." };
+    }
+
+    // 🛡️ STEP 2: Fetch order to ensure it exists and get details for notifications
+    const { data: order, error: orderFetchError } = await supabase
+      .from("orders")
+      .select("customer_id, material_type, tonnage, unit, pickup_location, total_amount")
+      .eq("id", orderId)
+      .single();
+
+    if (orderFetchError || !order) {
+      return { success: false, error: "Order not found" };
+    }
+
+    // 🛡️ STEP 3: ONLY NOW update the database
     const { error } = await supabase
       .from("orders")
       .update({
@@ -1359,7 +1387,7 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
       old_status: "pending_payment",
       new_status: "pending_supplier_acceptance",
       changed_by: "system",
-      notes: `Payment verified via Flutterwave (TxRef: ${txRef})`,
+      notes: `Payment verified via Flutterwave API (TxRef: ${txRef})`,
     });
 
     const { data: admins } = await supabase.from("profiles").select("id, email, full_name").eq("role", "admin");
@@ -1387,7 +1415,6 @@ export async function verifyPaymentAndUpdateOrder(orderId: string, txRef: string
           message: `A customer has paid for ${order?.material_type}. Please review and accept the order.`,
           type: "order",
           emailSubject: "📦 New Paid Order Ready for Your Acceptance!",
-          // ✅ UPDATED: Dynamic unit in email
           emailHtml: `<p>A customer has successfully paid for an order of <strong>${order?.material_type}</strong> (${order?.tonnage} ${order?.unit || 'tons'}).</p><p>Please log in to your supplier dashboard to review and accept this order.</p>`,
           userEmail: supplier.email,
           link: "/dashboard/supplier?tab=orders",

@@ -4,25 +4,37 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CreditCard, Building2, ShieldCheck, ArrowUpRight, ArrowDownRight, 
-  Search, Filter, Plus, MoreHorizontal, CheckCircle, Clock, 
-  AlertCircle, XCircle, Wallet, Download, Smartphone
+  Search, Plus, MoreHorizontal, CheckCircle, Clock, 
+  AlertCircle, XCircle, Wallet, Download, Loader2
 } from "lucide-react";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock Payment Data (Using Naira ₦)
-const mockTransactions = [
-  { id: "TXN-8891", date: "2026-06-01", desc: "Order #ORD-9921 - 5 tons 1-Inch Granite", type: "debit", amount: 285000, status: "escrow", method: "Bank Transfer" },
-  { id: "TXN-8885", date: "2026-05-28", desc: "Order #ORD-9918 - 10 tons Sharp Sand", type: "debit", amount: 150000, status: "success", method: "Card (**** 4242)" },
-  { id: "TXN-8880", date: "2026-05-25", desc: "Wallet Top-up", type: "credit", amount: 500000, status: "success", method: "Bank Transfer" },
-  { id: "TXN-8875", date: "2026-05-20", desc: "Order #ORD-9910 - 3 tons 3/4 Granite", type: "debit", amount: 135000, status: "refunded", method: "Card (**** 4242)" },
-  { id: "TXN-8870", date: "2026-05-15", desc: "Order #ORD-9905 - 8 tons Hardcore Granite", type: "debit", amount: 320000, status: "success", method: "Bank Transfer" },
-];
+// ==========================================
+// 🔄 TODO: Implement these real Supabase calls when backend is ready
+// ==========================================
+/*
+async function getUserTransactions(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  return { data, error };
+}
 
-const paymentMethods = [
-  { id: "pm_1", type: "bank", name: "Access Bank", account: "**** 7890", isDefault: true },
-  { id: "pm_2", type: "card", name: "Visa Debit", account: "**** 4242", isDefault: false },
-];
+async function getWalletBalance(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("wallets")
+    .select("balance")
+    .eq("user_id", userId)
+    .single();
+  return { data, error };
+}
+*/
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   "success": { label: "Completed", color: "text-green-600 dark:text-green-400", bg: "bg-green-100 dark:bg-green-900/30", icon: CheckCircle },
@@ -57,23 +69,52 @@ export default function PaymentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  // ✅ Clean State: No mock data
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1200);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // ✅ TODO: Uncomment these lines when your transactions/wallets tables are ready
+          // const [txResult, balanceResult] = await Promise.all([
+          //   getUserTransactions(user.id),
+          //   getWalletBalance(user.id)
+          // ]);
+          // if (txResult.data) setTransactions(txResult.data);
+          // if (balanceResult.data) setWalletBalance(balanceResult.data.balance || 0);
+        }
+        
+        // Simulating network delay for skeleton demo (Remove this in production)
+        await new Promise(resolve => setTimeout(resolve, 800));
+      } catch (error) {
+        console.error("Failed to fetch payment data:", error);
+        addToast({ type: "error", title: "Error", message: "Failed to load payment data." });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const filteredTransactions = mockTransactions.filter(txn => {
-    const matchesSearch = txn.desc.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          txn.id.toLowerCase().includes(searchQuery.toLowerCase());
+    fetchData();
+  }, [addToast]);
+
+  const filteredTransactions = transactions.filter((txn: any) => {
+    const matchesSearch = (txn.description || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (txn.id || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || txn.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
-    totalSpent: mockTransactions.filter(t => t.type === "debit" && t.status === "success").reduce((acc, curr) => acc + curr.amount, 0),
-    inEscrow: mockTransactions.filter(t => t.status === "escrow").reduce((acc, curr) => acc + curr.amount, 0),
-    walletBalance: 500000, // Mock wallet balance
+    totalSpent: transactions.filter((t: any) => t.type === "debit" && t.status === "success").reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0),
+    inEscrow: transactions.filter((t: any) => t.status === "escrow").reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0),
+    walletBalance: walletBalance,
   };
 
   const formatNaira = (amount: number) => {
@@ -81,11 +122,7 @@ export default function PaymentsPage() {
   };
 
   const handleAddMethod = () => {
-    addToast({ type: "info", title: "Add Payment Method", message: "Opening secure Paystack modal..." });
-  };
-
-  const handleSetDefault = (id: string) => {
-    addToast({ type: "success", title: "Default Updated", message: "This payment method is now your default." });
+    addToast({ type: "info", title: "Add Payment Method", message: "Opening secure payment gateway..." });
   };
 
   return (
@@ -170,8 +207,8 @@ export default function PaymentsPage() {
               ) : filteredTransactions.length > 0 ? (
                 <div className="divide-y divide-border">
                   <AnimatePresence>
-                    {filteredTransactions.map((txn, index) => {
-                      const status = statusConfig[txn.status];
+                    {filteredTransactions.map((txn: any, index: number) => {
+                      const status = statusConfig[txn.status] || statusConfig["pending"];
                       const StatusIcon = status.icon;
                       const isDebit = txn.type === "debit";
 
@@ -189,15 +226,15 @@ export default function PaymentsPage() {
                               {isDebit ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
                             </div>
                             <div>
-                              <p className="font-semibold text-foreground text-sm md:text-base">{txn.desc}</p>
+                              <p className="font-semibold text-foreground text-sm md:text-base">{txn.description || "Transaction"}</p>
                               <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                                 <span className="font-mono">{txn.id}</span>
                                 <span>•</span>
-                                <span>{txn.date}</span>
+                                <span>{new Date(txn.created_at).toLocaleDateString()}</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">
-                                  {txn.method === "Bank Transfer" ? <Building2 className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
-                                  {txn.method}
+                                  {(txn.method || "").includes("Bank") ? <Building2 className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
+                                  {txn.method || "Unknown"}
                                 </span>
                               </div>
                             </div>
@@ -206,7 +243,7 @@ export default function PaymentsPage() {
                           <div className="flex items-center justify-between md:justify-end gap-4 md:gap-6 pl-14 md:pl-0">
                             <div className="text-right">
                               <p className={`font-bold text-sm md:text-base ${isDebit ? "text-foreground" : "text-green-600 dark:text-green-400"}`}>
-                                {isDebit ? "-" : "+"}{formatNaira(txn.amount)}
+                                {isDebit ? "-" : "+"}{formatNaira(txn.amount || 0)}
                               </p>
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${status.bg} ${status.color}`}>
                                 <StatusIcon className="w-3 h-3" />
@@ -228,14 +265,16 @@ export default function PaymentsPage() {
                     <Search className="w-8 h-8 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-bold mb-1">No transactions found</h3>
-                  <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {transactions.length === 0 ? "You haven't made any transactions yet." : "Try adjusting your search or filter criteria."}
+                  </p>
                 </div>
               )}
               
               {/* Pagination / Export */}
               {!isLoading && filteredTransactions.length > 0 && (
                 <div className="p-4 border-t border-border flex items-center justify-between bg-muted/20">
-                  <span className="text-xs text-muted-foreground">Showing {filteredTransactions.length} of {mockTransactions.length} transactions</span>
+                  <span className="text-xs text-muted-foreground">Showing {filteredTransactions.length} of {transactions.length} transactions</span>
                   <button 
                     onClick={() => addToast({ type: "info", title: "Downloading...", message: "Your transaction history is being exported to CSV." })}
                     className="flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors cursor-pointer"
@@ -254,34 +293,15 @@ export default function PaymentsPage() {
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-orange-500" /> Payment Methods
               </h3>
+              
+              {/* ✅ Clean Empty State for Payment Methods */}
               <div className="space-y-3 mb-4">
-                {paymentMethods.map((method) => (
-                  <div key={method.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg border border-border">
-                        {method.type === "bank" ? <Building2 className="w-5 h-5 text-blue-500" /> : <CreditCard className="w-5 h-5 text-purple-500" />}
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{method.name}</p>
-                        <p className="text-xs text-muted-foreground">{method.account}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {method.isDefault && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">Default</span>
-                      )}
-                      {!method.isDefault && (
-                        <button 
-                          onClick={() => handleSetDefault(method.id)}
-                          className="text-xs text-muted-foreground hover:text-orange-500 transition-colors cursor-pointer"
-                        >
-                          Set Default
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <div className="text-center py-8 border border-dashed border-border rounded-xl bg-muted/10">
+                  <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No payment methods saved yet.</p>
+                </div>
               </div>
+
               <button 
                 onClick={handleAddMethod}
                 className="w-full flex items-center justify-center gap-2 py-2.5 border border-dashed border-border rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Truck, Clock, CheckCircle, DollarSign, 
   User, MapPin, Calendar, Loader2, AlertCircle, Star, Plus, KeyRound,
-  AlertTriangle, X, Navigation
+  AlertTriangle, X, Navigation, Building2 // ✅ Added Building2 here
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -494,12 +494,20 @@ export default function CustomerDashboardPage() {
                     <p className="text-2xl font-bold text-orange-500">{formatNaira(selectedOrderForPayment.delivery_fee)}</p>
                   </div>
 
-                  <div className="p-4 bg-muted/30 rounded-xl text-sm">
-                    <p className="font-semibold text-foreground mb-2">Transfer to this account:</p>
-                    <p className="font-mono text-lg font-bold">1234567890</p>
-                    <p className="text-muted-foreground">EWA Logistics Escrow</p>
-                    <p className="text-muted-foreground">Opay / Moniepoint</p>
-                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">️ Please include your Order ID as reference.</p>
+                  {/* ✅ UPDATED: Real Bank Account Details */}
+                  <div className="p-4 bg-muted/30 rounded-xl text-sm border border-border">
+                    <p className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-orange-500" /> Transfer to this account:
+                    </p>
+                    <div className="space-y-1">
+                      <p className="font-mono text-xl font-bold text-orange-500">9502044637</p>
+                      <p className="text-foreground font-medium">EWA LOGISTICS LIMITED</p>
+                      <p className="text-muted-foreground">Flutterwave MFB</p>
+                    </div>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-3 flex items-start gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> 
+                      Please include your Order ID (<span className="font-mono">{selectedOrderForPayment.id.slice(0, 8).toUpperCase()}</span>) as payment reference.
+                    </p>
                   </div>
 
                   <div>
