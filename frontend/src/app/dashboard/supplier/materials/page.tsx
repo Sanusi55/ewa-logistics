@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Plus, Edit2, Trash2, Search, Eye, EyeOff,
   DollarSign, CheckCircle, Loader2, X, ArrowLeft, Upload, 
-  Image as ImageIcon, Clock
+  Image as ImageIcon, Clock, MapPin
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/dashboard-layout";
@@ -22,6 +22,8 @@ interface Material {
   is_active: boolean;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  town?: string;
+  lga?: string;
 }
 
 export default function SupplierMaterialsPage() {
@@ -45,6 +47,8 @@ export default function SupplierMaterialsPage() {
     price_per_ton: "",
     unit: "tons",
     image_url: "",
+    town: "",
+    lga: "",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
@@ -85,6 +89,8 @@ export default function SupplierMaterialsPage() {
       price_per_ton: "",
       unit: "tons",
       image_url: "",
+      town: "",
+      lga: "",
     });
     setSelectedFile(null);
     setImagePreview("");
@@ -99,6 +105,8 @@ export default function SupplierMaterialsPage() {
       price_per_ton: material.price_per_ton.toString(),
       unit: material.unit,
       image_url: material.image_url || "",
+      town: material.town || "",
+      lga: material.lga || "",
     });
     setSelectedFile(null);
     setImagePreview(material.image_url || "");
@@ -137,14 +145,10 @@ export default function SupplierMaterialsPage() {
         return null;
       }
 
-      // Generate unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${materialId || Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `materials/${fileName}`;
 
-      console.log('Uploading to path:', filePath); // Debug log
-
-      // Upload the file
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('material-images')
         .upload(filePath, file, { 
@@ -157,12 +161,10 @@ export default function SupplierMaterialsPage() {
         throw uploadError;
       }
 
-      // Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('material-images')
         .getPublicUrl(filePath);
 
-      console.log('Public URL:', publicUrl); // Debug log
       return publicUrl;
       
     } catch (error: any) {
@@ -205,6 +207,8 @@ export default function SupplierMaterialsPage() {
         image_url: imageUrl,
         is_active: true,
         status: "pending",
+        town: formData.town,
+        lga: formData.lga,
       });
 
     if (!error) {
@@ -240,6 +244,8 @@ export default function SupplierMaterialsPage() {
         unit: formData.unit,
         image_url: imageUrl,
         status: "pending", 
+        town: formData.town,
+        lga: formData.lga,
       })
       .eq("id", selectedMaterial.id);
 
@@ -428,6 +434,19 @@ export default function SupplierMaterialsPage() {
                     <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{material.description}</p>
                   )}
                   
+                  {/* ✅ NEW: Location Display */}
+                  {(material.town || material.lga) && (
+                    <div className="mb-4 p-3 bg-muted/30 rounded-lg border border-border flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Pickup Location</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {material.town}{material.town && material.lga ? ", " : ""}{material.lga}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-xs text-muted-foreground">Price per {material.unit}</p>
@@ -537,6 +556,30 @@ export default function SupplierMaterialsPage() {
                       className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
                       placeholder="Brief description of your material..."
                     />
+                  </div>
+
+                  {/* ✅ NEW: Location Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Town / City</label>
+                      <input
+                        type="text"
+                        value={formData.town}
+                        onChange={(e) => setFormData({...formData, town: e.target.value})}
+                        className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        placeholder="e.g. Ikeja"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">LGA / Area Council</label>
+                      <input
+                        type="text"
+                        value={formData.lga}
+                        onChange={(e) => setFormData({...formData, lga: e.target.value})}
+                        className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        placeholder="e.g. Lagos Mainland"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -678,6 +721,28 @@ export default function SupplierMaterialsPage() {
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
                       className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
                     />
+                  </div>
+
+                  {/* ✅ NEW: Location Fields in Edit */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Town / City</label>
+                      <input
+                        type="text"
+                        value={formData.town}
+                        onChange={(e) => setFormData({...formData, town: e.target.value})}
+                        className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">LGA / Area Council</label>
+                      <input
+                        type="text"
+                        value={formData.lga}
+                        onChange={(e) => setFormData({...formData, lga: e.target.value})}
+                        className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

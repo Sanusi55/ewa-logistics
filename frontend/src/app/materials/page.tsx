@@ -22,12 +22,16 @@ interface Material {
   supplier_id: string;
   is_active: boolean;
   created_at: string;
+  town?: string;
+  lga?: string;
 }
 
 interface Supplier {
   id: string;
   full_name: string;
-  state: string;
+  state?: string;
+  town?: string;
+  lga?: string;
 }
 
 export default function MaterialsPage() {
@@ -45,32 +49,42 @@ export default function MaterialsPage() {
     state: "all",
     sortBy: "newest" 
   });
-  const [shuffleSeed, setShuffleSeed] = useState(0); // ✅ NEW: Trigger shuffle
+  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   useEffect(() => {
     async function fetchMaterials() {
       setIsLoading(true);
+      console.log("🔍 Fetching materials...");
+      
       const { data, error } = await getMaterials();
       
       if (error) {
+        console.error("❌ Error fetching materials:", error);
         addToast({ type: "error", title: "Error", message: "Failed to load materials" });
       } else {
+        console.log("✅ Materials fetched:", data);
         setMaterials(data || []);
         
-        // Fetch supplier information
         if (data && data.length > 0) {
           const supplierIds = [...new Set(data.map(m => m.supplier_id))];
-          const { data: supplierData } = await supabase
+          console.log("👥 Fetching suppliers:", supplierIds);
+          
+          const { data: supplierData, error: supplierError } = await supabase
             .from("profiles")
-            .select("id, full_name, state")
+            .select("id, full_name, state, town, lga")
             .in("id", supplierIds);
           
-          if (supplierData) {
-            const supplierMap: Record<string, Supplier> = {};
-            supplierData.forEach(s => {
-              supplierMap[s.id] = s;
-            });
-            setSuppliers(supplierMap);
+          if (supplierError) {
+            console.error("❌ Error fetching suppliers:", supplierError);
+          } else {
+            console.log("✅ Suppliers fetched:", supplierData);
+            if (supplierData) {
+              const supplierMap: Record<string, Supplier> = {};
+              supplierData.forEach(s => {
+                supplierMap[s.id] = s;
+              });
+              setSuppliers(supplierMap);
+            }
           }
         }
       }
@@ -78,10 +92,9 @@ export default function MaterialsPage() {
     }
     fetchMaterials();
 
-    // ✅ UPDATED: Shuffle every 3 minutes by updating the seed
     const shuffleInterval = setInterval(() => {
       setShuffleSeed(prev => prev + 1);
-    }, 3 * 60 * 1000); // 3 minutes
+    }, 3 * 60 * 1000);
 
     return () => clearInterval(shuffleInterval);
   }, []);
@@ -96,7 +109,6 @@ export default function MaterialsPage() {
     }
   };
 
-  // ✅ Fisher-Yates shuffle function
   const shuffleArray = (array: Material[]) => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -127,21 +139,18 @@ export default function MaterialsPage() {
       return matchesSearch && matchesCategory && matchesPrice && matchesState;
     });
 
-    // ✅ Apply shuffle if seed changed (every 3 minutes)
     if (shuffleSeed > 0 && filters.sortBy === "newest") {
       result = shuffleArray(result);
     }
 
-    // Sorting (only if not shuffling)
     if (filters.sortBy === "price-low") {
       result.sort((a, b) => a.price_per_ton - b.price_per_ton);
     } else if (filters.sortBy === "price-high") {
       result.sort((a, b) => b.price_per_ton - a.price_per_ton);
     }
-    // Note: "newest" is handled by the shuffle above
 
     return result;
-  }, [searchQuery, filters, materials, suppliers, shuffleSeed]); // ✅ Added shuffleSeed to dependencies
+  }, [searchQuery, filters, materials, suppliers, shuffleSeed]);
 
   const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
@@ -153,6 +162,24 @@ export default function MaterialsPage() {
 
   const formatNaira = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
+  };
+
+  // ✅ Improved helper to format location string with fallbacks
+  const getLocationString = (item: Material, supplier: Supplier | undefined) => {
+    // 1. Try material's specific town/lga first
+    if (item.town && item.lga) return `${item.town}, ${item.lga}`;
+    if (item.town) return item.town;
+    if (item.lga) return item.lga;
+    
+    // 2. Fall back to supplier's profile town/lga/state
+    if (supplier) {
+      if (supplier.town && supplier.lga) return `${supplier.town}, ${supplier.lga}`;
+      if (supplier.town) return supplier.town;
+      if (supplier.lga) return supplier.lga;
+      if (supplier.state) return supplier.state;
+    }
+    
+    return "Nigeria";
   };
 
   return (
@@ -232,7 +259,6 @@ export default function MaterialsPage() {
                 <option value="granite">Granite</option>
                 <option value="stone">Stone</option>
                 <option value="gravel">Gravel</option>
-                {/* ✅ NEW: Added Cement, Steel, and Bricks */}
                 <option value="cement">Cement</option>
                 <option value="steel">Steel</option>
                 <option value="bricks">Bricks</option>
@@ -255,7 +281,7 @@ export default function MaterialsPage() {
               </select>
             </div>
 
-            {/* ✅ State Filter */}
+            {/* State Filter */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Supplier State</label>
               <select
@@ -362,24 +388,32 @@ export default function MaterialsPage() {
                       </p>
                     )}
                     
-                    {/* Supplier Info */}
-                    {supplier && (
-                      <div className="flex items-center gap-2 mb-4 p-2 bg-muted/30 rounded-lg">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {supplier.full_name?.charAt(0) || "S"}
+                    {/* ✅ UPDATED: Robust Supplier Info with Exact Location */}
+                    <div className="mb-4 p-3 bg-muted/30 rounded-lg border border-border">
+                      {supplier ? (
+                        <div className="flex items-start gap-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {supplier.full_name?.charAt(0) || "S"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold truncate">{supplier.full_name || "Supplier"}</p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{getLocationString(item, supplier)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-yellow-500 flex-shrink-0">
+                            <Star className="w-3 h-3 fill-yellow-500" />
+                            <span className="font-medium">4.8</span>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate">{supplier.full_name || "Supplier"}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <MapPin className="w-3 h-3" /> {supplier.state || "Nigeria"}
-                          </p>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span>{getLocationString(item, undefined)}</span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-yellow-500">
-                          <Star className="w-3 h-3 fill-yellow-500" />
-                          <span className="font-medium">4.8</span>
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* Actions */}
                     <div className="flex gap-2 mt-auto pt-4 border-t border-border">
@@ -399,7 +433,7 @@ export default function MaterialsPage() {
             })}
           </div>
         ) : (
-          /* ✅ Smart Empty State */
+          /* Smart Empty State */
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
@@ -484,11 +518,13 @@ export default function MaterialsPage() {
                     <div>
                       <h2 className="text-2xl font-bold mb-1">{quickViewItem.name}</h2>
                       {suppliers[quickViewItem.supplier_id] && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                          <MapPin className="w-4 h-4 flex-shrink-0" />
                           <span>{suppliers[quickViewItem.supplier_id].full_name}</span>
                           <span>•</span>
-                          <span>{suppliers[quickViewItem.supplier_id].state}</span>
+                          <span className="font-medium text-foreground">
+                            {getLocationString(quickViewItem, suppliers[quickViewItem.supplier_id])}
+                          </span>
                         </div>
                       )}
                     </div>

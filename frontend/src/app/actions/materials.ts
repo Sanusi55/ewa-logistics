@@ -5,11 +5,20 @@ import { createClient } from "@/lib/supabase/server";
 export async function getMaterials() {
   const supabase = await createClient();
   
-  // Method 1: Fetch materials and filter in two steps for reliability
   const { data: materials, error } = await supabase
     .from("materials")
     .select(`
-      *,
+      id,
+      name,
+      description,
+      price_per_ton,
+      unit,
+      image_url,
+      is_active,
+      status,
+      created_at,
+      town,
+      lga,
       supplier:profiles!inner (
         id,
         is_deleted,
@@ -27,12 +36,13 @@ export async function getMaterials() {
 
   // Filter out materials from deleted or suspended suppliers
   const activeMaterials = materials?.filter((material: any) => {
-    const supplier = material.supplier;
+    // Safely handle if Supabase types the relation as an array
+    const supplier = Array.isArray(material.supplier) ? material.supplier[0] : material.supplier;
     return supplier && !supplier.is_deleted && !supplier.is_suspended;
   }) || [];
 
   // Clean up the data by removing the nested supplier object
-  const cleanData = activeMaterials.map(({ supplier, ...rest }) => rest);
+  const cleanData = activeMaterials.map(({ supplier, ...rest }: any) => rest);
 
   console.log(`✅ Fetched ${cleanData.length} materials from active suppliers`);
   
@@ -45,7 +55,17 @@ export async function getMaterialById(id: string) {
   const { data, error } = await supabase
     .from("materials")
     .select(`
-      *,
+      id,
+      name,
+      description,
+      price_per_ton,
+      unit,
+      image_url,
+      is_active,
+      status,
+      created_at,
+      town,
+      lga,
       supplier:profiles!inner (
         id,
         is_deleted,
@@ -60,17 +80,17 @@ export async function getMaterialById(id: string) {
     return { data: null, error: error.message };
   }
 
+  // Safely handle if Supabase types the relation as an array
+  const supplier = Array.isArray(data?.supplier) ? data.supplier[0] : data?.supplier;
+
   // Check if supplier exists and is active
-  if (!data?.supplier || data.supplier.is_deleted || data.supplier.is_suspended) {
+  if (!supplier || supplier.is_deleted || supplier.is_suspended) {
     console.log("🚫 Material blocked: supplier is deleted or suspended");
     return { data: null, error: "This material is no longer available." };
   }
 
   // Clean up the nested supplier object
-  const { supplier, ...cleanData } = data;
+  const { supplier: _, ...cleanData } = data as any;
 
   return { data: cleanData, error: null };
 }
-
-// ⚠️ NOTE: createOrder has been moved to @/app/actions/orders.ts
-// Make sure your frontend imports it from there!
