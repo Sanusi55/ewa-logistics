@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard-layout";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
-import { MapPin, Phone, MessageSquare, Star, CheckCircle2, Clock, Truck, Package, Loader2, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { MapPin, Phone, MessageSquare, Star, CheckCircle2, Clock, Truck, Package, Loader2, AlertCircle, Building2 } from "lucide-react";
 import { getOrderById } from "@/app/actions/orders";
 import { useToast } from "@/components/providers/toast-provider";
 
@@ -171,6 +172,47 @@ export default function OrderDetailsPage() {
 
           {/* Right: Driver & Order Info */}
           <div className="space-y-6">
+            
+            {/* ✅ NEW: Delivery Payment Required Banner */}
+            {order.status === 'pending_delivery_payment' && (
+              <div className="glass p-6 rounded-xl border border-orange-500/20 bg-orange-500/5">
+                <h3 className="font-semibold mb-4 flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                  <AlertCircle className="w-5 h-5" /> Action Required: Pay Delivery Fee
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  You have selected a driver. Please transfer the delivery fee to the account below to officially assign them.
+                </p>
+                <div className="space-y-3 mb-4 bg-background p-4 rounded-lg border border-border">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-sm">Account Number:</span>
+                    <span className="font-mono text-lg font-bold text-orange-500">1312736500</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-sm">Account Name:</span>
+                    <span className="font-medium text-foreground">EWA LOGISTICS LIMITED</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-sm">Bank Name:</span>
+                    <span className="font-medium text-foreground">Zenith Bank</span>
+                  </div>
+                </div>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-start gap-1.5 bg-yellow-500/10 p-2 rounded-lg mb-4">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> 
+                  Please include your Order ID (<span className="font-mono font-bold">{order.id.slice(0, 8).toUpperCase()}</span>) as the payment reference.
+                </p>
+                <div className="pt-4 border-t border-border">
+                  <p className="text-sm font-medium mb-2">Next Step:</p>
+                  <p className="text-xs text-muted-foreground">
+                    After making the transfer, please go to your{" "}
+                    <Link href="/dashboard/customer" className="text-orange-500 hover:underline font-medium">
+                      Customer Dashboard
+                    </Link>{" "}
+                    to upload your payment proof and confirm the delivery fee.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {order.driver_name && (
               <div className="glass p-6 rounded-xl">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -208,7 +250,6 @@ export default function OrderDetailsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Quantity</span>
-                  {/* ✅ FIXED: Dynamic unit display */}
                   <span className="font-medium">{order.tonnage} {order.unit || 'tons'}</span>
                 </div>
                 {order.delivery_fee && (

@@ -9,6 +9,7 @@ export async function getMaterials() {
     .from("materials")
     .select(`
       id,
+      supplier_id,
       name,
       description,
       price_per_ton,
@@ -41,7 +42,7 @@ export async function getMaterials() {
     return supplier && !supplier.is_deleted && !supplier.is_suspended;
   }) || [];
 
-  // Clean up the data by removing the nested supplier object
+  // Clean up the data by removing the nested supplier object, but KEEP supplier_id
   const cleanData = activeMaterials.map(({ supplier, ...rest }: any) => rest);
 
   console.log(`✅ Fetched ${cleanData.length} materials from active suppliers`);
@@ -56,6 +57,7 @@ export async function getMaterialById(id: string) {
     .from("materials")
     .select(`
       id,
+      supplier_id,
       name,
       description,
       price_per_ton,
@@ -89,7 +91,7 @@ export async function getMaterialById(id: string) {
     return { data: null, error: "This material is no longer available." };
   }
 
-  // Clean up the nested supplier object
+  // Clean up the nested supplier object, but KEEP supplier_id
   const { supplier: _, ...cleanData } = data as any;
 
   return { data: cleanData, error: null };

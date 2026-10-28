@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Search, Heart, Eye, ShoppingCart, Package, Truck,
-  MapPin, Star, Shield, Award, TrendingUp, X, Loader2
+  MapPin, Star, Shield, Award, TrendingUp, X, Loader2, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import Navbar from "@/components/navbar";
@@ -49,7 +49,8 @@ export default function MaterialsPage() {
     state: "all",
     sortBy: "newest" 
   });
-  const [shuffleSeed, setShuffleSeed] = useState(0);
+  
+  const [shuffleSeed, setShuffleSeed] = useState(1);
 
   useEffect(() => {
     async function fetchMaterials() {
@@ -62,41 +63,56 @@ export default function MaterialsPage() {
         console.error("❌ Error fetching materials:", error);
         addToast({ type: "error", title: "Error", message: "Failed to load materials" });
       } else {
-        console.log("✅ Materials fetched:", data);
+        console.log("✅ Materials fetched:", data?.length || 0, "items");
+        console.log(" First material:", data?.[0]);
         setMaterials(data || []);
         
         if (data && data.length > 0) {
-          const supplierIds = [...new Set(data.map(m => m.supplier_id))];
+          // ✅ Filter out any materials without supplier_id
+          const validMaterials = data.filter(m => m.supplier_id);
+          const supplierIds = [...new Set(validMaterials.map(m => m.supplier_id))];
+          
+          console.log("👥 Valid materials with supplier_id:", validMaterials.length);
           console.log("👥 Fetching suppliers:", supplierIds);
           
-          const { data: supplierData, error: supplierError } = await supabase
-            .from("profiles")
-            .select("id, full_name, state, town, lga")
-            .in("id", supplierIds);
-          
-          if (supplierError) {
-            console.error("❌ Error fetching suppliers:", supplierError);
-          } else {
-            console.log("✅ Suppliers fetched:", supplierData);
-            if (supplierData) {
-              const supplierMap: Record<string, Supplier> = {};
-              supplierData.forEach(s => {
-                supplierMap[s.id] = s;
-              });
-              setSuppliers(supplierMap);
+          if (supplierIds.length > 0) {
+            const { data: supplierData, error: supplierError } = await supabase
+              .from("profiles")
+              .select("id, full_name, state, town, lga")
+              .in("id", supplierIds);
+            
+            if (supplierError) {
+              console.error("❌ Error fetching suppliers:", supplierError);
+            } else {
+              console.log("✅ Suppliers fetched:", supplierData?.length || 0, "items");
+              console.log(" Supplier data:", supplierData);
+              if (supplierData) {
+                const supplierMap: Record<string, Supplier> = {};
+                supplierData.forEach(s => {
+                  supplierMap[s.id] = s;
+                });
+                setSuppliers(supplierMap);
+              }
             }
+          } else {
+            console.warn("⚠️ No valid supplier IDs found in materials");
           }
         }
       }
       setIsLoading(false);
     }
+    
     fetchMaterials();
 
     const shuffleInterval = setInterval(() => {
+      console.log("🔄 [AUTO-ROTATE] Rotating marketplace materials...");
       setShuffleSeed(prev => prev + 1);
     }, 3 * 60 * 1000);
 
-    return () => clearInterval(shuffleInterval);
+    return () => {
+      console.log(" Clearing shuffle interval");
+      clearInterval(shuffleInterval);
+    };
   }, []);
 
   const toggleWishlist = (id: string, name: string) => {
@@ -118,7 +134,26 @@ export default function MaterialsPage() {
     return shuffled;
   };
 
+  const normalizeState = (stateName: string | undefined) => {
+    if (!stateName) return "";
+    const normalized = stateName.toLowerCase().trim();
+    
+    if (normalized.includes("fct") || normalized === "abuja") return "federal capital territory";
+    if (normalized.includes("lagos")) return "lagos";
+    if (normalized.includes("ebonyi")) return "ebonyi";
+    if (normalized.includes("rivers")) return "rivers";
+    if (normalized.includes("kano")) return "kano";
+    
+    return normalized
+      .replace(/\b(state|area|territory)\b/gi, "")
+      .trim();
+  };
+
   const filteredMaterials = useMemo(() => {
+    console.log("🔍 Filtering materials. Filters:", filters);
+    console.log("📊 Total materials:", materials.length);
+    console.log(" Total suppliers:", Object.keys(suppliers).length);
+    
     let result = materials.filter((item) => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             item.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -133,13 +168,37 @@ export default function MaterialsPage() {
       else if (filters.priceRange === "45000+") matchesPrice = item.price_per_ton > 45000;
 
       const supplier = suppliers[item.supplier_id];
-      const matchesState = filters.state === "all" || 
-                           (supplier && supplier.state === filters.state);
+      
+      let matchesState = true;
+      if (filters.state !== "all") {
+        if (!supplier) {
+          console.log(`⚠️ No supplier found for material ${item.name} (supplier_id: ${item.supplier_id})`);
+          matchesState = false;
+        } else {
+          const selectedState = normalizeState(filters.state);
+          const supplierState = normalizeState(supplier.state);
+          const supplierTown = normalizeState(supplier.town);
+          const supplierLga = normalizeState(supplier.lga);
+          
+          matchesState = 
+            supplierState === selectedState ||
+            supplierTown === selectedState ||
+            supplierLga === selectedState ||
+            (selectedState === "federal capital territory" && supplierTown?.includes("abuja")) ||
+            (getLocationString(item, supplier).toLowerCase().includes(selectedState));
+          
+          console.log(`📍 Material: ${item.name}`);
+          console.log(`   Supplier State: "${supplier.state}", Town: "${supplier.town}", LGA: "${supplier.lga}"`);
+          console.log(`   Selected: "${filters.state}" → Normalized: "${selectedState}"`);
+          console.log(`   Matches: ${matchesState}`);
+        }
+      }
 
       return matchesSearch && matchesCategory && matchesPrice && matchesState;
     });
 
     if (shuffleSeed > 0 && filters.sortBy === "newest") {
+      console.log(" Shuffling materials. Current seed:", shuffleSeed);
       result = shuffleArray(result);
     }
 
@@ -149,6 +208,7 @@ export default function MaterialsPage() {
       result.sort((a, b) => b.price_per_ton - a.price_per_ton);
     }
 
+    console.log("✅ Filtered result:", result.length, "materials");
     return result;
   }, [searchQuery, filters, materials, suppliers, shuffleSeed]);
 
@@ -164,14 +224,11 @@ export default function MaterialsPage() {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
   };
 
-  // ✅ Improved helper to format location string with fallbacks
   const getLocationString = (item: Material, supplier: Supplier | undefined) => {
-    // 1. Try material's specific town/lga first
     if (item.town && item.lga) return `${item.town}, ${item.lga}`;
     if (item.town) return item.town;
     if (item.lga) return item.lga;
     
-    // 2. Fall back to supplier's profile town/lga/state
     if (supplier) {
       if (supplier.town && supplier.lga) return `${supplier.town}, ${supplier.lga}`;
       if (supplier.town) return supplier.town;
@@ -187,7 +244,6 @@ export default function MaterialsPage() {
       <Navbar />
       
       <main className="pt-24 md:pt-32 px-6 max-w-7xl mx-auto pb-20">
-        {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -197,16 +253,15 @@ export default function MaterialsPage() {
             Premium Construction <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">Materials</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Source the best granite, sand, cement, steel, and bricks for your next big project. 
+            Source the best granite, sand, cement, steel, and blocks for your next big project. 
             Direct from verified suppliers with escrow protection.
           </p>
           
-          {/* Search Bar */}
           <div className="max-w-3xl mx-auto relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search for granite, sand, cement, steel, bricks..."
+              placeholder="Search for granite, sand, cement, steel, blocks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-4 bg-muted/50 border border-border rounded-xl outline-none focus:ring-2 ring-orange-500/20 focus:border-orange-500 transition-all text-lg"
@@ -214,7 +269,6 @@ export default function MaterialsPage() {
           </div>
         </motion.div>
 
-        {/* Trust Badges */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -238,7 +292,6 @@ export default function MaterialsPage() {
           ))}
         </motion.div>
 
-        {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -246,7 +299,6 @@ export default function MaterialsPage() {
           className="glass p-4 rounded-2xl border border-border mb-8"
         >
           <div className="grid md:grid-cols-3 gap-3">
-            {/* Category Filter */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Category</label>
               <select
@@ -261,11 +313,10 @@ export default function MaterialsPage() {
                 <option value="gravel">Gravel</option>
                 <option value="cement">Cement</option>
                 <option value="steel">Steel</option>
-                <option value="bricks">Bricks</option>
+                <option value="block">Block</option>
               </select>
             </div>
 
-            {/* Price Range Filter */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Price Range</label>
               <select
@@ -281,7 +332,6 @@ export default function MaterialsPage() {
               </select>
             </div>
 
-            {/* State Filter */}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">Supplier State</label>
               <select
@@ -297,7 +347,6 @@ export default function MaterialsPage() {
             </div>
           </div>
 
-          {/* Sort */}
           <div className="mt-3 pt-3 border-t border-border">
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">Sort by</label>
             <select
@@ -312,11 +361,15 @@ export default function MaterialsPage() {
           </div>
         </motion.div>
 
-        {/* Results Count & Wishlist Summary */}
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
             Showing <span className="font-semibold text-foreground">{filteredMaterials.length}</span> materials
             {filters.state !== "all" && <span> in <span className="text-orange-500">{filters.state}</span></span>}
+            {filters.sortBy === "newest" && (
+              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                <RefreshCw className="w-3 h-3 animate-spin-slow" /> Auto-rotating
+              </span>
+            )}
           </p>
           {wishlist.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-orange-500 font-medium">
@@ -326,13 +379,11 @@ export default function MaterialsPage() {
           )}
         </div>
 
-        {/* Loading State */}
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
           </div>
         ) : filteredMaterials.length > 0 ? (
-          /* Materials Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredMaterials.map((item, index) => {
               const supplier = suppliers[item.supplier_id];
@@ -346,7 +397,6 @@ export default function MaterialsPage() {
                   transition={{ delay: index * 0.05 }}
                   className="group glass rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-border flex flex-col relative"
                 >
-                  {/* Wishlist Button */}
                   <button
                     onClick={() => toggleWishlist(item.id, item.name)}
                     className="absolute top-4 right-4 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-muted transition-colors cursor-pointer"
@@ -354,7 +404,6 @@ export default function MaterialsPage() {
                     <Heart className={`w-5 h-5 transition-colors ${isWishlisted ? "fill-orange-500 text-orange-500" : "text-muted-foreground"}`} />
                   </button>
 
-                  {/* Image */}
                   <div className="relative h-48 w-full bg-gradient-to-br from-orange-500/10 to-red-500/10 overflow-hidden">
                     {item.image_url ? (
                       <img
@@ -369,13 +418,11 @@ export default function MaterialsPage() {
                       </div>
                     )}
                     
-                    {/* Price Badge */}
                     <div className="absolute top-4 left-4 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-bold shadow-lg">
                       {formatNaira(item.price_per_ton)}
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="p-6 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="text-xl font-bold">{item.name}</h3>
@@ -388,7 +435,6 @@ export default function MaterialsPage() {
                       </p>
                     )}
                     
-                    {/* ✅ UPDATED: Robust Supplier Info with Exact Location */}
                     <div className="mb-4 p-3 bg-muted/30 rounded-lg border border-border">
                       {supplier ? (
                         <div className="flex items-start gap-2">
@@ -415,7 +461,6 @@ export default function MaterialsPage() {
                       )}
                     </div>
 
-                    {/* Actions */}
                     <div className="flex gap-2 mt-auto pt-4 border-t border-border">
                       <button 
                         onClick={() => setQuickViewItem(item)}
@@ -433,7 +478,6 @@ export default function MaterialsPage() {
             })}
           </div>
         ) : (
-          /* Smart Empty State */
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
@@ -475,7 +519,6 @@ export default function MaterialsPage() {
         )}
       </main>
 
-      {/* Quick View Modal */}
       <AnimatePresence>
         {quickViewItem && (
           <>

@@ -6,10 +6,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Shield, BarChart3, Users, Package, Truck, 
   Megaphone, History, Settings, Menu, X, LogOut, MessageSquare, ArrowLeft, Loader2,
-  Layers, CreditCard, AlertTriangle, Lock, Key, Smartphone, AlertCircle
+  Layers, CreditCard, AlertTriangle, Lock, Key, Smartphone
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { unlockAdminSession } from "@/app/actions/auth";
+import { useToast } from "@/components/providers/toast-provider";
 
 const navItems = [
   { name: "Overview", tab: "overview", icon: BarChart3 },
@@ -43,20 +44,20 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClient();
+  const { addToast } = useToast(); // ✅ Added Toast Provider
 
   const currentTab = searchParams.get("tab") || "overview";
 
-  // ✅ UPDATED: Automatic Screen Lock after 1 Minute (60,000ms) of Inactivity
+  // ✅ Automatic Screen Lock after 1 Minute (60,000ms) of Inactivity
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     
     const resetTimer = () => {
       clearTimeout(timeout);
       if (!isLocked) {
-        // 1 minute = 60 * 1000 milliseconds
         timeout = setTimeout(() => {
           setIsLocked(true);
-        }, 60 * 1000); 
+        }, 60 * 1000); // 1 minute
       }
     };
 
@@ -84,9 +85,11 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const handleUnlock = async (formData: FormData) => {
     const result = await unlockAdminSession(formData);
     if (result?.error) {
-      alert(result.error); // You can replace this with your toast provider if preferred
+      // ✅ Replaced alert() with professional toast notification
+      addToast({ type: "error", title: "Unlock Failed", message: result.error });
     } else {
       setIsLocked(false);
+      addToast({ type: "success", title: "Session Unlocked", message: "Welcome back, Admin." });
     }
   };
 
@@ -230,7 +233,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-x-hidden">
+        <div className="flex-1 overflow-x-hidden p-4 sm:p-6">
           {children}
         </div>
       </main>

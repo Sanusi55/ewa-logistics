@@ -23,7 +23,7 @@ interface Order {
   created_at: string;
   material_type: string;
   tonnage: number;
-  unit?: string; // ✅ ADDED: unit field
+  unit?: string;
   driver_name?: string;
   driver_phone?: string;
   truck_plate_number?: string;
@@ -145,7 +145,7 @@ export default function OrdersPage() {
   const stats = {
     total: orders.length,
     pending: orders.filter(o => ["pending_supplier_acceptance", "driver_searching", "no_driver_available"].includes(o.status)).length,
-    completed: orders.filter(o => o.status === "delivered").length,
+    completed: orders.filter(o => o.status === "delivered" || o.status === "completed").length,
   };
 
   const formatNaira = (amount: number) => {
@@ -157,7 +157,7 @@ export default function OrdersPage() {
   };
 
   const shouldShowCode = (order: Order) => {
-    return order.delivery_code && ["driver_assigned", "supplier_driver_assigned", "in_transit"].includes(order.status);
+    return order.delivery_code && ["driver_assigned", "supplier_driver_assigned", "in_transit", "loading"].includes(order.status);
   };
 
   return (
@@ -262,12 +262,11 @@ export default function OrdersPage() {
                             {status.label}
                           </span>
                         </div>
-                        {/* ✅ UPDATED: Dynamic unit display */}
+                        
                         <p className="text-sm font-medium text-foreground truncate">
                           {order.material_type || "Material Order"} ({order.tonnage} {order.unit || 'tons'})
                         </p>
                         
-                        {/* ✅ UPDATED: Shows both Pickup and Dropoff locations clearly */}
                         <div className="flex flex-col gap-1 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1.5">
                             <MapPin className="w-3 h-3 text-orange-500 flex-shrink-0" /> 
@@ -500,13 +499,12 @@ export default function OrdersPage() {
                 </div>
                 <div className="space-y-4 mb-6">
                   <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-2">️ Please verify before confirming</p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-2">⚠️ Please verify before confirming</p>
                     <p className="text-xs text-muted-foreground">Once you confirm, the delivery will be marked as complete and payment will be released to the supplier.</p>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-xl border border-border">
                     <p className="text-xs text-muted-foreground mb-2">Order Summary</p>
                     <p className="font-bold text-foreground">{orderToConfirm.material_type}</p>
-                    {/* ✅ UPDATED: Dynamic unit display */}
                     <p className="text-sm text-muted-foreground mt-1">{orderToConfirm.tonnage} {orderToConfirm.unit || 'tons'}</p>
                   </div>
                   <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">

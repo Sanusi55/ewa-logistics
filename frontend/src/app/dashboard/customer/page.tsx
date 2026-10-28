@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, Truck, Clock, CheckCircle, DollarSign, 
   User, MapPin, Calendar, Loader2, AlertCircle, Star, Plus, KeyRound,
-  AlertTriangle, X, Navigation, Building2 // ✅ Added Building2 here
+  AlertTriangle, X, Navigation, Building2, Copy
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -494,19 +494,28 @@ export default function CustomerDashboardPage() {
                     <p className="text-2xl font-bold text-orange-500">{formatNaira(selectedOrderForPayment.delivery_fee)}</p>
                   </div>
 
-                  {/* ✅ UPDATED: Real Bank Account Details */}
+                  {/* ✅ UPDATED: Direct Bank Account Details */}
                   <div className="p-4 bg-muted/30 rounded-xl text-sm border border-border">
                     <p className="font-semibold text-foreground mb-3 flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-orange-500" /> Transfer to this account:
                     </p>
-                    <div className="space-y-1">
-                      <p className="font-mono text-xl font-bold text-orange-500">9502044637</p>
-                      <p className="text-foreground font-medium">EWA LOGISTICS LIMITED</p>
-                      <p className="text-muted-foreground">Flutterwave MFB</p>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Account Number:</span>
+                        <span className="font-mono text-lg font-bold text-orange-500">1312736500</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Account Name:</span>
+                        <span className="font-medium text-foreground">EWA LOGISTICS LIMITED</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Bank Name:</span>
+                        <span className="font-medium text-foreground">Zenith Bank</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-3 flex items-start gap-1.5">
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-4 flex items-start gap-1.5 bg-yellow-500/10 p-2 rounded-lg">
                       <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> 
-                      Please include your Order ID (<span className="font-mono">{selectedOrderForPayment.id.slice(0, 8).toUpperCase()}</span>) as payment reference.
+                      Please include your Order ID (<span className="font-mono font-bold">{selectedOrderForPayment.id.slice(0, 8).toUpperCase()}</span>) as the payment reference/narration.
                     </p>
                   </div>
 

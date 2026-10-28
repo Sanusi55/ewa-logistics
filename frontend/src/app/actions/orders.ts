@@ -86,12 +86,12 @@ async function sendNotification({
 }
 
 // ============================================
-// 📦 CREATE ORDER (SECURED: Waits for Payment)
+//  CREATE ORDER (SECURED: Waits for Payment)
 // ============================================
 export async function createOrder(orderData: {
   material_type: string;
   tonnage: number;
-  unit: string; // ✅ ADDED: unit parameter
+  unit: string;
   pickup_location: string;
   delivery_location: string;
   delivery_address: string;
@@ -121,7 +121,7 @@ export async function createOrder(orderData: {
         customer_id: user.id,
         material_type: orderData.material_type,
         tonnage: orderData.tonnage,
-        unit: orderData.unit, // ✅ ADDED: Save unit to database
+        unit: orderData.unit,
         pickup_location: orderData.pickup_location,
         delivery_location: orderData.delivery_location,
         delivery_address: orderData.delivery_address,
@@ -158,7 +158,6 @@ export async function createOrder(orderData: {
           message: `A new order for ${orderData.material_type} has been placed and is awaiting payment.`,
           type: "info",
           emailSubject: "🔔 New Order Placed on EWA Logistics",
-          // ✅ UPDATED: Dynamic unit in email
           emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} ${orderData.unit}) has been placed and is awaiting payment.</p>`,
           userEmail: admin.email,
           link: "/admin?tab=orders",
@@ -175,7 +174,6 @@ export async function createOrder(orderData: {
           message: `A new order for ${orderData.material_type} is available.`,
           type: "info",
           emailSubject: "📦 New Order Available for Your Review",
-          // ✅ UPDATED: Dynamic unit in email
           emailHtml: `<p>A new order for <strong>${orderData.material_type}</strong> (${orderData.tonnage} ${orderData.unit}) is available in the system.</p>`,
           userEmail: supplier.email,
           link: "/dashboard/supplier?tab=orders",
@@ -241,54 +239,112 @@ export async function getAvailableJobs() {
 // 📋 GET USER ORDERS (SECURED FOR ALL ROLES)
 // ============================================
 export async function getUserOrders(role: "customer" | "supplier" | "driver") {
-  console.log("🚀 [SERVER ACTION] getUserOrders started for role:", role);
   const supabase = await createClient();
-  console.log("✅ [SERVER ACTION] Supabase client initialized");
   
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log("✅ [SERVER ACTION] User authenticated, ID:", user?.id);
     
     if (authError || !user) {
-      console.error("❌ Auth error in getUserOrders:", authError);
       return { error: "Unauthorized", orders: [] };
     }
 
-    let query = supabase
-      .from("orders")
-      .select(`
-        *,
-        driver_bids (
-          id,
-          bid_amount,
-          estimated_arrival_minutes,
-          driver_message,
-          status,
-          driver_id
-        )
-      `)
-      .order("created_at", { ascending: false });
-
     if (role === "customer") {
-      query = query.eq("customer_id", user.id);
+      const { data, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          driver_bids (
+            id,
+            bid_amount,
+            estimated_arrival_minutes,
+            driver_message,
+            status,
+            driver_id
+          )
+        `)
+        .eq("customer_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) return { error: error.message, orders: [] };
+      return { orders: data || [] };
+      
     } else if (role === "supplier") {
-      query = query.or(
-        `supplier_id.eq.${user.id},and(status.eq.pending_supplier_acceptance,is_paid.eq.true)`
-      );
+      // ✅ Get supplier's own accepted orders
+      const { data: myOrders, error: myOrdersError } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          driver_bids (
+            id,
+            bid_amount,
+            estimated_arrival_minutes,
+            driver_message,
+            status,
+            driver_id
+          )
+        `)
+        .eq("supplier_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (myOrdersError) {
+        console.error("❌ Error fetching supplier's orders:", myOrdersError);
+      }
+
+      // ✅ Get unassigned paid orders available for any supplier
+      const { data: availableOrders, error: availableError } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          driver_bids (
+            id,
+            bid_amount,
+            estimated_arrival_minutes,
+            driver_message,
+            status,
+            driver_id
+          )
+        `)
+        .is("supplier_id", null)
+        .eq("status", "pending_supplier_acceptance")
+        .eq("is_paid", true)
+        .order("created_at", { ascending: false });
+
+      if (availableError) {
+        console.error("❌ Error fetching available orders:", availableError);
+      }
+
+      // Combine both sets of orders
+      const allOrders = [...(myOrders || []), ...(availableOrders || [])];
+      
+      // Remove duplicates and sort by newest first
+      const uniqueOrders = allOrders.filter((order, index, self) => 
+        index === self.findIndex(o => o.id === order.id)
+      ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      return { orders: uniqueOrders };
+      
     } else if (role === "driver") {
-      query = query.eq("driver_id", user.id);
+      const { data, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          driver_bids (
+            id,
+            bid_amount,
+            estimated_arrival_minutes,
+            driver_message,
+            status,
+            driver_id
+          )
+        `)
+        .eq("driver_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) return { error: error.message, orders: [] };
+      return { orders: data || [] };
     }
 
-    console.log("⏳ [SERVER ACTION] Executing Supabase query...");
-    const { data, error } = await query;
-    console.log("✅ [SERVER ACTION] Query complete. Rows returned:", data?.length);
-
-    if (error) {
-      console.error("❌ Get orders database error:", error);
-      return { error: error.message, orders: [] };
-    }
-
-    return { orders: data || [] };
+    return { orders: [] };
   } catch (error: any) {
     console.error("❌ Get orders exception:", error);
     return { error: error.message, orders: [] };
@@ -369,7 +425,6 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
       return { error: "Unauthorized" };
     }
 
-    // ✅ UPDATED: Added 'unit' to select
     const { data: order, error: orderFetchError } = await supabase
       .from("orders")
       .select("material_type, tonnage, unit, customer_id")
@@ -452,7 +507,6 @@ export async function supplierAcceptOrder(orderId: string, materialPrice: number
             message: `A new order for ${order.material_type} needs a driver in ${supplierProfile.state}.`,
             type: "info",
             emailSubject: "🚛 New Delivery Job Available in Your Area!",
-            // ✅ UPDATED: Dynamic unit in email
             emailHtml: `<p>Hi ${driver.full_name},</p><p>A new order for <strong>${order.material_type}</strong> (${order.tonnage} ${order.unit || 'tons'}) needs a driver in <strong>${supplierProfile.state}</strong>.</p><p>Log in to your dashboard to place your bid!</p>`,
             userEmail: driver.email,
             link: "/dashboard/driver?tab=jobs",
@@ -1086,9 +1140,20 @@ export async function confirmCustomerDelivery(orderId: string) {
 
     const gross_supplier_amount = order.material_price || 0; 
     const net_supplier_payout = Math.max(0, gross_supplier_amount - supplier_commission);
-
+    
+    // ✅ FIXED: Added missing driver payout calculations
     const gross_driver_amount = order.delivery_fee || 0;
     const net_driver_payout = Math.max(0, gross_driver_amount - driver_commission);
+
+    console.log("💰 [CUSTOMER DELIVERY] Calculating payouts:", { 
+      gross_supplier_amount, 
+      supplier_commission, 
+      net_supplier_payout,
+      gross_driver_amount,
+      driver_commission,
+      net_driver_payout,
+      supplier_id: order.supplier_id 
+    });
 
     const { error: updateError } = await supabase
       .from("orders")
@@ -1114,12 +1179,18 @@ export async function confirmCustomerDelivery(orderId: string) {
     });
 
     if (net_supplier_payout > 0 && order.supplier_id) {
-      await supabase.from("supplier_earnings").insert({
+      console.log("✅ Inserting supplier earnings:", net_supplier_payout);
+      const { error: earningsError } = await supabase.from("supplier_earnings").insert({
         user_id: order.supplier_id,
         order_id: orderId,
         amount: net_supplier_payout,
         status: "available",
       });
+      if (earningsError) {
+        console.error("❌ Failed to insert supplier earnings:", earningsError);
+      }
+    } else {
+      console.warn("⚠️ Supplier earnings NOT inserted. Reason: Payout <= 0 or no supplier_id");
     }
 
     if (net_driver_payout > 0 && order.driver_id) {
@@ -1239,9 +1310,20 @@ export async function confirmSupplierDelivery(orderId: string, deliveryCode: str
 
     const gross_supplier_amount = order.material_price || 0; 
     const net_supplier_payout = Math.max(0, gross_supplier_amount - supplier_commission);
-
+    
+    // ✅ FIXED: Added missing driver payout calculations
     const gross_driver_amount = order.delivery_fee || 0;
     const net_driver_payout = Math.max(0, gross_driver_amount - driver_commission);
+
+    console.log("💰 [SUPPLIER DELIVERY] Calculating payouts:", { 
+      gross_supplier_amount, 
+      supplier_commission, 
+      net_supplier_payout,
+      gross_driver_amount,
+      driver_commission,
+      net_driver_payout,
+      supplier_id: order.supplier_id 
+    });
 
     const { error: updateError } = await supabase
       .from("orders")
@@ -1267,12 +1349,18 @@ export async function confirmSupplierDelivery(orderId: string, deliveryCode: str
     });
 
     if (net_supplier_payout > 0 && order.supplier_id) {
-      await supabase.from("supplier_earnings").insert({
+      console.log("✅ Inserting supplier earnings:", net_supplier_payout);
+      const { error: earningsError } = await supabase.from("supplier_earnings").insert({
         user_id: order.supplier_id,
         order_id: orderId,
         amount: net_supplier_payout,
         status: "available",
       });
+      if (earningsError) {
+        console.error("❌ Failed to insert supplier earnings:", earningsError);
+      }
+    } else {
+      console.warn("⚠️ Supplier earnings NOT inserted. Reason: Payout <= 0 or no supplier_id");
     }
 
     if (net_driver_payout > 0 && order.driver_id) {

@@ -126,7 +126,7 @@ export default function SupplierDashboardPage() {
 
       setOrders(sortedOrders);
     } catch (error: any) {
-      console.error(" Load orders error:", error);
+      console.error("❌ Load orders error:", error);
       addToast({ type: "error", title: "Error", message: "Failed to load orders" });
     } finally {
       setIsLoading(false);
@@ -180,19 +180,31 @@ export default function SupplierDashboardPage() {
     if (data) setWithdrawals(data);
   };
 
+  // ✅ UPDATED: Added detailed console logging to debug earnings
   const loadEarnings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    console.log("🔍 Loading earnings for user:", user.id);
+    
+    // Fetch both amount and status to debug
     const { data, error } = await supabase
       .from("supplier_earnings")
-      .select("amount")
-      .eq("user_id", user.id)
-      .eq("status", "available");
+      .select("amount, status")
+      .eq("user_id", user.id);
 
-    if (data) {
-      const total = data.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-      setAvailableBalance(total);
+    if (error) {
+      console.error("❌ Error loading earnings from database:", error);
+    } else {
+      console.log("📊 Raw earnings data fetched:", data);
+      if (data) {
+        const availableTotal = data
+          .filter((item: any) => item.status === "available")
+          .reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+        
+        console.log("✅ Calculated available balance:", availableTotal);
+        setAvailableBalance(availableTotal);
+      }
     }
   };
 
@@ -544,7 +556,7 @@ export default function SupplierDashboardPage() {
     const matchesSearch = 
       order.material_type?.toLowerCase().includes(searchLower) ||
       order.delivery_location?.toLowerCase().includes(searchLower) ||
-      (order.delivery_address || "").toLowerCase().includes(searchLower); // ✅ ADDED: Search by exact address
+      (order.delivery_address || "").toLowerCase().includes(searchLower);
     
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -793,7 +805,6 @@ export default function SupplierDashboardPage() {
                         </MagneticButton>
                       )}
 
-                      {/* ✅ FOOLPROOF FIX: Show button for ANY order with a driver that isn't finished */}
                       {order.driver_name && !["completed", "cancelled", "delivered"].includes(order.status) && (
                         <MagneticButton 
                           onClick={() => handleGenerateTrackingLink(order)}
@@ -1469,7 +1480,6 @@ export default function SupplierDashboardPage() {
                       </p>
                     </div>
 
-                    {/* ✅ UPDATED: Audit Trail Logging */}
                     <div>
                       <label className="block text-sm font-medium mb-1.5 text-slate-300">Tracking Link</label>
                       <div className="flex gap-2">
@@ -1482,7 +1492,6 @@ export default function SupplierDashboardPage() {
                         <button 
                           onClick={async () => {
                             await navigator.clipboard.writeText(generatedTrackingLink);
-                            // ✅ Record to database for audit trail
                             await import("@/app/actions/tracking").then(mod => 
                               mod.updateTrackingShareMethod(generatedTrackingToken, "copied")
                             );
@@ -1498,7 +1507,6 @@ export default function SupplierDashboardPage() {
                     <div className="flex gap-3 pt-2">
                       <button 
                         onClick={async () => {
-                          // ✅ Record to database for audit trail before opening WhatsApp
                           await import("@/app/actions/tracking").then(mod => 
                             mod.updateTrackingShareMethod(generatedTrackingToken, "whatsapp")
                           );

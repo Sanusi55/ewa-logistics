@@ -11,31 +11,6 @@ import DashboardLayout from "@/components/dashboard-layout";
 import { useToast } from "@/components/providers/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 
-// ==========================================
-// 🔄 TODO: Implement these real Supabase calls when backend is ready
-// ==========================================
-/*
-async function getUserTransactions(userId: string) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-  return { data, error };
-}
-
-async function getWalletBalance(userId: string) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("wallets")
-    .select("balance")
-    .eq("user_id", userId)
-    .single();
-  return { data, error };
-}
-*/
-
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   "success": { label: "Completed", color: "text-green-600 dark:text-green-400", bg: "bg-green-100 dark:bg-green-900/30", icon: CheckCircle },
   "pending": { label: "Pending", color: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-100 dark:bg-yellow-900/30", icon: Clock },
@@ -70,10 +45,10 @@ export default function PaymentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   
-  // ✅ Clean State: No mock data
   const [transactions, setTransactions] = useState<any[]>([]);
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
+  // ✅ REAL SUPABASE FETCHING LOGIC
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -82,17 +57,52 @@ export default function PaymentsPage() {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-          // ✅ TODO: Uncomment these lines when your transactions/wallets tables are ready
-          // const [txResult, balanceResult] = await Promise.all([
-          //   getUserTransactions(user.id),
-          //   getWalletBalance(user.id)
-          // ]);
-          // if (txResult.data) setTransactions(txResult.data);
-          // if (balanceResult.data) setWalletBalance(balanceResult.data.balance || 0);
+          // 1. Get User Role
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single();
+          
+          const role = profile?.role || "customer";
+          let earningsData: any[] = [];
+
+          // 2. Fetch Earnings based on Role
+          if (role === "supplier") {
+            const { data } = await supabase
+              .from("supplier_earnings")
+              .select("amount, status, created_at, order_id")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false });
+            earningsData = data || [];
+          } else if (role === "driver") {
+            const { data } = await supabase
+              .from("driver_earnings")
+              .select("amount, status, created_at, order_id")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false });
+            earningsData = data || [];
+          }
+
+          // 3. Calculate Available Balance
+          const currentBalance = earningsData
+            .filter((e: any) => e.status === "available")
+            .reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
+
+          // 4. Format Transactions for the UI
+          const formattedTxs = earningsData.map((e: any) => ({
+            id: e.order_id || `TXN-${Date.now()}`,
+            amount: e.amount,
+            type: "credit",
+            status: e.status === "available" ? "success" : "pending",
+            description: role === "supplier" ? "Supplier Order Payout" : "Driver Trip Earnings",
+            created_at: e.created_at,
+            method: "EWA Wallet"
+          }));
+
+          setTransactions(formattedTxs);
+          setWalletBalance(currentBalance);
         }
-        
-        // Simulating network delay for skeleton demo (Remove this in production)
-        await new Promise(resolve => setTimeout(resolve, 800));
       } catch (error) {
         console.error("Failed to fetch payment data:", error);
         addToast({ type: "error", title: "Error", message: "Failed to load payment data." });
@@ -294,7 +304,6 @@ export default function PaymentsPage() {
                 <CreditCard className="w-5 h-5 text-orange-500" /> Payment Methods
               </h3>
               
-              {/* ✅ Clean Empty State for Payment Methods */}
               <div className="space-y-3 mb-4">
                 <div className="text-center py-8 border border-dashed border-border rounded-xl bg-muted/10">
                   <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />

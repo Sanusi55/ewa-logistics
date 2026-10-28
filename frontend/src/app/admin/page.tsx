@@ -32,7 +32,7 @@ import {
   updatePlatformSetting,
   updateListingStatus,
 } from "@/app/actions/admin";
-import { generateTrackingLink, getTrackingSessions } from "@/app/actions/tracking"; // ✅ ADDED: getTrackingSessions
+import { generateTrackingLink, getTrackingSessions } from "@/app/actions/tracking";
 
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -127,37 +127,6 @@ interface Dispute {
   user_role?: string;
 }
 
-const revenueData = [
-  { name: "Jan", revenue: 1250000, orders: 45 },
-  { name: "Feb", revenue: 1800000, orders: 62 },
-  { name: "Mar", revenue: 1500000, orders: 55 },
-  { name: "Apr", revenue: 2200000, orders: 78 },
-  { name: "May", revenue: 2800000, orders: 95 },
-  { name: "Jun", revenue: 3500000, orders: 120 },
-];
-
-const userDistributionData = [
-  { name: "Customers", value: 1250, color: "#3b82f6" },
-  { name: "Drivers", value: 340, color: "#8b5cf6" },
-  { name: "Suppliers", value: 180, color: "#10b981" },
-  { name: "Admins", value: 5, color: "#ef4444" },
-];
-
-const orderStatusData = [
-  { name: "Pending", value: 45, color: "#eab308" },
-  { name: "In Transit", value: 120, color: "#3b82f6" },
-  { name: "Delivered", value: 850, color: "#10b981" },
-  { name: "Cancelled", value: 35, color: "#ef4444" },
-];
-
-const topRegionsData = [
-  { name: "Lagos", percent: 45, count: "1,250 orders" },
-  { name: "Abuja", percent: 25, count: "680 orders" },
-  { name: "Port Harcourt", percent: 15, count: "410 orders" },
-  { name: "Ibadan", percent: 10, count: "275 orders" },
-  { name: "Others", percent: 5, count: "135 orders" },
-];
-
 export default function AdminPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -225,6 +194,12 @@ export default function AdminPage() {
 
   // ✅ NEW: Tracking Sessions Data State
   const [trackingSessionsData, setTrackingSessionsData] = useState<any[]>([]);
+
+  // ✅ NEW: Real Chart Data States
+  const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [userDistributionData, setUserDistributionData] = useState<any[]>([]);
+  const [orderStatusData, setOrderStatusData] = useState<any[]>([]);
+  const [topRegionsData, setTopRegionsData] = useState<any[]>([]);
 
   useEffect(() => { checkAuth(); }, []);
 
@@ -308,13 +283,14 @@ export default function AdminPage() {
     if (activeTab === "deliveries") fetchDeliveries();
     if (activeTab === "audit") {
       fetchAuditLogs();
-      fetchTrackingSessions(); // ✅ Fetch tracking sessions when audit tab is active
+      fetchTrackingSessions();
     }
     if (activeTab === "settings") fetchSettings();
     if (activeTab === "messages") fetchMessages();
     if (activeTab === "payments") fetchWithdrawals();
     if (activeTab === "disputes") fetchDisputes();
     if (activeTab === "listings") fetchListings();
+    if (activeTab === "overview") fetchChartData();
   }, [authState, activeTab, userFilter, userSearch, orderFilter, deliveryFilter]);
 
   async function fetchAllData() {
@@ -322,8 +298,119 @@ export default function AdminPage() {
     const result = await getAdminStats();
     if (result.success) setStats(result.stats);
     await fetchUsers();
+    await fetchChartData();
     setIsLoading(false);
   }
+
+  // ✅ NEW: Fetch Real Chart Data
+  async function fetchChartData() {
+    try {
+      const supabase = createClient();
+      
+      // 1. Fetch Revenue Trend (Last 6 Months)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      
+      const { data: transactions } = await supabase
+        .from("ewa_wallet_transactions")
+        .select("amount, created_at")
+        .gte("created_at", sixMonthsAgo.toISOString())
+        .order("created_at", { ascending: true });
+
+      const monthlyRevenue: Record<string, number> = {};
+      const monthlyOrders: Record<string, number> = {};
+      
+      transactions?.forEach((tx: any) => {
+        const month = new Date(tx.created_at).toLocaleString('default', { month: 'short' });
+        monthlyRevenue[month] = (monthlyRevenue[month] || 0) + (tx.amount || 0);
+        monthlyOrders[month] = (monthlyOrders[month] || 0) + 1;
+      });
+
+      const revenueChart = Object.keys(monthlyRevenue).map(month => ({
+        name: month,
+        revenue: monthlyRevenue[month],
+        orders: monthlyOrders[month]
+      }));
+      setRevenueData(revenueChart);
+
+      // 2. Fetch User Distribution
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("role");
+
+      const userDist: Record<string, number> = { customer: 0, driver: 0, supplier: 0, admin: 0 };
+      profiles?.forEach((p: any) => {
+        userDist[p.role] = (userDist[p.role] || 0) + 1;
+      });
+
+      setUserDistributionData([
+        { name: "Customers", value: userDist.customer || 0, color: "#3b82f6" },
+        { name: "Drivers", value: userDist.driver || 0, color: "#8b5cf6" },
+        { name: "Suppliers", value: userDist.supplier || 0, color: "#10b981" },
+        { name: "Admins", value: userDist.admin || 0, color: "#ef4444" },
+      ]);
+
+      // 3. Fetch Order Status Distribution
+      const { data: allOrders } = await supabase
+        .from("orders")
+        .select("status");
+
+      const statusCount: Record<string, number> = {};
+      allOrders?.forEach((o: any) => {
+        statusCount[o.status] = (statusCount[o.status] || 0) + 1;
+      });
+
+      const statusColors: Record<string, string> = {
+        "pending_supplier_acceptance": "#eab308",
+        "driver_searching": "#3b82f6",
+        "no_driver_available": "#f97316",
+        "driver_assigned": "#a855f7",
+        "supplier_driver_assigned": "#6366f1",
+        "loading": "#06b6d4",
+        "in_transit": "#3b82f6",
+        "delivered": "#10b981",
+        "completed": "#10b981",
+        "cancelled": "#ef4444",
+      };
+
+      const orderStatusChart = Object.keys(statusCount).map(status => ({
+        name: status.replace(/_/g, " "),
+        value: statusCount[status],
+        color: statusColors[status] || "#94a3b8"
+      }));
+      setOrderStatusData(orderStatusChart);
+
+      // 4. Fetch Top Regions
+      const { data: ordersWithLocation } = await supabase
+        .from("orders")
+        .select("delivery_location");
+
+      const regionCount: Record<string, number> = {};
+      ordersWithLocation?.forEach((o: any) => {
+        if (o.delivery_location) {
+          regionCount[o.delivery_location] = (regionCount[o.delivery_location] || 0) + 1;
+        }
+      });
+
+      const sortedRegions = Object.entries(regionCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+      const totalOrders = sortedRegions.reduce((sum, [, count]) => sum + count, 0);
+      
+      const topRegionsChart = sortedRegions.map(([region, count]) => ({
+        name: region,
+        percent: totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0,
+        count: `${count} orders`
+      }));
+      
+      setTopRegionsData(topRegionsChart);
+
+    } catch (error) {
+      console.error("❌ Error fetching chart data:", error);
+    }
+  }
+
   async function fetchUsers() { const result = await getAdminUsers(userFilter, userSearch); if (result.data) setUsers(result.data); }
   async function fetchOrders() { const result = await getAdminOrders(orderFilter); if (result.data) setOrders(result.data); }
   async function fetchDeliveries() { const result = await getAdminDeliveries(deliveryFilter); if (result.data) setDeliveries(result.data); }
@@ -442,7 +529,6 @@ export default function AdminPage() {
     if (result.success) { addToast({ type: "success", title: "Role Updated", message: `Role changed to ${newRole}` }); fetchUsers(); }
   };
 
-  // ✅ UPDATED: Handle Delete User with proper error feedback
   const handleDeleteUser = async (user: UserProfile) => {
     if (!confirm(`⚠️ DELETE ${user.full_name || user.email}? This cannot be undone!`)) return;
     
@@ -453,7 +539,6 @@ export default function AdminPage() {
       fetchUsers(); 
       fetchAllData(); 
     } else {
-      // ✅ ADDED: Show error toast if deletion fails (e.g., due to foreign key constraints)
       addToast({ type: "error", title: "Delete Failed", message: result.error || "Could not delete user." });
     }
   };
@@ -504,7 +589,6 @@ export default function AdminPage() {
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const formatTime = (dateString: string) => new Date(dateString).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  // ✅ NEW: Handle Manual Confirm Delivery
   const handleManualConfirmDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualConfirmOrder || !manualConfirmReason.trim()) return;
@@ -534,7 +618,6 @@ export default function AdminPage() {
     }
   };
 
-  // ✅ NEW: Handle Generate Tracking Link
   const handleGenerateTrackingLink = async (order: any) => {
     setSelectedOrderForLink(order);
     setIsGeneratingLink(true);
@@ -547,7 +630,6 @@ export default function AdminPage() {
         addToast({ type: "error", title: "Error", message: result.error });
         setShowTrackingLinkModal(false);
       } else {
-        // ✅ FIXED: Added fallback to satisfy TypeScript strict null checks
         setGeneratedTrackingLink(result.url || ""); 
         addToast({ type: "success", title: "Link Generated!", message: "Copy the link and send it to the driver." });
       }
@@ -733,35 +815,47 @@ export default function AdminPage() {
                     <span className="text-xs text-slate-400 bg-slate-700/50 px-3 py-1 rounded-full">Updated Live</span>
                   </div>
                   <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={revenueData}>
-                        <defs>
-                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]} />
-                        <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    {revenueData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={revenueData}>
+                          <defs>
+                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                              <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                          <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${(value / 1000000).toFixed(1)}M`} />
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} formatter={(value: any) => [`₦${Number(value).toLocaleString()}`, "Revenue"]} />
+                          <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-400">
+                        No revenue data available
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                   <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-blue-400" /> User Distribution</h3>
                   <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={userDistributionData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
-                          {userDistributionData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {userDistributionData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={userDistributionData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                            {userDistributionData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-400">
+                        No user data available
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-3 mt-2">
                     {userDistributionData.map((item) => (
@@ -781,44 +875,58 @@ export default function AdminPage() {
                 <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                   <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-purple-400" /> Order Status Overview</h3>
                   <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={orderStatusData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} />
-                        <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={80} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
-                        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
-                          {orderStatusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {orderStatusData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={orderStatusData} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} />
+                          <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                          <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={80} />
+                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
+                          <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
+                            {orderStatusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-400">
+                        No order data available
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                   <h3 className="font-semibold text-white mb-6 flex items-center gap-2"><MapPin className="w-5 h-5 text-green-400" /> Top Regions</h3>
-                  <div className="space-y-5">
-                    {topRegionsData.map((region, i) => (
-                      <div key={region.name}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-slate-200">{region.name}</span>
-                          <span className="text-xs text-slate-400">{region.count}</span>
+                  {topRegionsData.length > 0 ? (
+                    <div className="space-y-5">
+                      {topRegionsData.map((region, i) => (
+                        <div key={region.name}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-slate-200">{region.name}</span>
+                            <span className="text-xs text-slate-400">{region.count}</span>
+                          </div>
+                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${region.percent}%` }} transition={{ duration: 1, delay: i * 0.1 }} className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full" />
+                          </div>
                         </div>
-                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${region.percent}%` }} transition={{ duration: 1, delay: i * 0.1 }} className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-48 text-slate-400">
+                      No regional data available
+                    </div>
+                  )}
+                  {topRegionsData.length > 0 && (
+                    <div className="mt-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <Award className="w-8 h-8 text-orange-400" />
+                        <div>
+                          <p className="text-sm font-semibold text-orange-300">Platform Growth</p>
+                          <p className="text-xs text-slate-400 mt-1">{topRegionsData[0]?.name} remains the top performing region with {topRegionsData[0]?.percent}% of total orders.</p>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <Award className="w-8 h-8 text-orange-400" />
-                      <div>
-                        <p className="text-sm font-semibold text-orange-300">Platform Growth</p>
-                        <p className="text-xs text-slate-400 mt-1">Lagos remains the top performing region with 45% of total orders.</p>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -1022,7 +1130,6 @@ export default function AdminPage() {
                                   </button>
                                 </Link>
                                 
-                                {/* ✅ NEW: Create Tracking Link Button for Supplier Drivers */}
                                 {order.status === "supplier_driver_assigned" && (
                                   <button 
                                     onClick={() => handleGenerateTrackingLink(order)}
@@ -1032,7 +1139,6 @@ export default function AdminPage() {
                                   </button>
                                 )}
                                 
-                                {/* ✅ NEW: Manual Confirm Delivery Button */}
                                 {order.status !== "completed" && order.status !== "cancelled" && (
                                   <button 
                                     onClick={() => { setManualConfirmOrder(order); setShowManualConfirmModal(true); }}
@@ -1323,11 +1429,9 @@ export default function AdminPage() {
             </motion.div>
           )}
 
-          {/* ✅ UPDATED: Audit Tab with Tracking History */}
           {activeTab === "audit" && (
             <motion.div key="audit" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
               
-              {/* ✅ NEW: Tracking History Section */}
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex items-center justify-between">
                   <h3 className="font-semibold text-white flex items-center gap-2">
@@ -1393,7 +1497,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Existing Admin Actions Log */}
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex items-center justify-between">
                   <h3 className="font-semibold text-white flex items-center gap-2">
@@ -1608,7 +1711,6 @@ export default function AdminPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Manual Delivery Confirmation Modal */}
       <AnimatePresence>
         {showManualConfirmModal && manualConfirmOrder && (
           <>
@@ -1684,7 +1786,6 @@ export default function AdminPage() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NEW: Generate Tracking Link Modal */}
       <AnimatePresence>
         {showTrackingLinkModal && selectedOrderForLink && (
           <>
